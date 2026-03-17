@@ -118,6 +118,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: tempId,
         source: params.source,
         target: params.target,
+        sourceHandle: params.sourceHandle ?? undefined,
+        targetHandle: params.targetHandle ?? undefined,
         animated: true,
         style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
       };
