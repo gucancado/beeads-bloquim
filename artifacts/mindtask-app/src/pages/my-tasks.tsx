@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function MyTasksPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
