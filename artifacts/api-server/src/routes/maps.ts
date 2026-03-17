@@ -1,0 +1,77 @@
+import { Router, IRouter } from "express";
+import { db } from "@workspace/db";
+import { maps, cards, cardConnections } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
+import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { requireWorkspaceRole } from "../middlewares/permissions";
+import { z } from "zod";
+
+const router: IRouter = Router({ mergeParams: true });
+
+const mapNameSchema = z.object({ name: z.string().min(1) });
+
+router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req, res) => {
+  const { workspaceId } = req.params;
+  const mapList = await db.select().from(maps).where(eq(maps.workspaceId, workspaceId));
+  res.json(mapList);
+});
+
+router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
+  const parsed = mapNameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const [map] = await db
+    .insert(maps)
+    .values({ workspaceId: req.params.workspaceId, name: parsed.data.name, createdBy: req.user!.userId })
+    .returning();
+
+  res.status(201).json(map);
+});
+
+router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req, res) => {
+  const { workspaceId, mapId } = req.params;
+
+  const [map] = await db
+    .select()
+    .from(maps)
+    .where(and(eq(maps.id, mapId), eq(maps.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!map) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const cardList = await db.select().from(cards).where(eq(cards.mapId, mapId));
+  const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));
+
+  res.json({ ...map, cards: cardList, connections: connectionList });
+});
+
+router.put("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
+  const parsed = mapNameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(maps)
+    .set({ name: parsed.data.name, updatedAt: new Date() })
+    .where(and(eq(maps.id, req.params.mapId), eq(maps.workspaceId, req.params.workspaceId)))
+    .returning();
+
+  res.json(updated);
+});
+
+router.delete("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
+  await db
+    .delete(maps)
+    .where(and(eq(maps.id, req.params.mapId), eq(maps.workspaceId, req.params.workspaceId)));
+  res.json({ success: true, message: "Map deleted" });
+});
+
+export default router;

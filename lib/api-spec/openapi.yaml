@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: MindTask API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: workspaces
+    description: Workspace management
+  - name: maps
+    description: Mind map management
+  - name: cards
+    description: Card management
+  - name: tasks
+    description: Task management
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +33,814 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      tags: [workspaces]
+      summary: List workspaces for current user
+      responses:
+        "200":
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceResponse"
+    post:
+      operationId: createWorkspace
+      tags: [workspaces]
+      summary: Create a workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceRequest"
+      responses:
+        "201":
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceResponse"
+
+  /workspaces/{workspaceId}:
+    get:
+      operationId: getWorkspace
+      tags: [workspaces]
+      summary: Get workspace by ID
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Workspace details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceDetailResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateWorkspace
+      tags: [workspaces]
+      summary: Update workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceRequest"
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceResponse"
+    delete:
+      operationId: deleteWorkspace
+      tags: [workspaces]
+      summary: Delete workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /workspaces/{workspaceId}/members:
+    get:
+      operationId: listWorkspaceMembers
+      tags: [workspaces]
+      summary: List workspace members
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceMemberResponse"
+    post:
+      operationId: addWorkspaceMember
+      tags: [workspaces]
+      summary: Add member to workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberRequest"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMemberResponse"
+
+  /workspaces/{workspaceId}/members/{memberId}:
+    put:
+      operationId: updateWorkspaceMember
+      tags: [workspaces]
+      summary: Update member role
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRoleRequest"
+      responses:
+        "200":
+          description: Member updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMemberResponse"
+    delete:
+      operationId: removeWorkspaceMember
+      tags: [workspaces]
+      summary: Remove member from workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /workspaces/{workspaceId}/maps:
+    get:
+      operationId: listMaps
+      tags: [maps]
+      summary: List maps in workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of maps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MapResponse"
+    post:
+      operationId: createMap
+      tags: [maps]
+      summary: Create a map
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMapRequest"
+      responses:
+        "201":
+          description: Map created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}:
+    get:
+      operationId: getMap
+      tags: [maps]
+      summary: Get map with cards and connections
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Map with cards and connections
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapDetailResponse"
+    put:
+      operationId: updateMap
+      tags: [maps]
+      summary: Update map name
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMapRequest"
+      responses:
+        "200":
+          description: Updated map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+    delete:
+      operationId: deleteMap
+      tags: [maps]
+      summary: Delete map
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/cards:
+    post:
+      operationId: createCard
+      tags: [cards]
+      summary: Create a card in the map
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCardRequest"
+      responses:
+        "201":
+          description: Card created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/cards/{cardId}:
+    get:
+      operationId: getCard
+      tags: [cards]
+      summary: Get a card with its task
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Card with optional task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardDetailResponse"
+    put:
+      operationId: updateCard
+      tags: [cards]
+      summary: Update a card (title, description, position)
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCardRequest"
+      responses:
+        "200":
+          description: Updated card
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardResponse"
+    delete:
+      operationId: deleteCard
+      tags: [cards]
+      summary: Delete a card
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/connections:
+    post:
+      operationId: createConnection
+      tags: [cards]
+      summary: Create a connection between cards
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConnectionRequest"
+      responses:
+        "201":
+          description: Connection created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/connections/{connectionId}:
+    delete:
+      operationId: deleteConnection
+      tags: [cards]
+      summary: Delete a connection
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/cards/{cardId}/task:
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task linked to a card
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+      responses:
+        "201":
+          description: Task created and card updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "409":
+          description: Card already has a task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unlinkTask
+      tags: [tasks]
+      summary: Unlink and delete task from a card
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Task unlinked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/cards/{cardId}/task/status:
+    patch:
+      operationId: updateTaskStatus
+      tags: [tasks]
+      summary: Update task status (syncs card visual status)
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskStatusRequest"
+      responses:
+        "200":
+          description: Task and card updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/cards/{cardId}/task/details:
+    patch:
+      operationId: updateTaskDetails
+      tags: [tasks]
+      summary: Update task details (title, description, assignee, due date, priority)
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskDetailsRequest"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /my-tasks:
+    get:
+      operationId: getMyTasks
+      tags: [tasks]
+      summary: Get tasks assigned to the current user
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TaskStatus"
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskWithContextResponse"
+
+  /workspaces/{workspaceId}/dashboard:
+    get:
+      operationId: getDashboard
+      tags: [workspaces]
+      summary: Get dashboard summary for a workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +848,532 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [success]
+
+    TaskStatus:
+      type: string
+      enum: [pending, in_progress, completed, overdue]
+
+    TaskPriority:
+      type: string
+      enum: [low, medium, high, critical]
+
+    CardVisualStatus:
+      type: string
+      enum: [no_task, pending, in_progress, completed, overdue]
+
+    WorkspaceRole:
+      type: string
+      enum: [admin, editor, executor]
+
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+      required: [name, email, password]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, createdAt]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserResponse"
+        token:
+          type: string
+      required: [user, token]
+
+    CreateWorkspaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+    WorkspaceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+      required: [id, name, createdBy, createdAt, role]
+
+    WorkspaceDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceMemberResponse"
+        maps:
+          type: array
+          items:
+            $ref: "#/components/schemas/MapResponse"
+      required: [id, name, createdBy, createdAt, role, members, maps]
+
+    WorkspaceMemberResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+        user:
+          $ref: "#/components/schemas/UserResponse"
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, workspaceId, userId, role, user, createdAt]
+
+    AddMemberRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+      required: [email, role]
+
+    UpdateMemberRoleRequest:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+      required: [role]
+
+    CreateMapRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+    MapResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, workspaceId, name, createdBy, createdAt, updatedAt]
+
+    MapDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardResponse"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectionResponse"
+      required: [id, workspaceId, name, createdBy, createdAt, updatedAt, cards, connections]
+
+    CreateCardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        positionX:
+          type: number
+        positionY:
+          type: number
+      required: [title]
+
+    UpdateCardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        positionX:
+          type: number
+        positionY:
+          type: number
+
+    CardResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        positionX:
+          type: number
+        positionY:
+          type: number
+        statusVisual:
+          $ref: "#/components/schemas/CardVisualStatus"
+        taskId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, mapId, title, positionX, positionY, statusVisual, createdAt, updatedAt]
+
+    CardDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        positionX:
+          type: number
+        positionY:
+          type: number
+        statusVisual:
+          $ref: "#/components/schemas/CardVisualStatus"
+        taskId:
+          type: string
+          format: uuid
+          nullable: true
+        task:
+          $ref: "#/components/schemas/TaskResponse"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, mapId, title, positionX, positionY, statusVisual, createdAt, updatedAt]
+
+    CreateConnectionRequest:
+      type: object
+      properties:
+        sourceCardId:
+          type: string
+          format: uuid
+        targetCardId:
+          type: string
+          format: uuid
+      required: [sourceCardId, targetCardId]
+
+    ConnectionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        sourceCardId:
+          type: string
+          format: uuid
+        targetCardId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, mapId, sourceCardId, targetCardId, createdAt]
+
+    CreateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+      required: [title]
+
+    UpdateTaskStatusRequest:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+      required: [status]
+
+    UpdateTaskDetailsRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        assignedUser:
+          $ref: "#/components/schemas/UserResponse"
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, mapId, workspaceId, title, priority, status, createdAt, updatedAt]
+
+    TaskWithContextResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        cardId:
+          type: string
+          format: uuid
+        cardTitle:
+          type: string
+        mapName:
+          type: string
+        workspaceName:
+          type: string
+      required: [id, mapId, workspaceId, title, priority, status, createdAt, updatedAt, cardId, cardTitle, mapName, workspaceName]
+
+    DashboardResponse:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        totalMaps:
+          type: integer
+        totalCards:
+          type: integer
+        totalTasks:
+          type: integer
+        tasksByStatus:
+          type: object
+          properties:
+            pending:
+              type: integer
+            in_progress:
+              type: integer
+            completed:
+              type: integer
+            overdue:
+              type: integer
+          required: [pending, in_progress, completed, overdue]
+        tasksByPriority:
+          type: object
+          properties:
+            low:
+              type: integer
+            medium:
+              type: integer
+            high:
+              type: integer
+            critical:
+              type: integer
+          required: [low, medium, high, critical]
+      required: [workspaceId, totalMaps, totalCards, totalTasks, tasksByStatus, tasksByPriority]

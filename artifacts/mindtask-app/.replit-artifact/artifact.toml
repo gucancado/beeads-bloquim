@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "MindTask"
+version = "1.0.0"
+id = "artifacts/mindtask-app"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 24117
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/mindtask-app run dev"
+
+[services.env]
+PORT = "24117"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/mindtask-app", "run", "build"]
+publicDir = "artifacts/mindtask-app/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

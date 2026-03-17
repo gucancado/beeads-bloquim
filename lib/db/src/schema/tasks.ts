@@ -1,0 +1,63 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  pgEnum,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { users } from "./users";
+import { maps } from "./maps";
+import { workspaces } from "./workspaces";
+
+export const taskStatusEnum = pgEnum("task_status", [
+  "pending",
+  "in_progress",
+  "completed",
+  "overdue",
+]);
+
+export const taskPriorityEnum = pgEnum("task_priority", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const tasks = pgTable("tasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  mapId: uuid("map_id")
+    .notNull()
+    .references(() => maps.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  assignedTo: uuid("assigned_to").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  dueDate: timestamp("due_date"),
+  priority: taskPriorityEnum("priority").notNull().default("medium"),
+  status: taskStatusEnum("status").notNull().default("pending"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+});
+
+export const updateTaskSchema = insertTaskSchema.partial().omit({
+  mapId: true,
+  workspaceId: true,
+});
+
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type UpdateTask = z.infer<typeof updateTaskSchema>;
+export type Task = typeof tasks.$inferSelect;
