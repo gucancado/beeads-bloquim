@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { cards, cardConnections, tasks, maps } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { cards, tasks } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -20,11 +20,6 @@ const updateCardSchema = z.object({
   description: z.string().nullable().optional(),
   positionX: z.number().optional(),
   positionY: z.number().optional(),
-});
-
-const createConnectionSchema = z.object({
-  sourceCardId: z.string().uuid(),
-  targetCardId: z.string().uuid(),
 });
 
 const createTaskSchema = z.object({
@@ -99,26 +94,6 @@ router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), a
 router.delete("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
   await db.delete(cards).where(eq(cards.id, req.params.cardId));
   res.json({ success: true, message: "Card deleted" });
-});
-
-router.post("/connections", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
-  const parsed = createConnectionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Validation error" });
-    return;
-  }
-
-  const [connection] = await db
-    .insert(cardConnections)
-    .values({ mapId: req.params.mapId, ...parsed.data })
-    .returning();
-
-  res.status(201).json(connection);
-});
-
-router.delete("/connections/:connectionId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
-  await db.delete(cardConnections).where(eq(cardConnections.id, req.params.connectionId));
-  res.json({ success: true, message: "Connection deleted" });
 });
 
 router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {

@@ -18,7 +18,10 @@ export default function RegisterPage() {
 
   const registerMutation = useRegister({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        if (data?.token) {
+          localStorage.setItem("mindtask_token", data.token);
+        }
         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
         setLocation("/workspaces");
       },

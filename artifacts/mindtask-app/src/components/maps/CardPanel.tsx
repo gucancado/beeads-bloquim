@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useUnlinkTask, useListWorkspaceMembers } from "@workspace/api-client-react";
-import { Loader2, Calendar as CalendarIcon, CheckCircle2, User, Flag, Save, Trash2, X } from "lucide-react";
+import { Loader2, Calendar as CalendarIcon, CheckCircle2, User, Flag, Save, Trash2, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

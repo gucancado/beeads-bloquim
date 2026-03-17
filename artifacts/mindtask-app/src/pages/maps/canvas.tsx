@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, Panel } from 'reactflow';
+import { ReactFlow, Controls, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange } from 'reactflow';
+import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection } from "@workspace/api-client-react";
@@ -14,30 +15,28 @@ const nodeTypes = {
   mindmap: MindMapNode,
 };
 
-export default function CanvasPage() {
-  const [, params] = useRoute("/workspaces/:wsId/maps/:mapId");
-  const workspaceId = params?.wsId || "";
-  const mapId = params?.mapId || "";
+function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
-
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const initializedRef = useRef(false);
 
-  // Sync server data to ReactFlow state once when loaded
   useEffect(() => {
-    if (mapData) {
+    if (!mapData) return;
+
+    if (!initializedRef.current) {
       const initialNodes: Node[] = mapData.cards.map(c => ({
         id: c.id,
         type: 'mindmap',
         position: { x: c.positionX, y: c.positionY },
-        data: { 
-          title: c.title, 
-          description: c.description, 
-          statusVisual: c.statusVisual, 
-          taskId: c.taskId 
+        data: {
+          title: c.title,
+          description: c.description,
+          statusVisual: c.statusVisual,
+          taskId: c.taskId
         }
       }));
       setNodes(initialNodes);
@@ -47,18 +46,60 @@ export default function CanvasPage() {
         source: c.sourceCardId,
         target: c.targetCardId,
         animated: true,
-        style: { strokeWidth: 2 }
+        style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
       }));
       setEdges(initialEdges);
+      initializedRef.current = true;
+    } else {
+      setNodes(prev => {
+        const serverIds = new Set(mapData.cards.map(c => c.id));
+        const filtered = prev.filter(n => serverIds.has(n.id));
+
+        const existingIds = new Set(filtered.map(n => n.id));
+        const newNodes: Node[] = mapData.cards
+          .filter(c => !existingIds.has(c.id))
+          .map(c => ({
+            id: c.id,
+            type: 'mindmap',
+            position: { x: c.positionX, y: c.positionY },
+            data: { title: c.title, description: c.description, statusVisual: c.statusVisual, taskId: c.taskId }
+          }));
+
+        return [
+          ...filtered.map(n => {
+            const serverCard = mapData.cards.find(c => c.id === n.id);
+            if (!serverCard) return n;
+            return { ...n, data: { title: serverCard.title, description: serverCard.description, statusVisual: serverCard.statusVisual, taskId: serverCard.taskId } };
+          }),
+          ...newNodes
+        ];
+      });
+
+      setEdges(prev => {
+        const serverIds = new Set(mapData.connections.map(c => c.id));
+        const filtered = prev.filter(e => serverIds.has(e.id) || e.id.startsWith('temp-'));
+        const existingIds = new Set(filtered.map(e => e.id));
+        const newEdges: Edge[] = mapData.connections
+          .filter(c => !existingIds.has(c.id))
+          .map(c => ({
+            id: c.id,
+            source: c.sourceCardId,
+            target: c.targetCardId,
+            animated: true,
+            style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
+          }));
+        return [...filtered, ...newEdges];
+      });
     }
-  }, [mapData, setNodes, setEdges]);
+  }, [mapData]);
 
   const updateCardMut = useUpdateCard();
   const createConnMut = useCreateConnection();
+  const deleteConnMut = useDeleteConnection();
   const createCardMut = useCreateCard();
 
   const onNodeDragStop = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (_event: React.MouseEvent, node: Node) => {
       updateCardMut.mutate({
         workspaceId,
         mapId,
@@ -72,37 +113,60 @@ export default function CanvasPage() {
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) return;
-      
-      // Optimistic update
-      const newEdge: Edge = { id: `temp-${Date.now()}`, source: params.source, target: params.target, animated: true };
+      const tempId = `temp-${Date.now()}`;
+      const newEdge: Edge = {
+        id: tempId,
+        source: params.source,
+        target: params.target,
+        animated: true,
+        style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
+      };
       setEdges((eds) => addEdge(newEdge, eds));
-      
-      // API Call
+
       createConnMut.mutate(
-        { workspaceId, mapId, data: { sourceCardId: params.source, targetCardId: params.target } },
+        { workspaceId, mapId, data: { sourceCardId: params.source!, targetCardId: params.target! } },
         {
-          onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }),
-          onError: () => setEdges((eds) => eds.filter(e => e.id !== newEdge.id)) // Revert on fail
+          onSuccess: (conn) => {
+            setEdges(eds => eds.map(e => e.id === tempId ? { ...e, id: conn.id } : e));
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          },
+          onError: () => {
+            setEdges((eds) => eds.filter(e => e.id !== tempId));
+          }
         }
       );
     },
     [setEdges, createConnMut, workspaceId, mapId, queryClient]
   );
 
+  const onEdgesChangeWithDelete = useCallback(
+    (changes: EdgeChange[]) => {
+      const removals = changes.filter(c => c.type === 'remove');
+      removals.forEach(change => {
+        if (change.type === 'remove' && !change.id.startsWith('temp-')) {
+          deleteConnMut.mutate({ workspaceId, mapId, connectionId: change.id });
+        }
+      });
+      onEdgesChange(changes);
+    },
+    [onEdgesChange, deleteConnMut, workspaceId, mapId]
+  );
+
   const handleAddCard = useCallback(() => {
-    // Add in center roughly
+    const centerX = 200 + Math.random() * 200;
+    const centerY = 200 + Math.random() * 200;
     createCardMut.mutate(
-      { workspaceId, mapId, data: { title: "New Node", positionX: 250, positionY: 250 } },
+      { workspaceId, mapId, data: { title: "New Node", positionX: centerX, positionY: centerY } },
       {
         onSuccess: (newCard) => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          setSelectedCardId(newCard.id); // Open panel immediately
+          setSelectedCardId(newCard.id);
         }
       }
     );
   }, [workspaceId, mapId, createCardMut, queryClient]);
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     setSelectedCardId(node.id);
   }, []);
 
@@ -122,15 +186,15 @@ export default function CanvasPage() {
 
   return (
     <AppLayout>
-      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 relative">
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-4">
+      <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 relative overflow-hidden">
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
           <Link href={`/workspaces/${workspaceId}`}>
-            <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 bg-background shadow-md">
+            <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 bg-background shadow-md border-border/60">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div className="bg-background px-5 py-2 rounded-xl border shadow-md">
-            <h2 className="font-display font-bold text-foreground text-lg">{mapData.name}</h2>
+          <div className="bg-background px-5 py-2.5 rounded-xl border border-border/60 shadow-md">
+            <h2 className="font-display font-bold text-foreground text-lg leading-none">{mapData.name}</h2>
           </div>
         </div>
 
@@ -141,32 +205,52 @@ export default function CanvasPage() {
           </Button>
         </div>
 
+        <div className="absolute bottom-4 left-4 z-10">
+          <p className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-border/40 shadow-sm">
+            Click node to edit • Drag to connect • Scroll to zoom
+          </p>
+        </div>
+
         <div className="flex-1 w-full h-full">
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onEdgesChange={onEdgesChangeWithDelete}
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             fitView
+            fitViewOptions={{ padding: 0.2 }}
+            deleteKeyCode="Delete"
             className="w-full h-full"
           >
-            <Background variant={BackgroundVariant.Dots} gap={24} size={2} color="hsl(var(--muted-foreground) / 0.2)" />
-            <Controls className="bg-card border shadow-lg rounded-xl overflow-hidden" />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="hsl(var(--muted-foreground) / 0.15)" />
+            <Controls className="bg-card border border-border shadow-md rounded-xl overflow-hidden" />
           </ReactFlow>
         </div>
       </div>
 
-      <CardPanel 
+      <CardPanel
         workspaceId={workspaceId}
         mapId={mapId}
         cardId={selectedCardId}
         onClose={() => setSelectedCardId(null)}
       />
     </AppLayout>
+  );
+}
+
+export default function CanvasPage() {
+  const [, params] = useRoute("/workspaces/:wsId/maps/:mapId");
+  const workspaceId = params?.wsId || "";
+  const mapId = params?.mapId || "";
+
+  return (
+    <ReactFlowProvider>
+      <CanvasInner workspaceId={workspaceId} mapId={mapId} />
+    </ReactFlowProvider>
   );
 }

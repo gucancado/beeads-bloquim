@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout, useListWorkspaces } from "@workspace/api-client-react";
 import { LayoutDashboard, LogOut, CheckSquare, Compass, Folders, Loader2, Plus } from "lucide-react";
@@ -19,10 +19,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const logoutMutation = useLogout({
     mutation: {
       onSuccess: () => {
+        localStorage.removeItem("mindtask_token");
         window.location.href = "/login";
       }
     }
   });
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      setLocation("/login");
+    }
+  }, [isUserLoading, user, setLocation]);
 
   if (isUserLoading) {
     return (
@@ -33,7 +40,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    setLocation("/login");
     return null;
   }
 
