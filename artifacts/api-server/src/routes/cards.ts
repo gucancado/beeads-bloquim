@@ -68,12 +68,12 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "in_progress" })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "pending" })
     .returning();
 
   const [updated] = await db
     .update(cards)
-    .set({ taskId: task.id, statusVisual: "in_progress", updatedAt: new Date() })
+    .set({ taskId: task.id, statusVisual: "pending", updatedAt: new Date() })
     .where(eq(cards.id, card.id))
     .returning();
 
@@ -140,12 +140,12 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
   }
 
   const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined;
-  const overdue = computeOverdue(dueDate ?? null, "in_progress");
-  const visual = toVisualStatus("in_progress", overdue);
+  const overdue = computeOverdue(dueDate ?? null, "pending");
+  const visual = toVisualStatus("pending", overdue);
 
   const [task] = await db
     .insert(tasks)
-    .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "in_progress", overdue })
+    .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "pending", overdue })
     .returning();
 
   await db
