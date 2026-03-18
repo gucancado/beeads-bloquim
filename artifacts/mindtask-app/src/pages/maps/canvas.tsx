@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ReactFlow, Controls, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
+import DeletableEdge from "@/components/maps/DeletableEdge";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus } from "lucide-react";
@@ -11,8 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 
-const nodeTypes = {
-  mindmap: MindMapNode,
+const nodeTypes = { mindmap: MindMapNode };
+const edgeTypes = { deletable: DeletableEdge };
+
+const EDGE_STYLE = {
+  type: 'deletable' as const,
+  animated: true,
+  style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
 };
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
@@ -32,12 +38,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         type: 'mindmap',
         position: { x: c.positionX, y: c.positionY },
-        data: {
-          title: c.title,
-          description: c.description,
-          statusVisual: c.statusVisual,
-          taskId: c.taskId
-        }
+        data: { title: c.title, description: c.description, statusVisual: c.statusVisual, taskId: c.taskId },
       }));
       setNodes(initialNodes);
 
@@ -45,8 +46,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         source: c.sourceCardId,
         target: c.targetCardId,
-        animated: true,
-        style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
+        ...EDGE_STYLE,
       }));
       setEdges(initialEdges);
       initializedRef.current = true;
@@ -54,7 +54,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       setNodes(prev => {
         const serverIds = new Set(mapData.cards.map(c => c.id));
         const filtered = prev.filter(n => serverIds.has(n.id));
-
         const existingIds = new Set(filtered.map(n => n.id));
         const newNodes: Node[] = mapData.cards
           .filter(c => !existingIds.has(c.id))
@@ -62,16 +61,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             id: c.id,
             type: 'mindmap',
             position: { x: c.positionX, y: c.positionY },
-            data: { title: c.title, description: c.description, statusVisual: c.statusVisual, taskId: c.taskId }
+            data: { title: c.title, description: c.description, statusVisual: c.statusVisual, taskId: c.taskId },
           }));
-
         return [
           ...filtered.map(n => {
-            const serverCard = mapData.cards.find(c => c.id === n.id);
-            if (!serverCard) return n;
-            return { ...n, data: { title: serverCard.title, description: serverCard.description, statusVisual: serverCard.statusVisual, taskId: serverCard.taskId } };
+            const s = mapData.cards.find(c => c.id === n.id);
+            if (!s) return n;
+            return { ...n, data: { title: s.title, description: s.description, statusVisual: s.statusVisual, taskId: s.taskId } };
           }),
-          ...newNodes
+          ...newNodes,
         ];
       });
 
@@ -81,13 +79,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const existingIds = new Set(filtered.map(e => e.id));
         const newEdges: Edge[] = mapData.connections
           .filter(c => !existingIds.has(c.id))
-          .map(c => ({
-            id: c.id,
-            source: c.sourceCardId,
-            target: c.targetCardId,
-            animated: true,
-            style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
-          }));
+          .map(c => ({ id: c.id, source: c.sourceCardId, target: c.targetCardId, ...EDGE_STYLE }));
         return [...filtered, ...newEdges];
       });
     }
@@ -101,13 +93,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       updateCardMut.mutate({
-        workspaceId,
-        mapId,
-        cardId: node.id,
-        data: { positionX: node.position.x, positionY: node.position.y }
+        workspaceId, mapId, cardId: node.id,
+        data: { positionX: node.position.x, positionY: node.position.y },
       });
     },
-    [workspaceId, mapId, updateCardMut]
+    [workspaceId, mapId, updateCardMut],
   );
 
   const onConnect = useCallback(
@@ -120,8 +110,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         target: params.target,
         sourceHandle: params.sourceHandle ?? undefined,
         targetHandle: params.targetHandle ?? undefined,
-        animated: true,
-        style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' }
+        ...EDGE_STYLE,
       };
       setEdges((eds) => addEdge(newEdge, eds));
 
@@ -129,16 +118,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         { workspaceId, mapId, data: { sourceCardId: params.source!, targetCardId: params.target! } },
         {
           onSuccess: (conn) => {
-            setEdges(eds => eds.map(e => e.id === tempId ? { ...e, id: conn.id } : e));
+            setEdges(eds => eds.map(e =>
+              e.id === tempId
+                ? { ...e, id: conn.id }
+                : e,
+            ));
             queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           },
           onError: () => {
             setEdges((eds) => eds.filter(e => e.id !== tempId));
-          }
-        }
+          },
+        },
       );
     },
-    [setEdges, createConnMut, workspaceId, mapId, queryClient]
+    [setEdges, createConnMut, workspaceId, mapId, queryClient],
   );
 
   const onEdgesChangeWithDelete = useCallback(
@@ -151,7 +144,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       });
       onEdgesChange(changes);
     },
-    [onEdgesChange, deleteConnMut, workspaceId, mapId]
+    [onEdgesChange, deleteConnMut, workspaceId, mapId],
   );
 
   const handleAddCard = useCallback(() => {
@@ -163,8 +156,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         onSuccess: (newCard) => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           setSelectedCardId(newCard.id);
-        }
-      }
+        },
+      },
     );
   }, [workspaceId, mapId, createCardMut, queryClient]);
 
@@ -209,7 +202,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
         <div className="absolute bottom-4 left-4 z-10">
           <p className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-border/40 shadow-sm">
-            Click node to edit • Drag to connect • Scroll to zoom
+            Clique no node para editar • Arraste para conectar • Clique na ligação para removê-la
           </p>
         </div>
 
@@ -224,6 +217,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             deleteKeyCode="Delete"
