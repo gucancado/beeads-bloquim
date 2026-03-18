@@ -24,7 +24,8 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
     '!w-4 !h-4 !border-2 !rounded-full !bg-background',
     'hover:!opacity-100 hover:!scale-125',
   ].join(' ');
-  const handleStyle = { borderColor: color };
+  const handleStyleLeft  = { borderColor: color, left:  -12 };
+  const handleStyleRight = { borderColor: color, right: -12 };
 
   const dueDateStr = data.taskDueDate
     ? format(new Date(data.taskDueDate), 'dd/MM/yy')
@@ -45,10 +46,10 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
           : undefined,
       }}
     >
-      <Handle type="target" position={Position.Left}  id="target-left"  className={handleCls} style={handleStyle} />
-      <Handle type="target" position={Position.Right} id="target-right" className={handleCls} style={handleStyle} />
-      <Handle type="source" position={Position.Left}  id="source-left"  className={handleCls} style={handleStyle} />
-      <Handle type="source" position={Position.Right} id="source-right" className={handleCls} style={handleStyle} />
+      <Handle type="target" position={Position.Left}  id="target-left"  className={handleCls} style={handleStyleLeft} />
+      <Handle type="target" position={Position.Right} id="target-right" className={handleCls} style={handleStyleRight} />
+      <Handle type="source" position={Position.Left}  id="source-left"  className={handleCls} style={handleStyleLeft} />
+      <Handle type="source" position={Position.Right} id="source-right" className={handleCls} style={handleStyleRight} />
 
       <div className="p-4 relative overflow-hidden rounded-xl">
         <div
