@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { cards, tasks } from "@workspace/db/schema";
+import { cards, tasks, cardConnections } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
@@ -42,6 +42,11 @@ const updateTaskDetailsSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
+function resolveStatus(dueDate: Date | null | undefined): "in_progress" | "overdue" {
+  if (dueDate && dueDate < new Date()) return "overdue";
+  return "in_progress";
+}
+
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
   const parsed = createCardSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -58,12 +63,12 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium" })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "in_progress" })
     .returning();
 
   const [updated] = await db
     .update(cards)
-    .set({ taskId: task.id, statusVisual: "pending", updatedAt: new Date() })
+    .set({ taskId: task.id, statusVisual: "in_progress", updatedAt: new Date() })
     .where(eq(cards.id, card.id))
     .returning();
 
@@ -129,18 +134,22 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     return;
   }
 
+  const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined;
+  const status = resolveStatus(dueDate ?? null);
+
   const taskData = {
     ...parsed.data,
     mapId,
     workspaceId,
-    dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
+    dueDate,
+    status,
   };
 
   const [task] = await db.insert(tasks).values(taskData).returning();
 
   await db
     .update(cards)
-    .set({ taskId: task.id, statusVisual: "pending", updatedAt: new Date() })
+    .set({ taskId: task.id, statusVisual: status, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
 
   res.status(201).json(task);
@@ -211,6 +220,44 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
     .set({ statusVisual: status, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
 
+  // Cascade: when completed, activate all directly connected downstream cards
+  if (status === "completed") {
+    const connections = await db
+      .select()
+      .from(cardConnections)
+      .where(eq(cardConnections.sourceCardId, cardId));
+
+    for (const conn of connections) {
+      const [targetCard] = await db
+        .select()
+        .from(cards)
+        .where(eq(cards.id, conn.targetCardId))
+        .limit(1);
+
+      if (!targetCard?.taskId) continue;
+
+      const [targetTask] = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, targetCard.taskId))
+        .limit(1);
+
+      if (!targetTask || targetTask.status === "completed") continue;
+
+      const newStatus = resolveStatus(targetTask.dueDate);
+
+      await db
+        .update(tasks)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(eq(tasks.id, targetCard.taskId));
+
+      await db
+        .update(cards)
+        .set({ statusVisual: newStatus, updatedAt: new Date() })
+        .where(eq(cards.id, conn.targetCardId));
+    }
+  }
+
   res.json(updatedTask);
 });
 
@@ -230,8 +277,11 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
   }
 
   const updateData: any = { ...parsed.data, updatedAt: new Date() };
+  let resolvedDueDate: Date | null | undefined;
+
   if (parsed.data.dueDate !== undefined) {
-    updateData.dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
+    resolvedDueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
+    updateData.dueDate = resolvedDueDate;
   }
 
   const [updatedTask] = await db
@@ -239,6 +289,22 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     .set(updateData)
     .where(eq(tasks.id, card.taskId))
     .returning();
+
+  // Auto-overdue: if due date was changed and is in the past, flip status
+  if (resolvedDueDate !== undefined && resolvedDueDate !== null && updatedTask.status !== "completed") {
+    const effectiveDue = resolvedDueDate;
+    if (effectiveDue < new Date()) {
+      await db
+        .update(tasks)
+        .set({ status: "overdue", updatedAt: new Date() })
+        .where(eq(tasks.id, card.taskId));
+
+      await db
+        .update(cards)
+        .set({ statusVisual: "overdue", updatedAt: new Date() })
+        .where(eq(cards.id, cardId));
+    }
+  }
 
   res.json(updatedTask);
 });
