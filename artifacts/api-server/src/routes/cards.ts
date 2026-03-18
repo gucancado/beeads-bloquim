@@ -49,12 +49,25 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
     return;
   }
 
+  const { workspaceId, mapId } = req.params;
+
   const [card] = await db
     .insert(cards)
-    .values({ mapId: req.params.mapId, ...parsed.data })
+    .values({ mapId, ...parsed.data })
     .returning();
 
-  res.status(201).json(card);
+  const [task] = await db
+    .insert(tasks)
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium" })
+    .returning();
+
+  const [updated] = await db
+    .update(cards)
+    .set({ taskId: task.id, statusVisual: "pending", updatedAt: new Date() })
+    .where(eq(cards.id, card.id))
+    .returning();
+
+  res.status(201).json(updated);
 });
 
 router.get("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req, res) => {

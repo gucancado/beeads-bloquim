@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useUnlinkTask, useListWorkspaceMembers, useDeleteCard } from "@workspace/api-client-react";
-import { Loader2, CheckCircle2, Save, Trash2, X, Plus, Flag, Calendar, User, AlertTriangle } from "lucide-react";
+import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard } from "@workspace/api-client-react";
+import { Loader2, CheckCircle2, Save, Trash2, X, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +42,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const [taskDueDate, setTaskDueDate] = useState<string>("");
 
   const [showDeleteCard, setShowDeleteCard] = useState(false);
-  const [showUnlinkTask, setShowUnlinkTask] = useState(false);
 
   useEffect(() => {
     if (card) {
@@ -65,6 +64,22 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       }
     }
   }, [card]);
+
+  const createTaskMut = useCreateTask();
+
+  useEffect(() => {
+    if (card && !card.task && cardId && !createTaskMut.isPending) {
+      createTaskMut.mutate(
+        { workspaceId, mapId, cardId, data: { title: card.title, priority: "medium" } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
+          }
+        }
+      );
+    }
+  }, [card, cardId]);
 
   const updateCardMut = useUpdateCard();
   const handleSaveCard = () => {
@@ -91,29 +106,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           toast({ title: "Card removido do mapa." });
           onClose();
-        }
-      }
-    );
-  };
-
-  const createTaskMut = useCreateTask();
-  const handleCreateTask = () => {
-    if (!cardId) return;
-    createTaskMut.mutate(
-      {
-        workspaceId,
-        mapId,
-        cardId,
-        data: {
-          title: cardTitle,
-          priority: "medium",
-        }
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-          toast({ title: "Tarefa criada e vinculada ao card." });
         }
       }
     );
@@ -158,22 +150,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
     );
   };
 
-  const unlinkTaskMut = useUnlinkTask();
-  const handleUnlink = () => {
-    if (!cardId) return;
-    unlinkTaskMut.mutate(
-      { workspaceId, mapId, cardId },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-          setShowUnlinkTask(false);
-          toast({ title: "Tarefa removida do card." });
-        }
-      }
-    );
-  };
-
   const getStatusDot = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-blue-500';
@@ -183,6 +159,8 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       default: return 'bg-slate-400';
     }
   };
+
+  const isTaskReady = !!card?.task;
 
   return (
     <>
@@ -198,7 +176,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 <div className="flex items-center justify-between mb-1">
                   <SheetHeader className="text-left flex-1">
                     <SheetTitle className="text-xl font-display">Editar Card</SheetTitle>
-                    <SheetDescription className="text-sm">Atualize o nó visual ou gerencie sua tarefa.</SheetDescription>
+                    <SheetDescription className="text-sm">Atualize o nó e gerencie sua tarefa.</SheetDescription>
                   </SheetHeader>
                   <div className="flex items-center gap-1 ml-4">
                     <Button
@@ -247,30 +225,17 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
                 {/* Task Section */}
                 <div className="space-y-4 bg-card rounded-2xl p-5 border shadow-sm">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      </div>
-                      <h3 className="font-semibold text-foreground text-sm">Execução de Tarefa</h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                     </div>
-                    {card.task && (
-                      <Button variant="ghost" size="sm" onClick={() => setShowUnlinkTask(true)} className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 rounded-lg text-xs">
-                        <Trash2 className="w-3 h-3 mr-1" /> Remover
-                      </Button>
-                    )}
+                    <h3 className="font-semibold text-foreground text-sm">Execução de Tarefa</h3>
                   </div>
 
-                  {!card.task ? (
-                    <div className="text-center py-5">
-                      <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3">
-                        <CheckCircle2 className="w-6 h-6 text-muted-foreground/50" />
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">Este card é apenas um nó visual. Converta-o em tarefa para rastrear execução.</p>
-                      <Button onClick={handleCreateTask} disabled={createTaskMut.isPending} className="rounded-xl px-6">
-                        {createTaskMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                        Converter em Tarefa
-                      </Button>
+                  {!isTaskReady ? (
+                    <div className="flex items-center justify-center py-6 gap-3 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Preparando tarefa…</span>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -378,7 +343,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
               <AlertTriangle className="w-5 h-5 text-destructive" /> Deletar card?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              O card e sua tarefa vinculada serão removidos permanentemente do mapa. Esta ação não pode ser desfeita.
+              O card e sua tarefa serão removidos permanentemente do mapa. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -388,27 +353,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
               onClick={handleDeleteCard}
             >
               {deleteCardMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Deletar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Unlink Task Confirmation */}
-      <AlertDialog open={showUnlinkTask} onOpenChange={setShowUnlinkTask}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover tarefa vinculada?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A tarefa e seus dados (status, prazo, responsável) serão apagados. O card voltará a ser apenas um nó visual.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleUnlink}
-            >
-              {unlinkTaskMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Remover"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
