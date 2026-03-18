@@ -108,12 +108,9 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
             queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-            toast({ title: "Alterações salvas." });
           }
         }
       );
-    } else {
-      toast({ title: "Alterações salvas." });
     }
   };
 
