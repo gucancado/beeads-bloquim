@@ -31,7 +31,7 @@ const createTaskSchema = z.object({
 });
 
 const updateTaskStatusSchema = z.object({
-  status: z.enum(["pending", "in_progress", "completed"]),
+  status: z.enum(["pending", "in_progress", "completed", "blocked"]),
 });
 
 const updateTaskDetailsSchema = z.object({
@@ -47,8 +47,8 @@ function computeOverdue(dueDate: Date | null | undefined, status: string): boole
   return !!dueDate && dueDate < new Date();
 }
 
-function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "no_task" {
-  if (overdue && status !== "completed") return "overdue";
+function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "no_task" {
+  if (overdue && status !== "completed" && status !== "blocked") return "overdue";
   return status as any;
 }
 
@@ -245,7 +245,7 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
         .where(eq(tasks.id, targetCard.taskId))
         .limit(1);
 
-      if (!targetTask || targetTask.status === "completed") continue;
+      if (!targetTask || targetTask.status === "completed" || targetTask.status === "blocked") continue;
 
       const childOverdue = computeOverdue(targetTask.dueDate, "in_progress");
       const childVisual = toVisualStatus("in_progress", childOverdue);

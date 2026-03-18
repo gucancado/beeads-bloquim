@@ -25,12 +25,24 @@ export default function MyTasksPage() {
     }
   };
 
+  const getStatusLabel = (s: string) => {
+    switch (s) {
+      case 'pending': return 'PENDENTE';
+      case 'in_progress': return 'EM ANDAMENTO';
+      case 'completed': return 'CONCLUÍDA';
+      case 'overdue': return 'VENCIDA';
+      case 'blocked': return 'INTERROMPIDA';
+      default: return s.replace('_', ' ').toUpperCase();
+    }
+  };
+
   const getStatusColor = (s: string) => {
     switch (s) {
       case 'overdue': return 'bg-red-500 text-white border-transparent';
       case 'completed': return 'bg-emerald-500 text-white border-transparent';
       case 'in_progress': return 'bg-amber-500 text-white border-transparent';
       case 'pending': return 'bg-blue-500 text-white border-transparent';
+      case 'blocked': return 'bg-purple-500 text-white border-transparent';
       default: return '';
     }
   };
@@ -62,6 +74,7 @@ export default function MyTasksPage() {
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="blocked">Interrompida</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -87,7 +100,7 @@ export default function MyTasksPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
-                          {task.status.replace('_', ' ').toUpperCase()}
+                          {getStatusLabel(task.status)}
                         </Badge>
                         <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
                           <Flag className="w-3 h-3 mr-1 inline-block" /> {task.priority}

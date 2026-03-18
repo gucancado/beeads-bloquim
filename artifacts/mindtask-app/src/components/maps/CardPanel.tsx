@@ -149,6 +149,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       case 'pending': return 'bg-blue-500';
       case 'in_progress': return 'bg-amber-500';
       case 'completed': return 'bg-emerald-500';
+      case 'blocked': return 'bg-purple-500';
       default: return 'bg-slate-400';
     }
   };
@@ -242,6 +243,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             <SelectItem value="pending">⏳ Pendente</SelectItem>
                             <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
                             <SelectItem value="completed">✅ Concluída</SelectItem>
+                            <SelectItem value="blocked">🚫 Interrompida</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

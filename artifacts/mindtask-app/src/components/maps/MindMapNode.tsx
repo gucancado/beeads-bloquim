@@ -17,6 +17,18 @@ interface MindMapNodeProps {
   selected: boolean;
 }
 
+function statusLabel(s: string) {
+  switch (s) {
+    case 'pending': return 'Pendente';
+    case 'in_progress': return 'Em andamento';
+    case 'completed': return 'Concluída';
+    case 'overdue': return 'Vencida';
+    case 'blocked': return 'Interrompida';
+    case 'no_task': return 'Sem tarefa';
+    default: return s.replace('_', ' ');
+  }
+}
+
 function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
@@ -96,7 +108,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         <div className="mt-3 pt-3 border-t flex items-center gap-2">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {data.statusVisual.replace('_', ' ')}
+            {statusLabel(data.statusVisual)}
           </span>
         </div>
       </div>
