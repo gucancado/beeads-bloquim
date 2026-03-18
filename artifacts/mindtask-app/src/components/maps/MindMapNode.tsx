@@ -19,14 +19,21 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
 
-  const handleCls = 'transition-opacity opacity-0 group-hover/node:opacity-100 !w-3 !h-3 !border-2 !bg-background hover:!opacity-100 hover:!scale-125';
+  const handleCls = [
+    'transition-all opacity-0 group-hover/node:opacity-100',
+    '!w-4 !h-4 !border-2 !rounded-full !bg-background',
+    'hover:!opacity-100 hover:!scale-125',
+  ].join(' ');
   const handleStyle = { borderColor: color };
 
   const dueDateStr = data.taskDueDate
     ? format(new Date(data.taskDueDate), 'dd/MM/yy')
     : null;
 
-  const isOverdue = data.taskDueDate && new Date(data.taskDueDate) < new Date() && data.statusVisual !== 'completed';
+  const isOverdue =
+    data.taskDueDate &&
+    new Date(data.taskDueDate) < new Date() &&
+    data.statusVisual !== 'completed';
 
   return (
     <div
@@ -38,17 +45,10 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
           : undefined,
       }}
     >
-      {/* Target handles */}
-      <Handle type="target" position={Position.Top}    id="target-top"    className={handleCls} style={handleStyle} />
-      <Handle type="target" position={Position.Bottom} id="target-bottom" className={handleCls} style={handleStyle} />
-      <Handle type="target" position={Position.Left}   id="target-left"   className={handleCls} style={handleStyle} />
-      <Handle type="target" position={Position.Right}  id="target-right"  className={handleCls} style={handleStyle} />
-
-      {/* Source handles */}
-      <Handle type="source" position={Position.Top}    id="source-top"    className={handleCls} style={handleStyle} />
-      <Handle type="source" position={Position.Bottom} id="source-bottom" className={handleCls} style={handleStyle} />
-      <Handle type="source" position={Position.Left}   id="source-left"   className={handleCls} style={handleStyle} />
-      <Handle type="source" position={Position.Right}  id="source-right"  className={handleCls} style={handleStyle} />
+      <Handle type="target" position={Position.Left}  id="target-left"  className={handleCls} style={handleStyle} />
+      <Handle type="target" position={Position.Right} id="target-right" className={handleCls} style={handleStyle} />
+      <Handle type="source" position={Position.Left}  id="source-left"  className={handleCls} style={handleStyle} />
+      <Handle type="source" position={Position.Right} id="source-right" className={handleCls} style={handleStyle} />
 
       <div className="p-4 relative overflow-hidden rounded-xl">
         <div
