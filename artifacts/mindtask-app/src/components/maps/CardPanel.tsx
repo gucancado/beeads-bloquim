@@ -163,7 +163,11 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   return (
     <>
       <Sheet open={isOpen} onOpenChange={(val) => !val && onClose()}>
-        <SheetContent className="w-[420px] sm:w-[500px] overflow-y-auto p-0 flex flex-col shadow-2xl">
+        <SheetContent
+          className="w-[420px] sm:w-[500px] overflow-y-auto p-0 flex flex-col shadow-2xl"
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
           {isCardLoading || !card ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
