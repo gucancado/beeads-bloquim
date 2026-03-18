@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard } from "@workspace/api-client-react";
-import { Loader2, CheckCircle2, Save, Trash2, X, Flag, Calendar, User, AlertTriangle } from "lucide-react";
+import { Loader2, Save, Trash2, X, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,14 +33,12 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
   const [cardTitle, setCardTitle] = useState("");
   const [cardDesc, setCardDesc] = useState("");
-
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
   const [taskPriority, setTaskPriority] = useState<any>("medium");
   const [taskStatus, setTaskStatus] = useState<any>("pending");
   const [taskAssignee, setTaskAssignee] = useState<string>("unassigned");
   const [taskDueDate, setTaskDueDate] = useState<string>("");
-
   const [showDeleteCard, setShowDeleteCard] = useState(false);
 
   useEffect(() => {
@@ -82,18 +80,45 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   }, [card, cardId]);
 
   const updateCardMut = useUpdateCard();
-  const handleSaveCard = () => {
+  const updateTaskDetailsMut = useUpdateTaskDetails();
+
+  const isSaving = updateCardMut.isPending || updateTaskDetailsMut.isPending;
+
+  const handleSaveAll = async () => {
     if (!cardId) return;
+
     updateCardMut.mutate(
       { workspaceId, mapId, cardId, data: { title: cardTitle, description: cardDesc } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-          toast({ title: "Card atualizado." });
         }
       }
     );
+
+    if (card?.task) {
+      updateTaskDetailsMut.mutate(
+        {
+          workspaceId, mapId, cardId, data: {
+            title: taskTitle,
+            description: taskDesc || null,
+            priority: taskPriority,
+            assignedTo: taskAssignee === "unassigned" ? null : taskAssignee,
+            dueDate: taskDueDate ? new Date(taskDueDate + "T00:00:00").toISOString() : null,
+          }
+        },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
+            toast({ title: "Alterações salvas." });
+          }
+        }
+      );
+    } else {
+      toast({ title: "Alterações salvas." });
+    }
   };
 
   const deleteCardMut = useDeleteCard();
@@ -111,29 +136,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
     );
   };
 
-  const updateTaskDetailsMut = useUpdateTaskDetails();
-  const handleUpdateTaskDetails = () => {
-    if (!cardId || !card?.task) return;
-    updateTaskDetailsMut.mutate(
-      {
-        workspaceId, mapId, cardId, data: {
-          title: taskTitle,
-          description: taskDesc || null,
-          priority: taskPriority,
-          assignedTo: taskAssignee === "unassigned" ? null : taskAssignee,
-          dueDate: taskDueDate ? new Date(taskDueDate + "T00:00:00").toISOString() : null,
-        }
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-          toast({ title: "Detalhes da tarefa atualizados." });
-        }
-      }
-    );
-  };
-
   const updateTaskStatusMut = useUpdateTaskStatus();
   const handleStatusChange = (val: string) => {
     if (!cardId || !card?.task) return;
@@ -144,7 +146,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-          toast({ title: "Status atualizado. O card foi sincronizado." });
         }
       }
     );
@@ -172,11 +173,12 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
             </div>
           ) : (
             <>
+              {/* Header */}
               <div className="p-6 bg-slate-50 dark:bg-slate-900 border-b">
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between">
                   <SheetHeader className="text-left flex-1">
                     <SheetTitle className="text-xl font-display">Editar Card</SheetTitle>
-                    <SheetDescription className="text-sm">Atualize o nó e gerencie sua tarefa.</SheetDescription>
+                    <SheetDescription className="text-sm">Atualize o nó e sua tarefa.</SheetDescription>
                   </SheetHeader>
                   <div className="flex items-center gap-1 ml-4">
                     <Button
@@ -200,46 +202,30 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 </div>
               </div>
 
-              <div className="p-5 space-y-5 flex-1">
-                {/* Card Section */}
-                <div className="space-y-4 bg-card rounded-2xl p-5 border shadow-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center text-xs font-bold">N</div>
-                    <h3 className="font-semibold text-foreground text-sm">Informações do Nó</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
-                      <Input value={cardTitle} onChange={e => setCardTitle(e.target.value)} className="bg-background rounded-xl" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
-                      <Textarea value={cardDesc} onChange={e => setCardDesc(e.target.value)} className="bg-background rounded-xl resize-none min-h-[72px]" placeholder="Descrição opcional..." />
-                    </div>
-                    <Button onClick={handleSaveCard} disabled={updateCardMut.isPending} size="sm" className="rounded-xl w-full">
-                      {updateCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                      Salvar Card
-                    </Button>
-                  </div>
+              {/* Form */}
+              <div className="p-5 space-y-4 flex-1">
+
+                {/* Title */}
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
+                  <Input value={cardTitle} onChange={e => setCardTitle(e.target.value)} className="bg-background rounded-xl" />
                 </div>
 
-                {/* Task Section */}
-                <div className="space-y-4 bg-card rounded-2xl p-5 border shadow-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    </div>
-                    <h3 className="font-semibold text-foreground text-sm">Execução de Tarefa</h3>
-                  </div>
+                {/* Description */}
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
+                  <Textarea value={cardDesc} onChange={e => setCardDesc(e.target.value)} className="bg-background rounded-xl resize-none min-h-[72px]" placeholder="Descrição opcional..." />
+                </div>
 
+                <div className="border-t pt-4">
                   {!isTaskReady ? (
-                    <div className="flex items-center justify-center py-6 gap-3 text-muted-foreground">
+                    <div className="flex items-center justify-center py-4 gap-3 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span className="text-sm">Preparando tarefa…</span>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Status */}
+                      {/* Status — auto-saves to sync canvas */}
                       <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5 block">
                           <span className={`w-2 h-2 rounded-full inline-block ${getStatusDot(taskStatus)}`} />
@@ -256,7 +242,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             <SelectItem value="overdue">🔴 Atrasada</SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-[11px] text-muted-foreground mt-1.5">Alterar o status sincroniza a cor do card no canvas.</p>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -310,25 +295,22 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         </Select>
                       </div>
 
-                      {/* Task Title */}
-                      <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título da Tarefa</label>
-                        <Input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} className="bg-background rounded-xl" />
-                      </div>
-
                       {/* Task Description */}
                       <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Detalhes</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Detalhes da Tarefa</label>
                         <Textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value)} className="bg-background rounded-xl resize-none min-h-[80px]" placeholder="Descreva os critérios de conclusão..." />
                       </div>
-
-                      <Button onClick={handleUpdateTaskDetails} disabled={updateTaskDetailsMut.isPending} className="rounded-xl w-full">
-                        {updateTaskDetailsMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                        Salvar Detalhes
-                      </Button>
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Sticky footer with single save button */}
+              <div className="p-5 border-t bg-slate-50 dark:bg-slate-900">
+                <Button onClick={handleSaveAll} disabled={isSaving} className="rounded-xl w-full h-11">
+                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Salvar
+                </Button>
               </div>
             </>
           )}
