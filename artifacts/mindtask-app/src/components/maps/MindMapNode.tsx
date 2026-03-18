@@ -5,17 +5,19 @@ import { Pencil, Calendar, User } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface MindMapNodeProps {
+  id: string;
   data: {
     title: string;
     statusVisual: string;
     taskId?: string | null;
     taskDueDate?: string | null;
     taskAssigneeName?: string | null;
+    onOpen?: (id: string) => void;
   };
   selected: boolean;
 }
 
-function MindMapNode({ data, selected }: MindMapNodeProps) {
+function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
 
@@ -68,6 +70,7 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
               color,
             }}
             title="Editar card"
+            onClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>

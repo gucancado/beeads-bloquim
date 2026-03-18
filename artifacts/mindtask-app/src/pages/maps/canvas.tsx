@@ -30,6 +30,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
+  const handleOpenPanel = useCallback((cardId: string) => {
+    setSelectedCardId(cardId);
+  }, []);
+
   useEffect(() => {
     if (!mapData) return;
 
@@ -38,7 +42,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         type: 'mindmap',
         position: { x: c.positionX, y: c.positionY },
-        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null },
+        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null, onOpen: handleOpenPanel },
       }));
       setNodes(initialNodes);
 
@@ -61,13 +65,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             id: c.id,
             type: 'mindmap',
             position: { x: c.positionX, y: c.positionY },
-            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null },
+            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null, onOpen: handleOpenPanel },
           }));
         return [
           ...filtered.map(n => {
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
-            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: (s as any).taskDueDate ?? null, taskAssigneeName: (s as any).taskAssigneeName ?? null } };
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: (s as any).taskDueDate ?? null, taskAssigneeName: (s as any).taskAssigneeName ?? null, onOpen: handleOpenPanel } };
           }),
           ...newNodes,
         ];
@@ -161,10 +165,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     );
   }, [workspaceId, mapId, createCardMut, queryClient]);
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    event.stopPropagation();
-    setSelectedCardId(node.id);
-  }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedCardId(null);
@@ -203,7 +203,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
         <div className="absolute bottom-4 left-4 z-10">
           <p className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-border/40 shadow-sm">
-            Clique no node para editar • Arraste para conectar • Clique na ligação para removê-la
+            Passe o mouse e clique no lápis para editar • Arraste para conectar • Clique na ligação para removê-la
           </p>
         </div>
 
@@ -215,7 +215,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onEdgesChange={onEdgesChangeWithDelete}
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
-            onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
