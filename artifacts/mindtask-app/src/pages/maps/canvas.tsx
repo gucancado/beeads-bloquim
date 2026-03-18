@@ -50,6 +50,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         source: c.sourceCardId,
         target: c.targetCardId,
+        sourceHandle: (c as any).sourceHandle ?? undefined,
+        targetHandle: (c as any).targetHandle ?? undefined,
         ...EDGE_STYLE,
       }));
       setEdges(initialEdges);
@@ -83,7 +85,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const existingIds = new Set(filtered.map(e => e.id));
         const newEdges: Edge[] = mapData.connections
           .filter(c => !existingIds.has(c.id))
-          .map(c => ({ id: c.id, source: c.sourceCardId, target: c.targetCardId, ...EDGE_STYLE }));
+          .map(c => ({ id: c.id, source: c.sourceCardId, target: c.targetCardId, sourceHandle: (c as any).sourceHandle ?? undefined, targetHandle: (c as any).targetHandle ?? undefined, ...EDGE_STYLE }));
         return [...filtered, ...newEdges];
       });
     }
@@ -119,7 +121,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       setEdges((eds) => addEdge(newEdge, eds));
 
       createConnMut.mutate(
-        { workspaceId, mapId, data: { sourceCardId: params.source!, targetCardId: params.target! } },
+        { workspaceId, mapId, data: { sourceCardId: params.source!, targetCardId: params.target!, sourceHandle: params.sourceHandle ?? undefined, targetHandle: params.targetHandle ?? undefined } as any },
         {
           onSuccess: (conn) => {
             setEdges(eds => eds.map(e =>

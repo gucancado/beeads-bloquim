@@ -47,6 +47,8 @@ export const cardConnections = pgTable("card_connections", {
   targetCardId: uuid("target_card_id")
     .notNull()
     .references(() => cards.id, { onDelete: "cascade" }),
+  sourceHandle: text("source_handle"),
+  targetHandle: text("target_handle"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

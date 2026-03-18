@@ -11,6 +11,8 @@ const router: IRouter = Router({ mergeParams: true });
 const createConnectionSchema = z.object({
   sourceCardId: z.string().uuid(),
   targetCardId: z.string().uuid(),
+  sourceHandle: z.string().optional(),
+  targetHandle: z.string().optional(),
 });
 
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
