@@ -1,14 +1,16 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
-import { CheckSquare } from 'lucide-react';
+import { CheckSquare, Calendar, User } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface MindMapNodeProps {
   data: {
     title: string;
-    description?: string;
     statusVisual: string;
     taskId?: string | null;
+    taskDueDate?: string | null;
+    taskAssigneeName?: string | null;
   };
   selected: boolean;
 }
@@ -20,6 +22,12 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
   const handleCls = 'transition-opacity opacity-0 group-hover/node:opacity-100 !w-3 !h-3 !border-2 !bg-background hover:!opacity-100 hover:!scale-125';
   const handleStyle = { borderColor: color };
 
+  const dueDateStr = data.taskDueDate
+    ? format(new Date(data.taskDueDate), 'dd/MM/yy')
+    : null;
+
+  const isOverdue = data.taskDueDate && new Date(data.taskDueDate) < new Date() && data.statusVisual !== 'completed';
+
   return (
     <div
       className={`group/node min-w-[220px] max-w-[280px] bg-card rounded-2xl shadow-lg border-2 transition-all duration-200 ${selected ? 'shadow-xl scale-[1.02]' : ''}`}
@@ -30,13 +38,13 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
           : undefined,
       }}
     >
-      {/* Target handles — receive connections from other nodes */}
+      {/* Target handles */}
       <Handle type="target" position={Position.Top}    id="target-top"    className={handleCls} style={handleStyle} />
       <Handle type="target" position={Position.Bottom} id="target-bottom" className={handleCls} style={handleStyle} />
       <Handle type="target" position={Position.Left}   id="target-left"   className={handleCls} style={handleStyle} />
       <Handle type="target" position={Position.Right}  id="target-right"  className={handleCls} style={handleStyle} />
 
-      {/* Source handles — initiate connections to other nodes */}
+      {/* Source handles */}
       <Handle type="source" position={Position.Top}    id="source-top"    className={handleCls} style={handleStyle} />
       <Handle type="source" position={Position.Bottom} id="source-bottom" className={handleCls} style={handleStyle} />
       <Handle type="source" position={Position.Left}   id="source-left"   className={handleCls} style={handleStyle} />
@@ -65,13 +73,24 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
           )}
         </div>
 
-        {data.description && (
-          <p className="mt-2 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {data.description}
-          </p>
+        {(dueDateStr || data.taskAssigneeName) && (
+          <div className="mt-3 flex flex-col gap-1.5">
+            {data.taskAssigneeName && (
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <User className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{data.taskAssigneeName}</span>
+              </div>
+            )}
+            {dueDateStr && (
+              <div className={`flex items-center gap-1.5 text-[11px] font-medium ${isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
+                <Calendar className="w-3 h-3 flex-shrink-0" />
+                <span>{dueDateStr}</span>
+              </div>
+            )}
+          </div>
         )}
 
-        <div className="mt-4 pt-3 border-t flex items-center gap-2">
+        <div className="mt-3 pt-3 border-t flex items-center gap-2">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {data.statusVisual.replace('_', ' ')}

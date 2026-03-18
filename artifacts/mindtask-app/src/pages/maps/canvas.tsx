@@ -38,7 +38,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         type: 'mindmap',
         position: { x: c.positionX, y: c.positionY },
-        data: { title: c.title, description: c.description, statusVisual: c.statusVisual, taskId: c.taskId },
+        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null },
       }));
       setNodes(initialNodes);
 
@@ -61,13 +61,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             id: c.id,
             type: 'mindmap',
             position: { x: c.positionX, y: c.positionY },
-            data: { title: c.title, description: c.description, statusVisual: c.statusVisual, taskId: c.taskId },
+            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null },
           }));
         return [
           ...filtered.map(n => {
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
-            return { ...n, data: { title: s.title, description: s.description, statusVisual: s.statusVisual, taskId: s.taskId } };
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: (s as any).taskDueDate ?? null, taskAssigneeName: (s as any).taskAssigneeName ?? null } };
           }),
           ...newNodes,
         ];

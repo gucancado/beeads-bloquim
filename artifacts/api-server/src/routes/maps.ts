@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { maps, cards, cardConnections } from "@workspace/db/schema";
+import { maps, cards, cardConnections, tasks, users } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
@@ -45,7 +45,34 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     return;
   }
 
-  const cardList = await db.select().from(cards).where(eq(cards.mapId, mapId));
+  const rawCards = await db
+    .select({
+      id: cards.id,
+      mapId: cards.mapId,
+      title: cards.title,
+      description: cards.description,
+      positionX: cards.positionX,
+      positionY: cards.positionY,
+      statusVisual: cards.statusVisual,
+      taskId: cards.taskId,
+      createdAt: cards.createdAt,
+      updatedAt: cards.updatedAt,
+      taskDueDate: tasks.dueDate,
+      taskAssigneeName: users.name,
+      taskAssigneeId: tasks.assignedTo,
+    })
+    .from(cards)
+    .leftJoin(tasks, eq(tasks.id, cards.taskId))
+    .leftJoin(users, eq(users.id, tasks.assignedTo))
+    .where(eq(cards.mapId, mapId));
+
+  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, ...c }) => ({
+    ...c,
+    taskDueDate: taskDueDate ?? null,
+    taskAssigneeName: taskAssigneeName ?? null,
+    taskAssigneeId: taskAssigneeId ?? null,
+  }));
+
   const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));
 
   res.json({ ...map, cards: cardList, connections: connectionList });
