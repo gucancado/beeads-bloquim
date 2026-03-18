@@ -4,6 +4,7 @@ import {
   timestamp,
   uuid,
   pgEnum,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -41,6 +42,7 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"),
   priority: taskPriorityEnum("priority").notNull().default("medium"),
   status: taskStatusEnum("status").notNull().default("pending"),
+  overdue: boolean("overdue").notNull().default(false),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

@@ -31,7 +31,7 @@ const createTaskSchema = z.object({
 });
 
 const updateTaskStatusSchema = z.object({
-  status: z.enum(["pending", "in_progress", "completed", "overdue"]),
+  status: z.enum(["pending", "in_progress", "completed"]),
 });
 
 const updateTaskDetailsSchema = z.object({
@@ -42,9 +42,14 @@ const updateTaskDetailsSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
-function resolveStatus(dueDate: Date | null | undefined): "in_progress" | "overdue" {
-  if (dueDate && dueDate < new Date()) return "overdue";
-  return "in_progress";
+function computeOverdue(dueDate: Date | null | undefined, status: string): boolean {
+  if (status === "completed") return false;
+  return !!dueDate && dueDate < new Date();
+}
+
+function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "no_task" {
+  if (overdue && status !== "completed") return "overdue";
+  return status as any;
 }
 
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
@@ -135,21 +140,17 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
   }
 
   const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined;
-  const status = resolveStatus(dueDate ?? null);
+  const overdue = computeOverdue(dueDate ?? null, "in_progress");
+  const visual = toVisualStatus("in_progress", overdue);
 
-  const taskData = {
-    ...parsed.data,
-    mapId,
-    workspaceId,
-    dueDate,
-    status,
-  };
-
-  const [task] = await db.insert(tasks).values(taskData).returning();
+  const [task] = await db
+    .insert(tasks)
+    .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "in_progress", overdue })
+    .returning();
 
   await db
     .update(cards)
-    .set({ taskId: task.id, statusVisual: status, updatedAt: new Date() })
+    .set({ taskId: task.id, statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
 
   res.status(201).json(task);
@@ -208,16 +209,18 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
 
   const { status } = parsed.data;
   const completedAt = status === "completed" ? new Date() : null;
+  const overdue = computeOverdue(task.dueDate, status);
+  const visual = toVisualStatus(status, overdue);
 
   const [updatedTask] = await db
     .update(tasks)
-    .set({ status, completedAt, updatedAt: new Date() })
+    .set({ status, overdue, completedAt, updatedAt: new Date() })
     .where(eq(tasks.id, card.taskId))
     .returning();
 
   await db
     .update(cards)
-    .set({ statusVisual: status, updatedAt: new Date() })
+    .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
 
   // Cascade: when completed, activate all directly connected downstream cards
@@ -244,16 +247,17 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
 
       if (!targetTask || targetTask.status === "completed") continue;
 
-      const newStatus = resolveStatus(targetTask.dueDate);
+      const childOverdue = computeOverdue(targetTask.dueDate, "in_progress");
+      const childVisual = toVisualStatus("in_progress", childOverdue);
 
       await db
         .update(tasks)
-        .set({ status: newStatus, updatedAt: new Date() })
+        .set({ status: "in_progress", overdue: childOverdue, updatedAt: new Date() })
         .where(eq(tasks.id, targetCard.taskId));
 
       await db
         .update(cards)
-        .set({ statusVisual: newStatus, updatedAt: new Date() })
+        .set({ statusVisual: childVisual, updatedAt: new Date() })
         .where(eq(cards.id, conn.targetCardId));
     }
   }
@@ -276,13 +280,20 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     return;
   }
 
+  const [currentTask] = await db.select().from(tasks).where(eq(tasks.id, card.taskId)).limit(1);
+
   const updateData: any = { ...parsed.data, updatedAt: new Date() };
-  let resolvedDueDate: Date | null | undefined;
+  let resolvedDueDate: Date | null = currentTask?.dueDate ?? null;
 
   if (parsed.data.dueDate !== undefined) {
     resolvedDueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
     updateData.dueDate = resolvedDueDate;
   }
+
+  // Recompute overdue whenever dueDate or any save happens
+  const currentStatus = currentTask?.status ?? "in_progress";
+  const overdue = computeOverdue(resolvedDueDate, currentStatus);
+  updateData.overdue = overdue;
 
   const [updatedTask] = await db
     .update(tasks)
@@ -290,21 +301,11 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     .where(eq(tasks.id, card.taskId))
     .returning();
 
-  // Auto-overdue: if due date was changed and is in the past, flip status
-  if (resolvedDueDate !== undefined && resolvedDueDate !== null && updatedTask.status !== "completed") {
-    const effectiveDue = resolvedDueDate;
-    if (effectiveDue < new Date()) {
-      await db
-        .update(tasks)
-        .set({ status: "overdue", updatedAt: new Date() })
-        .where(eq(tasks.id, card.taskId));
-
-      await db
-        .update(cards)
-        .set({ statusVisual: "overdue", updatedAt: new Date() })
-        .where(eq(cards.id, cardId));
-    }
-  }
+  const visual = toVisualStatus(currentStatus, overdue);
+  await db
+    .update(cards)
+    .set({ statusVisual: visual, updatedAt: new Date() })
+    .where(eq(cards.id, cardId));
 
   res.json(updatedTask);
 });

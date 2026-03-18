@@ -152,10 +152,11 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       case 'pending': return 'bg-blue-500';
       case 'in_progress': return 'bg-amber-500';
       case 'completed': return 'bg-emerald-500';
-      case 'overdue': return 'bg-red-500';
       default: return 'bg-slate-400';
     }
   };
+
+  const isOverdue = !!(card?.task as any)?.overdue;
 
   const isTaskReady = !!card?.task;
 
@@ -226,6 +227,11 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5 block">
                           <span className={`w-2 h-2 rounded-full inline-block ${getStatusDot(taskStatus)}`} />
                           Status
+                          {isOverdue && taskStatus !== 'completed' && (
+                            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
+                              🔴 Atrasada
+                            </span>
+                          )}
                         </label>
                         <Select value={taskStatus} onValueChange={handleStatusChange}>
                           <SelectTrigger className="bg-background rounded-xl h-10">
@@ -235,7 +241,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             <SelectItem value="pending">⏳ Pendente</SelectItem>
                             <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
                             <SelectItem value="completed">✅ Concluída</SelectItem>
-                            <SelectItem value="overdue">🔴 Atrasada</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
