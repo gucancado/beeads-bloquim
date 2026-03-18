@@ -34,7 +34,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const [cardTitle, setCardTitle] = useState("");
   const [cardDesc, setCardDesc] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
   const [taskPriority, setTaskPriority] = useState<any>("medium");
   const [taskStatus, setTaskStatus] = useState<any>("pending");
   const [taskAssignee, setTaskAssignee] = useState<string>("unassigned");
@@ -47,14 +46,12 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       setCardDesc(card.description || "");
       if (card.task) {
         setTaskTitle(card.task.title);
-        setTaskDesc(card.task.description || "");
         setTaskPriority(card.task.priority);
         setTaskStatus(card.task.status);
         setTaskAssignee(card.task.assignedTo || "unassigned");
         setTaskDueDate(card.task.dueDate ? format(new Date(card.task.dueDate), "yyyy-MM-dd") : "");
       } else {
         setTaskTitle(card.title);
-        setTaskDesc("");
         setTaskPriority("medium");
         setTaskStatus("pending");
         setTaskAssignee("unassigned");
@@ -102,7 +99,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
         {
           workspaceId, mapId, cardId, data: {
             title: taskTitle,
-            description: taskDesc || null,
             priority: taskPriority,
             assignedTo: taskAssignee === "unassigned" ? null : taskAssignee,
             dueDate: taskDueDate ? new Date(taskDueDate + "T00:00:00").toISOString() : null,
@@ -295,11 +291,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         </Select>
                       </div>
 
-                      {/* Task Description */}
-                      <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Detalhes da Tarefa</label>
-                        <Textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value)} className="bg-background rounded-xl resize-none min-h-[80px]" placeholder="Descreva os critérios de conclusão..." />
-                      </div>
                     </div>
                   )}
                 </div>
