@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
-import { CheckSquare, Calendar, User } from 'lucide-react';
+import { Pencil, Calendar, User } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface MindMapNodeProps {
@@ -61,17 +61,16 @@ function MindMapNode({ data, selected }: MindMapNodeProps) {
           <h3 className="font-display font-bold text-foreground text-base leading-tight break-words pr-2">
             {data.title}
           </h3>
-          {data.taskId && (
-            <div
-              className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center shadow-sm"
-              style={{
-                backgroundColor: `${color.replace(')', ' / 0.15)')}`,
-                color,
-              }}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-            </div>
-          )}
+          <button
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag"
+            style={{
+              backgroundColor: `${color.replace(')', ' / 0.12)')}`,
+              color,
+            }}
+            title="Editar card"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {(dueDateStr || data.taskAssigneeName) && (
