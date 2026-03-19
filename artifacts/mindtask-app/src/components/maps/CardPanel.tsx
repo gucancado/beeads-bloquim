@@ -250,11 +250,12 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                   ) : (
                     <div className="space-y-4">
                       {/* Status */}
+                      {taskStatus !== "completed" && (
                       <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5 block">
                           <span className={`w-2 h-2 rounded-full inline-block ${getStatusDot(taskStatus)}`} />
                           Status
-                          {isOverdue && taskStatus !== 'completed' && (
+                          {isOverdue && (
                             <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
                               🔴 Atrasada
                             </span>
@@ -267,11 +268,11 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                           <SelectContent>
                             <SelectItem value="pending">⏳ Pendente</SelectItem>
                             <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
-                            <SelectItem value="completed">✅ Concluída</SelectItem>
                             <SelectItem value="blocked">🚫 Interrompida</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-3">
                         {/* Priority */}
