@@ -30,7 +30,6 @@ export const taskPriorityEnum = pgEnum("task_priority", [
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   mapId: uuid("map_id")
-    .notNull()
     .references(() => maps.id, { onDelete: "cascade" }),
   workspaceId: uuid("workspace_id")
     .notNull()
