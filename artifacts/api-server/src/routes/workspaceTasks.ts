@@ -75,7 +75,6 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
     .insert(tasks)
     .values({
       workspaceId,
-      mapId: undefined as any,
       title,
       description: description ?? null,
       assignedTo: assignedTo ?? null,
