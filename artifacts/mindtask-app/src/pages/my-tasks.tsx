@@ -16,7 +16,6 @@ interface OpenCard {
 }
 
 const STATUS_OPTIONS = [
-  { value: "overdue",     label: "Vencida",       activeClass: "bg-red-500 text-white border-red-500 hover:bg-red-600"                       },
   { value: "in_progress", label: "Em andamento",  activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"                  },
   { value: "pending",     label: "Pendente",       activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600"                     },
   { value: "blocked",     label: "Interrompida",   activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600"               },
@@ -24,7 +23,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function MyTasksPage() {
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["overdue", "in_progress"]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
   const [openCard, setOpenCard] = useState<OpenCard | null>(null);
   const queryClient = useQueryClient();
 
