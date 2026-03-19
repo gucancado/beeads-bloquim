@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { useState, useEffect } from "react";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard, useGetMe } from "@workspace/api-client-react";
-import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, Check } from "lucide-react";
+import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,14 +44,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const [taskAssignee, setTaskAssignee] = useState<string>("unassigned");
   const [taskDueDate, setTaskDueDate] = useState<string>("");
   const [showDeleteCard, setShowDeleteCard] = useState(false);
-  const [showSaved, setShowSaved] = useState(false);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flashSaved = () => {
-    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-    setShowSaved(true);
-    savedTimerRef.current = setTimeout(() => setShowSaved(false), 2500);
-  };
 
   useEffect(() => {
     if (card) {
@@ -101,7 +93,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
     if (!cardId) return;
     updateCardMut.mutate(
       { workspaceId, mapId, cardId, data: { title: cardTitle, description: cardDesc } },
-      { onSuccess: () => { invalidate(); flashSaved(); } }
+      { onSuccess: () => { invalidate(); } }
     );
   };
 
@@ -119,7 +111,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
           dueDate: dueDate ? new Date(dueDate + "T00:00:00").toISOString() : null,
         }
       },
-      { onSuccess: () => { invalidate(); flashSaved(); } }
+      { onSuccess: () => { invalidate(); } }
     );
   };
 
@@ -154,7 +146,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
     setTaskStatus(val);
     updateTaskStatusMut.mutate(
       { workspaceId, mapId, cardId, data: { status: val as any } },
-      { onSuccess: () => { invalidate(); flashSaved(); } }
+      { onSuccess: () => { invalidate(); } }
     );
   };
 
@@ -183,45 +175,29 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
             </div>
           ) : (
             <>
-              {/* Header */}
-              <div className="p-6 bg-slate-50 dark:bg-slate-900 border-b">
-                <div className="flex items-center justify-between">
-                  <SheetHeader className="text-left flex-1">
-                    <SheetTitle className="text-xl font-display">Editar Card</SheetTitle>
-                    {showSaved ? (
-                      <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                        <Check className="w-3.5 h-3.5" /> Edições salvas
-                      </p>
-                    ) : (
-                      <SheetDescription className="text-sm">Atualize o nó e sua tarefa.</SheetDescription>
-                    )}
-                  </SheetHeader>
-                  <div className="flex items-center gap-1 ml-4">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowDeleteCard(true)}
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                      title="Deletar card"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               {/* Form */}
               <div className="p-5 space-y-4 flex-1">
 
-                {/* Title */}
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
-                  <Input
-                    value={cardTitle}
-                    onChange={e => setCardTitle(e.target.value)}
-                    onBlur={saveCard}
-                    className="bg-background rounded-xl"
-                  />
+                {/* Title + actions */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
+                    <Input
+                      value={cardTitle}
+                      onChange={e => setCardTitle(e.target.value)}
+                      onBlur={saveCard}
+                      className="bg-background rounded-xl"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowDeleteCard(true)}
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg mb-0.5"
+                    title="Deletar card"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
 
                 {/* Description */}
