@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { cards, tasks, cardConnections } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -230,14 +230,23 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
     .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
 
-  // Cascade: when completed, activate all directly connected downstream cards
+  // Cascade: when completed, activate downstream cards connected via right handle
+  // A downstream card only advances to "in_progress" if:
+  //   1. Its task is currently "pending"
+  //   2. ALL cards connected to its left handle (prerequisites) are "completed" or "blocked"
   if (status === "completed") {
-    const connections = await db
+    // Find all connections leaving from this card's right handle
+    const outgoingConnections = await db
       .select()
       .from(cardConnections)
-      .where(eq(cardConnections.sourceCardId, cardId));
+      .where(
+        and(
+          eq(cardConnections.sourceCardId, cardId),
+          eq(cardConnections.sourceHandle, "source-right")
+        )
+      );
 
-    for (const conn of connections) {
+    for (const conn of outgoingConnections) {
       const [targetCard] = await db
         .select()
         .from(cards)
@@ -252,8 +261,50 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
         .where(eq(tasks.id, targetCard.taskId))
         .limit(1);
 
-      if (!targetTask || targetTask.status === "completed" || targetTask.status === "blocked") continue;
+      // Only process tasks that are still "pending"
+      if (!targetTask || targetTask.status !== "pending") continue;
 
+      // Find all connections arriving at this target card's left handle (prerequisites)
+      const prerequisites = await db
+        .select()
+        .from(cardConnections)
+        .where(
+          and(
+            eq(cardConnections.targetCardId, conn.targetCardId),
+            eq(cardConnections.targetHandle, "target-left")
+          )
+        );
+
+      // Gather all prerequisite source tasks and check their statuses
+      let allPrerequisitesDone = true;
+      for (const prereq of prerequisites) {
+        const [prereqCard] = await db
+          .select()
+          .from(cards)
+          .where(eq(cards.id, prereq.sourceCardId))
+          .limit(1);
+
+        if (!prereqCard?.taskId) {
+          // Prerequisite card has no task — treat as not done
+          allPrerequisitesDone = false;
+          break;
+        }
+
+        const [prereqTask] = await db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, prereqCard.taskId))
+          .limit(1);
+
+        if (!prereqTask || (prereqTask.status !== "completed" && prereqTask.status !== "blocked")) {
+          allPrerequisitesDone = false;
+          break;
+        }
+      }
+
+      if (!allPrerequisitesDone) continue;
+
+      // All prerequisites are done — advance the target task to "in_progress"
       const childOverdue = computeOverdue(targetTask.dueDate, "in_progress");
       const childVisual = toVisualStatus("in_progress", childOverdue);
 
