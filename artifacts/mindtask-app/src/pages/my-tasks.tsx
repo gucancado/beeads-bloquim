@@ -1,16 +1,26 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetMyTasks } from "@workspace/api-client-react";
-import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, ArrowRight } from "lucide-react";
+import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, ArrowRight, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CardPanel } from "@/components/maps/CardPanel";
+import { useQueryClient } from "@tanstack/react-query";
+
+interface OpenCard {
+  workspaceId: string;
+  mapId: string;
+  cardId: string;
+}
 
 export default function MyTasksPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  
+  const [openCard, setOpenCard] = useState<OpenCard | null>(null);
+  const queryClient = useQueryClient();
+
   const { data: tasks, isLoading } = useGetMyTasks({ 
     status: statusFilter !== "all" ? statusFilter as any : undefined 
   });
@@ -45,6 +55,11 @@ export default function MyTasksPage() {
       case 'blocked': return 'bg-purple-500 text-white border-transparent';
       default: return '';
     }
+  };
+
+  const handleClosePanel = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+    setOpenCard(null);
   };
 
   return (
@@ -96,8 +111,12 @@ export default function MyTasksPage() {
             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
               <div className="divide-y divide-border/50">
                 {tasks?.map(task => (
-                  <div key={task.id} className="p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group">
-                    <div className="flex-1">
+                  <div
+                    key={task.id}
+                    className="p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
+                    onClick={() => setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId })}
+                  >
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
                         <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
                           {getStatusLabel(task.status)}
@@ -110,7 +129,7 @@ export default function MyTasksPage() {
                       <p className="text-muted-foreground text-sm line-clamp-1 max-w-2xl">{task.description || "No description provided."}</p>
                     </div>
 
-                    <div className="flex flex-col md:items-end gap-3 shrink-0">
+                    <div className="flex flex-col md:items-end gap-3 shrink-0" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         {task.dueDate && (
                           <div className="flex items-center gap-1.5">
@@ -126,11 +145,24 @@ export default function MyTasksPage() {
                         </div>
                       </div>
                       
-                      <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                        <Button variant="outline" size="sm" className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors">
-                          View in Map <ArrowRight className="w-4 h-4 ml-1.5" />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId });
+                          }}
+                        >
+                          <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
                         </Button>
-                      </Link>
+                        <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
+                          <Button variant="outline" size="sm" className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors">
+                            View in Map <ArrowRight className="w-4 h-4 ml-1.5" />
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -139,6 +171,15 @@ export default function MyTasksPage() {
           )}
         </div>
       </div>
+
+      {openCard && (
+        <CardPanel
+          workspaceId={openCard.workspaceId}
+          mapId={openCard.mapId}
+          cardId={openCard.cardId}
+          onClose={handleClosePanel}
+        />
+      )}
     </AppLayout>
   );
 }
