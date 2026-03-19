@@ -125,7 +125,7 @@ export default function MyTasksPage() {
                           <Flag className="w-3 h-3 mr-1 inline-block" /> {task.priority}
                         </Badge>
                       </div>
-                      <h3 className="text-xl font-bold text-foreground mb-1">{task.title}</h3>
+                      <h3 className="text-xl font-bold text-foreground mb-1">{(task as any).cardTitle || task.title}</h3>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5 shrink-0" />

@@ -111,6 +111,13 @@ router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), a
     .where(eq(cards.id, req.params.cardId))
     .returning();
 
+  if (parsed.data.title && updated.taskId) {
+    await db
+      .update(tasks)
+      .set({ title: parsed.data.title, updatedAt: new Date() })
+      .where(eq(tasks.id, updated.taskId));
+  }
+
   res.json(updated);
 });
 
