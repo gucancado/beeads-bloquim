@@ -5,12 +5,14 @@ import { LogOut, CheckSquare, Compass, Folders, Loader2, Plus, PanelLeftClose, P
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQueryClient } from "@tanstack/react-query";
+import { ProfileSheet } from "@/components/profile/ProfileSheet";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar_collapsed") === "true"; } catch { return false; }
   });
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const { data: user, isLoading: isUserLoading } = useGetMe({
     query: { retry: false }
@@ -163,7 +165,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* Footer */}
         <div className={`border-t border-sidebar-border/50 ${collapsed ? 'p-2' : 'p-4'}`}>
           {!collapsed && (
-            <div className="flex items-center gap-3 px-2 py-3 mb-2">
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="w-full flex items-center gap-3 px-2 py-3 mb-2 rounded-xl hover:bg-sidebar-accent/50 transition-colors text-left"
+              title="Editar perfil"
+            >
               <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm shrink-0">
                 {user.name.charAt(0).toUpperCase()}
               </div>
@@ -171,17 +177,26 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
                 <p className="text-xs text-sidebar-foreground/50 truncate">{user.email}</p>
               </div>
-            </div>
+            </button>
           )}
 
           {collapsed ? (
-            <button
-              title="Sair"
-              onClick={() => logoutMutation.mutate()}
-              className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col items-center gap-1">
+              <button
+                title={`${user.name} · Editar perfil`}
+                onClick={() => setProfileOpen(true)}
+                className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm hover:ring-2 hover:ring-primary/40 transition-all"
+              >
+                {user.name.charAt(0).toUpperCase()}
+              </button>
+              <button
+                title="Sair"
+                onClick={() => logoutMutation.mutate()}
+                className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           ) : (
             <Button 
               variant="ghost" 
@@ -199,6 +214,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <main className="flex-1 flex flex-col overflow-hidden relative min-w-0">
         {children}
       </main>
+
+      <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { users } from "@workspace/db/schema";
+import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, signToken, AuthRequest } from "../middlewares/auth";
 import { z } from "zod";
@@ -91,6 +91,47 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
   }
 
   res.json({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
+});
+
+const updateMeSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
+  const parsed = updateMeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const [updated] = await db
+    .update(users)
+    .set({ name: parsed.data.name })
+    .where(eq(users.id, req.user!.userId))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Not found", message: "User not found" });
+    return;
+  }
+
+  res.json({ id: updated.id, name: updated.name, email: updated.email, createdAt: updated.createdAt });
+});
+
+router.get("/me/workspaces", requireAuth, async (req: AuthRequest, res) => {
+  const rows = await db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      hidden: workspaces.hidden,
+      role: workspaceMembers.role,
+      createdAt: workspaces.createdAt,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
+    .where(eq(workspaceMembers.userId, req.user!.userId));
+
+  res.json(rows);
 });
 
 export default router;
