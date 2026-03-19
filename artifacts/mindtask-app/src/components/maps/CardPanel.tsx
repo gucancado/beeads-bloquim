@@ -180,8 +180,8 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
                 {/* Title + actions */}
                 <div>
-                  {isTaskReady && (
-                    <div className="flex justify-end mb-1">
+                  <div className="flex items-center justify-end gap-2 mb-1">
+                    {isTaskReady && (
                       <button
                         onClick={() => {
                           if (taskStatus === "completed") {
@@ -199,27 +199,25 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                       >
                         {taskStatus === "completed" ? "✓ Concluída" : "Concluir"}
                       </button>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
-                      <Input
-                        value={cardTitle}
-                        onChange={e => setCardTitle(e.target.value)}
-                        onBlur={saveCard}
-                        className="bg-background rounded-xl"
-                      />
-                    </div>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => setShowDeleteCard(true)}
-                      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg mt-5"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
                       title="Deletar card"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
+                    <Input
+                      value={cardTitle}
+                      onChange={e => setCardTitle(e.target.value)}
+                      onBlur={saveCard}
+                      className="bg-background rounded-xl"
+                    />
                   </div>
                 </div>
 
