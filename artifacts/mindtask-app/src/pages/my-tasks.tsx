@@ -4,7 +4,6 @@ import { useGetMyTasks } from "@workspace/api-client-react";
 import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, ArrowRight, Pencil, Building2, User } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardPanel } from "@/components/maps/CardPanel";
@@ -16,13 +15,27 @@ interface OpenCard {
   cardId: string;
 }
 
+const STATUS_OPTIONS = [
+  { value: "overdue",     label: "Vencida",       activeClass: "bg-red-500 text-white border-red-500 hover:bg-red-600"                       },
+  { value: "in_progress", label: "Em andamento",  activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"                  },
+  { value: "pending",     label: "Pendente",       activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600"                     },
+  { value: "blocked",     label: "Interrompida",   activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600"               },
+  { value: "completed",   label: "Concluída",      activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"            },
+];
+
 export default function MyTasksPage() {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["overdue", "in_progress"]);
   const [openCard, setOpenCard] = useState<OpenCard | null>(null);
   const queryClient = useQueryClient();
 
+  const toggleStatus = (value: string) => {
+    setSelectedStatuses(prev =>
+      prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
+    );
+  };
+
   const { data: tasks, isLoading } = useGetMyTasks({ 
-    status: statusFilter !== "all" ? statusFilter as any : undefined 
+    status: selectedStatuses.length > 0 ? selectedStatuses.join(",") as any : undefined 
   });
 
   const getPriorityColor = (p: string) => {
@@ -66,32 +79,45 @@ export default function MyTasksPage() {
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
         <div className="max-w-6xl mx-auto p-8 lg:p-12">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-12">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
-                  <CheckSquare className="w-5 h-5" />
+          <div className="flex flex-col gap-6 mb-12">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                    <CheckSquare className="w-5 h-5" />
+                  </div>
+                  <h1 className="text-4xl font-display font-bold text-foreground">My Tasks</h1>
                 </div>
-                <h1 className="text-4xl font-display font-bold text-foreground">My Tasks</h1>
+                <p className="text-muted-foreground text-lg ml-1">Everything assigned to you across all workspaces.</p>
               </div>
-              <p className="text-muted-foreground text-lg ml-1">Everything assigned to you across all workspaces.</p>
             </div>
-            
-            <div className="w-full sm:w-48">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Filter by Status</label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-12 rounded-xl bg-card border-border/60 shadow-sm">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="overdue">Overdue</SelectItem>
-                  <SelectItem value="blocked">Interrompida</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Filtrar:</span>
+              {STATUS_OPTIONS.map(opt => {
+                const isActive = selectedStatuses.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => toggleStatus(opt.value)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
+                      isActive
+                        ? opt.activeClass
+                        : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+              {selectedStatuses.length > 0 && (
+                <button
+                  onClick={() => setSelectedStatuses([])}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
+                >
+                  Limpar filtros
+                </button>
+              )}
             </div>
           </div>
 
