@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard } from "@workspace/api-client-react";
+import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard, useGetMe } from "@workspace/api-client-react";
 import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, Check } from "lucide-react";
+import { CommentsSection } from "@/components/maps/CommentsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +31,10 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const { data: members } = useListWorkspaceMembers(workspaceId, {
     query: { enabled: isOpen }
   });
+
+  const { data: me } = useGetMe({ query: { enabled: isOpen } });
+  const currentUserId = me?.id ?? "";
+  const isAdmin = !!(members?.find(m => m.userId === me?.id)?.role === "admin");
 
   const [cardTitle, setCardTitle] = useState("");
   const [cardDesc, setCardDesc] = useState("");
@@ -318,6 +323,17 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                     </div>
                   )}
                 </div>
+
+                {/* Comments */}
+                {cardId && (
+                  <CommentsSection
+                    workspaceId={workspaceId}
+                    mapId={mapId}
+                    cardId={cardId}
+                    currentUserId={currentUserId}
+                    isAdmin={isAdmin}
+                  />
+                )}
               </div>
             </>
           )}

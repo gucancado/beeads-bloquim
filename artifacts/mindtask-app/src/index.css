@@ -162,3 +162,59 @@
 .react-flow__controls-button:hover {
   background-color: hsl(var(--accent)) !important;
 }
+
+/* TipTap Editor */
+.comment-editor-area {
+  min-height: 80px;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  outline: none;
+}
+.comment-editor-area p {
+  margin: 0;
+}
+.comment-editor-area ul {
+  margin: 4px 0;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+}
+.comment-editor-area li {
+  margin: 0;
+}
+.comment-editor-area strong {
+  font-weight: 600;
+}
+.comment-editor-area em {
+  font-style: italic;
+}
+.comment-editor-area .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+
+/* Rendered comment HTML */
+.comment-rendered-content {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.comment-rendered-content p {
+  margin: 0;
+}
+.comment-rendered-content ul {
+  margin: 4px 0;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+}
+.comment-rendered-content li {
+  margin: 0;
+}
+.comment-rendered-content strong {
+  font-weight: 600;
+}
+.comment-rendered-content em {
+  font-style: italic;
+}
