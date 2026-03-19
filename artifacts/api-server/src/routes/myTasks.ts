@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, users } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 
@@ -28,11 +28,13 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       cardTitle: cards.title,
       mapName: maps.name,
       workspaceName: workspaces.name,
+      assigneeName: users.name,
     })
     .from(tasks)
     .innerJoin(cards, eq(cards.taskId, tasks.id))
     .innerJoin(maps, eq(maps.id, tasks.mapId))
     .innerJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
+    .leftJoin(users, eq(users.id, tasks.assignedTo))
     .where(
       and(
         eq(tasks.assignedTo, userId),

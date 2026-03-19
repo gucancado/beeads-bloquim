@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetMyTasks } from "@workspace/api-client-react";
-import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, ArrowRight, Pencil } from "lucide-react";
+import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, ArrowRight, Pencil, Building2, User } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -126,43 +126,45 @@ export default function MyTasksPage() {
                         </Badge>
                       </div>
                       <h3 className="text-xl font-bold text-foreground mb-1">{task.title}</h3>
-                      <p className="text-muted-foreground text-sm line-clamp-1 max-w-2xl">{task.description || "No description provided."}</p>
-                    </div>
-
-                    <div className="flex flex-col md:items-end gap-3 shrink-0" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate max-w-[140px]">{(task as any).workspaceName}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <MapIcon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate max-w-[140px]">{task.mapName}</span>
+                        </div>
                         {task.dueDate && (
                           <div className="flex items-center gap-1.5">
-                            <CalendarIcon className="w-4 h-4" />
-                            <span>{format(new Date(task.dueDate), 'MMM d')}</span>
+                            <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+                            <span>{format(new Date(task.dueDate), "dd/MM/yyyy")}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-1.5">
-                          <MapIcon className="w-4 h-4" />
-                          <span className="truncate max-w-[120px]" title={`${task.workspaceName} > ${task.mapName}`}>
-                            {task.mapName}
-                          </span>
+                          <User className="w-3.5 h-3.5 shrink-0" />
+                          <span>{(task as any).assigneeName ?? "Sem responsável"}</span>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId });
-                          }}
-                        >
-                          <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId });
+                        }}
+                      >
+                        <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+                      </Button>
+                      <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
+                        <Button variant="outline" size="sm" className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors">
+                          Ver no Mapa <ArrowRight className="w-4 h-4 ml-1.5" />
                         </Button>
-                        <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                          <Button variant="outline" size="sm" className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors">
-                            View in Map <ArrowRight className="w-4 h-4 ml-1.5" />
-                          </Button>
-                        </Link>
-                      </div>
+                      </Link>
                     </div>
                   </div>
                 ))}
