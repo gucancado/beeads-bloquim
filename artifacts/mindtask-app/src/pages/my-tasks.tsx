@@ -142,7 +142,7 @@ export default function MyTasksPage() {
             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
               <div className="divide-y divide-border/50">
                 {tasks?.map(task => {
-                  const isOverdue = (task as any).overdue === true && task.status !== 'completed' && task.status !== 'blocked';
+                  const isOverdue = !!(task as any).overdue && task.status !== 'completed' && task.status !== 'blocked';
                   return (
                   <div
                     key={task.id}
