@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard, useGetMe } from "@workspace/api-client-react";
-import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, CheckCircle2, Circle } from "lucide-react";
+import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,48 +179,48 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
               <div className="p-5 space-y-4 flex-1">
 
                 {/* Title + actions */}
-                <div className="flex items-end gap-2">
+                <div>
                   {isTaskReady && (
-                    <button
-                      onClick={() => {
-                        if (taskStatus === "completed") {
-                          const revertTo = (card?.task as any)?.previousStatus || "pending";
-                          handleStatusChange(revertTo);
-                        } else {
-                          handleStatusChange("completed");
-                        }
-                      }}
-                      title={taskStatus === "completed" ? "Marcar como pendente" : "Marcar como concluída"}
-                      className={`shrink-0 mb-0.5 transition-all rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                        taskStatus === "completed"
-                          ? "text-emerald-500 hover:text-emerald-400"
-                          : "text-muted-foreground/40 hover:text-emerald-500"
-                      }`}
-                    >
-                      {taskStatus === "completed"
-                        ? <CheckCircle2 className="w-6 h-6" />
-                        : <Circle className="w-6 h-6" />
-                      }
-                    </button>
+                    <div className="flex justify-end mb-1">
+                      <button
+                        onClick={() => {
+                          if (taskStatus === "completed") {
+                            const revertTo = (card?.task as any)?.previousStatus || "pending";
+                            handleStatusChange(revertTo);
+                          } else {
+                            handleStatusChange("completed");
+                          }
+                        }}
+                        className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all ${
+                          taskStatus === "completed"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                            : "bg-background text-muted-foreground border-border hover:border-emerald-400 hover:text-emerald-600"
+                        }`}
+                      >
+                        {taskStatus === "completed" ? "✓ Concluída" : "Concluir"}
+                      </button>
+                    </div>
                   )}
-                  <div className="flex-1">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
-                    <Input
-                      value={cardTitle}
-                      onChange={e => setCardTitle(e.target.value)}
-                      onBlur={saveCard}
-                      className="bg-background rounded-xl"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
+                      <Input
+                        value={cardTitle}
+                        onChange={e => setCardTitle(e.target.value)}
+                        onBlur={saveCard}
+                        className="bg-background rounded-xl"
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowDeleteCard(true)}
+                      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg mt-5"
+                      title="Deletar card"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowDeleteCard(true)}
-                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg mb-0.5"
-                    title="Deletar card"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
                 </div>
 
                 {/* Assignee */}
