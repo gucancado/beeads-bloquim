@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, users } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -41,6 +41,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         workspaceId ? eq(tasks.workspaceId, workspaceId) : undefined,
         status ? eq(tasks.status, status as any) : undefined
       )
+    )
+    .orderBy(
+      sql`${tasks.dueDate} ASC NULLS LAST`,
+      asc(tasks.createdAt)
     );
 
   res.json(taskList);
