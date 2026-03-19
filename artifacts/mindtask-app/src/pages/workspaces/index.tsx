@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useListWorkspaces, useCreateWorkspace } from "@workspace/api-client-react";
-import { FolderGit2, Plus, Loader2, ArrowRight } from "lucide-react";
+import { useCreateWorkspace } from "@workspace/api-client-react";
+import { FolderGit2, Plus, Loader2, ArrowRight, EyeOff, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { useListWorkspacesWithHidden, useToggleWorkspaceHidden } from "@/hooks/useHidden";
 
 function translateRole(role: string) {
   switch (role) {
@@ -19,12 +19,72 @@ function translateRole(role: string) {
   }
 }
 
+function WorkspaceCard({ ws, showHidden }: {
+  ws: { id: string; name: string; hidden: boolean; role: string };
+  showHidden: boolean;
+}) {
+  const toggleHidden = useToggleWorkspaceHidden(ws.id);
+  const isAdmin = ws.role === "admin";
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleHidden.mutate(!ws.hidden);
+  };
+
+  return (
+    <div className={`relative group ${ws.hidden ? 'opacity-60' : ''}`}>
+      <Link href={`/workspaces/${ws.id}`}>
+        <div className="group/card bg-card p-6 rounded-3xl border border-border/60 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300 cursor-pointer flex flex-col h-full hover:-translate-y-1">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-6 group-hover/card:bg-primary group-hover/card:text-primary-foreground transition-colors">
+            <FolderGit2 className="w-6 h-6" />
+          </div>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className="text-xl font-bold font-display text-foreground group-hover/card:text-primary transition-colors">{ws.name}</h3>
+            {ws.hidden && (
+              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                <EyeOff className="w-3 h-3" /> Oculto
+              </span>
+            )}
+          </div>
+          <div className="mt-auto pt-6 flex items-center justify-between text-sm text-muted-foreground">
+            <span>{translateRole(ws.role)}</span>
+            <span className="flex items-center text-primary font-medium opacity-0 group-hover/card:opacity-100 transition-opacity -translate-x-2 group-hover/card:translate-x-0 duration-300">
+              Acessar <ArrowRight className="w-4 h-4 ml-1" />
+            </span>
+          </div>
+        </div>
+      </Link>
+
+      {isAdmin && (
+        <button
+          onClick={handleToggle}
+          disabled={toggleHidden.isPending}
+          title={ws.hidden ? "Tornar visível" : "Ocultar espaço"}
+          className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground z-10"
+        >
+          {toggleHidden.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : ws.hidden ? (
+            <Eye className="w-3.5 h-3.5" />
+          ) : (
+            <EyeOff className="w-3.5 h-3.5" />
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function WorkspacesPage() {
-  const { data: workspaces, isLoading } = useListWorkspaces();
+  const [showHidden, setShowHidden] = useState(false);
+  const { data: workspaces, isLoading } = useListWorkspacesWithHidden(showHidden);
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const isAdmin = workspaces?.some((ws) => ws.role === "admin") ?? false;
 
   const createMutation = useCreateWorkspace({
     mutation: {
@@ -56,40 +116,60 @@ export default function WorkspacesPage() {
               <p className="text-muted-foreground mt-2 text-lg">Gerencie suas equipes e projetos</p>
             </div>
 
-            <Dialog open={isOpen} onOpenChange={setIsOpen}>
-              <DialogTrigger asChild>
-                <Button className="rounded-xl px-6 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all text-base">
-                  <Plus className="w-5 h-5 mr-2" />
-                  Novo Espaço
+            <div className="flex items-center gap-3">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="rounded-xl h-12 px-5 gap-2"
+                  onClick={() => setShowHidden((v) => !v)}
+                >
+                  {showHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showHidden ? "Ocultar ocultos" : "Ver ocultos"}
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl font-display">Criar Espaço de Trabalho</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCreate} className="space-y-6 mt-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Nome do Espaço</label>
-                    <Input 
-                      placeholder="ex: Equipe de Engenharia, Projetos Pessoais" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-12 rounded-xl"
-                      autoFocus
-                    />
-                  </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="rounded-xl">
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={createMutation.isPending || !name.trim()} className="rounded-xl">
-                      {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+              )}
+
+              <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogTrigger asChild>
+                  <Button className="rounded-xl px-6 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all text-base">
+                    <Plus className="w-5 h-5 mr-2" />
+                    Novo Espaço
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-display">Criar Espaço de Trabalho</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreate} className="space-y-6 mt-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Nome do Espaço</label>
+                      <Input 
+                        placeholder="ex: Equipe de Engenharia, Projetos Pessoais" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="h-12 rounded-xl"
+                        autoFocus
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="rounded-xl">
+                        Cancelar
+                      </Button>
+                      <Button type="submit" disabled={createMutation.isPending || !name.trim()} className="rounded-xl">
+                        {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
+
+          {showHidden && (
+            <div className="mb-6 flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-sm text-amber-700 dark:text-amber-400">
+              <EyeOff className="w-4 h-4 shrink-0" />
+              <span>Mostrando espaços ocultos. Apenas administradores podem ver e restaurar espaços ocultos.</span>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
@@ -100,29 +180,24 @@ export default function WorkspacesPage() {
               <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
                 <FolderGit2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold font-display text-foreground">Nenhum espaço ainda</h3>
-              <p className="text-muted-foreground mt-2 mb-8 max-w-md mx-auto">Crie um espaço para começar a organizar seus mapas mentais e tarefas.</p>
-              <Button onClick={() => setIsOpen(true)} className="rounded-xl px-8 h-12">
-                Criar primeiro espaço
-              </Button>
+              <h3 className="text-2xl font-bold font-display text-foreground">
+                {showHidden ? "Nenhum espaço oculto" : "Nenhum espaço ainda"}
+              </h3>
+              <p className="text-muted-foreground mt-2 mb-8 max-w-md mx-auto">
+                {showHidden
+                  ? "Você não possui espaços ocultos no momento."
+                  : "Crie um espaço para começar a organizar seus mapas mentais e tarefas."}
+              </p>
+              {!showHidden && (
+                <Button onClick={() => setIsOpen(true)} className="rounded-xl px-8 h-12">
+                  Criar primeiro espaço
+                </Button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {workspaces?.map((ws) => (
-                <Link key={ws.id} href={`/workspaces/${ws.id}`}>
-                  <div className="group bg-card p-6 rounded-3xl border border-border/60 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300 cursor-pointer flex flex-col h-full hover:-translate-y-1">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                      <FolderGit2 className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-xl font-bold font-display text-foreground mb-2 group-hover:text-primary transition-colors">{ws.name}</h3>
-                    <div className="mt-auto pt-6 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{translateRole(ws.role)}</span>
-                      <span className="flex items-center text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 duration-300">
-                        Acessar <ArrowRight className="w-4 h-4 ml-1" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                <WorkspaceCard key={ws.id} ws={ws} showHidden={showHidden} />
               ))}
             </div>
           )}

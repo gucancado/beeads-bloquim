@@ -10,10 +10,20 @@ const router: IRouter = Router({ mergeParams: true });
 
 const mapNameSchema = z.object({ name: z.string().min(1) });
 
-router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req, res) => {
+router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
+  const showHidden = req.query.showHidden === "true";
+  const userRole = (req as any).memberRole as string | undefined;
+
   const mapList = await db.select().from(maps).where(eq(maps.workspaceId, workspaceId));
-  res.json(mapList);
+
+  const filtered = mapList.filter((m) => {
+    if (!m.hidden) return true;
+    if (!showHidden) return false;
+    return userRole === "admin";
+  });
+
+  res.json(filtered);
 });
 
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
@@ -91,6 +101,19 @@ router.put("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]), as
     .update(maps)
     .set({ name: parsed.data.name, updatedAt: new Date() })
     .where(and(eq(maps.id, req.params.mapId), eq(maps.workspaceId, req.params.workspaceId)))
+    .returning();
+
+  res.json(updated);
+});
+
+router.patch("/:mapId/hidden", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
+  const { mapId, workspaceId } = req.params;
+  const { hidden } = req.body as { hidden: boolean };
+
+  const [updated] = await db
+    .update(maps)
+    .set({ hidden: !!hidden, updatedAt: new Date() })
+    .where(and(eq(maps.id, mapId), eq(maps.workspaceId, workspaceId)))
     .returning();
 
   res.json(updated);

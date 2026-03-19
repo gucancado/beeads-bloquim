@@ -17,6 +17,7 @@ const updateRoleSchema = z.object({ role: z.enum(["admin", "editor", "executor"]
 
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
+  const showHidden = req.query.showHidden === "true";
 
   const memberships = await db
     .select()
@@ -34,10 +35,17 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .from(workspaces)
     .where(inArray(workspaces.id, workspaceIds));
 
-  const result = workspaceList.map((w) => {
-    const membership = memberships.find((m) => m.workspaceId === w.id)!;
-    return { ...w, role: membership.role };
-  });
+  const result = workspaceList
+    .filter((w) => {
+      if (!w.hidden) return true;
+      if (!showHidden) return false;
+      const membership = memberships.find((m) => m.workspaceId === w.id);
+      return membership?.role === "admin";
+    })
+    .map((w) => {
+      const membership = memberships.find((m) => m.workspaceId === w.id)!;
+      return { ...w, role: membership.role };
+    });
 
   res.json(result);
 });
@@ -118,6 +126,19 @@ router.put("/:workspaceId", requireAuth, requireWorkspaceRole(["admin"]), async 
     .limit(1);
 
   res.json({ ...updated, role: membership?.role ?? "admin" });
+});
+
+router.patch("/:workspaceId/hidden", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
+  const { workspaceId } = req.params;
+  const { hidden } = req.body as { hidden: boolean };
+
+  const [updated] = await db
+    .update(workspaces)
+    .set({ hidden: !!hidden })
+    .where(eq(workspaces.id, workspaceId))
+    .returning();
+
+  res.json(updated);
 });
 
 router.delete("/:workspaceId", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {

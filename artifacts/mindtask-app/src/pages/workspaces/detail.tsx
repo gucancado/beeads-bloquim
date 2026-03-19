@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useGetWorkspace, useListMaps, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember } from "@workspace/api-client-react";
-import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User } from "lucide-react";
+import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember } from "@workspace/api-client-react";
+import { useListMapsWithHidden, useToggleMapHidden } from "@/hooks/useHidden";
+import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -13,12 +14,68 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
+function MapCard({ map, workspaceId, isAdmin }: {
+  map: { id: string; name: string; hidden: boolean; updatedAt: string };
+  workspaceId: string;
+  isAdmin: boolean;
+}) {
+  const toggleHidden = useToggleMapHidden(workspaceId, map.id);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleHidden.mutate(!map.hidden);
+  };
+
+  return (
+    <div className={`relative group ${map.hidden ? 'opacity-60' : ''}`}>
+      <Link href={`/workspaces/${workspaceId}/maps/${map.id}`}>
+        <div className="group/card bg-card rounded-2xl p-6 border border-border/60 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300 cursor-pointer hover:-translate-y-1">
+          <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-5 group-hover/card:scale-110 transition-transform">
+            <Map className="w-6 h-6" />
+          </div>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="text-lg font-bold font-display text-foreground group-hover/card:text-primary transition-colors">{map.name}</h3>
+            {map.hidden && (
+              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                <EyeOff className="w-3 h-3" /> Oculto
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">Atualizado em {format(new Date(map.updatedAt), 'dd/MM/yyyy')}</p>
+          <div className="mt-6 flex justify-end">
+            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-foreground group-hover/card:bg-primary group-hover/card:text-primary-foreground transition-colors">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+      </Link>
+
+      {isAdmin && (
+        <button
+          onClick={handleToggle}
+          disabled={toggleHidden.isPending}
+          title={map.hidden ? "Tornar visível" : "Ocultar mapa"}
+          className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground z-10"
+        >
+          {toggleHidden.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : map.hidden ? (
+            <Eye className="w-3.5 h-3.5" />
+          ) : (
+            <EyeOff className="w-3.5 h-3.5" />
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function WorkspaceDetailPage() {
   const [, params] = useRoute("/workspaces/:id");
   const workspaceId = params?.id || "";
 
   const { data: workspace, isLoading: isWsLoading } = useGetWorkspace(workspaceId);
-  const { data: maps, isLoading: isMapsLoading } = useListMaps(workspaceId);
   const { data: dashboard } = useGetDashboard(workspaceId);
 
   const [isMapDialogOpen, setIsMapDialogOpen] = useState(false);
@@ -27,6 +84,9 @@ export default function WorkspaceDetailPage() {
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState<"admin" | "editor" | "executor">("editor");
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [showHiddenMaps, setShowHiddenMaps] = useState(false);
+
+  const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -194,6 +254,30 @@ export default function WorkspaceDetailPage() {
 
               <div className="pt-8 pb-16 max-w-6xl mx-auto">
                 <TabsContent value="maps" className="mt-0 outline-none">
+                  {isAdmin && (
+                    <div className="flex items-center justify-between mb-6">
+                      <p className="text-sm text-muted-foreground">
+                        {maps?.length ?? 0} mapa{(maps?.length ?? 0) !== 1 ? 's' : ''} {showHiddenMaps ? '(incluindo ocultos)' : ''}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl gap-2"
+                        onClick={() => setShowHiddenMaps((v) => !v)}
+                      >
+                        {showHiddenMaps ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {showHiddenMaps ? "Ocultar ocultos" : "Ver ocultos"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {showHiddenMaps && isAdmin && (
+                    <div className="mb-6 flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-sm text-amber-700 dark:text-amber-400">
+                      <EyeOff className="w-4 h-4 shrink-0" />
+                      <span>Mostrando mapas ocultos. Apenas administradores podem ver e restaurar mapas ocultos.</span>
+                    </div>
+                  )}
+
                   {isMapsLoading ? (
                     <div className="flex items-center justify-center py-20">
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -201,27 +285,25 @@ export default function WorkspaceDetailPage() {
                   ) : maps?.length === 0 ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum mapa criado</h3>
-                      <p className="text-muted-foreground mt-2 mb-6">Comece a planejar visualmente com um mapa mental.</p>
-                      <Button onClick={() => setIsMapDialogOpen(true)} className="rounded-xl">Criar primeiro mapa</Button>
+                      <h3 className="text-xl font-bold font-display text-foreground">
+                        {showHiddenMaps ? "Nenhum mapa oculto" : "Nenhum mapa criado"}
+                      </h3>
+                      <p className="text-muted-foreground mt-2 mb-6">
+                        {showHiddenMaps ? "Não há mapas ocultos neste espaço." : "Comece a planejar visualmente com um mapa mental."}
+                      </p>
+                      {!showHiddenMaps && (
+                        <Button onClick={() => setIsMapDialogOpen(true)} className="rounded-xl">Criar primeiro mapa</Button>
+                      )}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {maps?.map(map => (
-                        <Link key={map.id} href={`/workspaces/${workspaceId}/maps/${map.id}`}>
-                          <div className="group bg-card rounded-2xl p-6 border border-border/60 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300 cursor-pointer hover:-translate-y-1">
-                            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                              <Map className="w-6 h-6" />
-                            </div>
-                            <h3 className="text-lg font-bold font-display text-foreground group-hover:text-primary transition-colors">{map.name}</h3>
-                            <p className="text-sm text-muted-foreground mt-2">Atualizado em {format(new Date(map.updatedAt), 'dd/MM/yyyy')}</p>
-                            <div className="mt-6 flex justify-end">
-                              <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                <ArrowRight className="w-4 h-4" />
-                              </div>
-                            </div>
-                          </div>
-                        </Link>
+                        <MapCard
+                          key={map.id}
+                          map={map}
+                          workspaceId={workspaceId}
+                          isAdmin={isAdmin}
+                        />
                       ))}
                     </div>
                   )}
