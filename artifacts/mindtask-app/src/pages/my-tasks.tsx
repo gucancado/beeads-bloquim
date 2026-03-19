@@ -145,7 +145,7 @@ export default function MyTasksPage() {
                   return (
                   <div
                     key={task.id}
-                    className={`p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4 ${isOverdue ? 'border-l-red-500 bg-red-50/30 dark:bg-red-950/10' : 'border-l-transparent'}`}
+                    className={`p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4 ${isOverdue ? 'border-l-red-500 bg-red-100 dark:bg-red-950/40' : 'border-l-transparent'}`}
                     onClick={() => setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId })}
                   >
                     <div className="flex-1 min-w-0">
