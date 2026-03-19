@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard } from "@workspace/api-client-react";
-import { Loader2, Save, Trash2, X, Flag, Calendar, User, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, X, Flag, Calendar, User, AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +39,14 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const [taskAssignee, setTaskAssignee] = useState<string>("unassigned");
   const [taskDueDate, setTaskDueDate] = useState<string>("");
   const [showDeleteCard, setShowDeleteCard] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashSaved = () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    setShowSaved(true);
+    savedTimerRef.current = setTimeout(() => setShowSaved(false), 2500);
+  };
 
   useEffect(() => {
     if (card) {
@@ -79,39 +87,45 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const updateCardMut = useUpdateCard();
   const updateTaskDetailsMut = useUpdateTaskDetails();
 
-  const isSaving = updateCardMut.isPending || updateTaskDetailsMut.isPending;
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
+  };
 
-  const handleSaveAll = async () => {
+  const saveCard = () => {
     if (!cardId) return;
-
     updateCardMut.mutate(
       { workspaceId, mapId, cardId, data: { title: cardTitle, description: cardDesc } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-        }
-      }
+      { onSuccess: () => { invalidate(); flashSaved(); } }
     );
+  };
 
-    if (card?.task) {
-      updateTaskDetailsMut.mutate(
-        {
-          workspaceId, mapId, cardId, data: {
-            title: taskTitle,
-            priority: taskPriority,
-            assignedTo: taskAssignee === "unassigned" ? null : taskAssignee,
-            dueDate: taskDueDate ? new Date(taskDueDate + "T00:00:00").toISOString() : null,
-          }
-        },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-          }
+  const saveTaskDetails = (overrides: { priority?: string; assignedTo?: string; dueDate?: string } = {}) => {
+    if (!cardId || !card?.task) return;
+    const priority = overrides.priority ?? taskPriority;
+    const assignedTo = overrides.assignedTo ?? taskAssignee;
+    const dueDate = overrides.dueDate ?? taskDueDate;
+    updateTaskDetailsMut.mutate(
+      {
+        workspaceId, mapId, cardId, data: {
+          title: taskTitle,
+          priority: priority as any,
+          assignedTo: assignedTo === "unassigned" ? null : assignedTo,
+          dueDate: dueDate ? new Date(dueDate + "T00:00:00").toISOString() : null,
         }
-      );
-    }
+      },
+      { onSuccess: () => { invalidate(); flashSaved(); } }
+    );
+  };
+
+  const handlePriorityChange = (val: string) => {
+    setTaskPriority(val);
+    saveTaskDetails({ priority: val });
+  };
+
+  const handleAssigneeChange = (val: string) => {
+    setTaskAssignee(val);
+    saveTaskDetails({ assignedTo: val });
   };
 
   const deleteCardMut = useDeleteCard();
@@ -135,12 +149,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
     setTaskStatus(val);
     updateTaskStatusMut.mutate(
       { workspaceId, mapId, cardId, data: { status: val as any } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
-        }
-      }
+      { onSuccess: () => { invalidate(); flashSaved(); } }
     );
   };
 
@@ -155,7 +164,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   };
 
   const isOverdue = !!(card?.task as any)?.overdue;
-
   const isTaskReady = !!card?.task;
 
   return (
@@ -177,7 +185,13 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 <div className="flex items-center justify-between">
                   <SheetHeader className="text-left flex-1">
                     <SheetTitle className="text-xl font-display">Editar Card</SheetTitle>
-                    <SheetDescription className="text-sm">Atualize o nó e sua tarefa.</SheetDescription>
+                    {showSaved ? (
+                      <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                        <Check className="w-3.5 h-3.5" /> Edições salvas
+                      </p>
+                    ) : (
+                      <SheetDescription className="text-sm">Atualize o nó e sua tarefa.</SheetDescription>
+                    )}
                   </SheetHeader>
                   <div className="flex items-center gap-1 ml-4">
                     <Button
@@ -207,13 +221,24 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 {/* Title */}
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
-                  <Input value={cardTitle} onChange={e => setCardTitle(e.target.value)} className="bg-background rounded-xl" />
+                  <Input
+                    value={cardTitle}
+                    onChange={e => setCardTitle(e.target.value)}
+                    onBlur={saveCard}
+                    className="bg-background rounded-xl"
+                  />
                 </div>
 
                 {/* Description */}
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
-                  <Textarea value={cardDesc} onChange={e => setCardDesc(e.target.value)} className="bg-background rounded-xl resize-none min-h-[72px]" placeholder="Descrição opcional..." />
+                  <Textarea
+                    value={cardDesc}
+                    onChange={e => setCardDesc(e.target.value)}
+                    onBlur={saveCard}
+                    className="bg-background rounded-xl resize-none min-h-[72px]"
+                    placeholder="Descrição opcional..."
+                  />
                 </div>
 
                 <div className="border-t pt-4">
@@ -224,7 +249,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Status — auto-saves to sync canvas */}
+                      {/* Status */}
                       <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5 block">
                           <span className={`w-2 h-2 rounded-full inline-block ${getStatusDot(taskStatus)}`} />
@@ -254,7 +279,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
                             <Flag className="w-3 h-3" /> Prioridade
                           </label>
-                          <Select value={taskPriority} onValueChange={setTaskPriority}>
+                          <Select value={taskPriority} onValueChange={handlePriorityChange}>
                             <SelectTrigger className="bg-background rounded-xl h-10">
                               <SelectValue />
                             </SelectTrigger>
@@ -276,6 +301,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             type="date"
                             value={taskDueDate}
                             onChange={e => setTaskDueDate(e.target.value)}
+                            onBlur={e => saveTaskDetails({ dueDate: e.target.value })}
                             className="bg-background rounded-xl h-10 text-sm"
                           />
                         </div>
@@ -286,7 +312,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
                           <User className="w-3 h-3" /> Responsável
                         </label>
-                        <Select value={taskAssignee} onValueChange={setTaskAssignee}>
+                        <Select value={taskAssignee} onValueChange={handleAssigneeChange}>
                           <SelectTrigger className="bg-background rounded-xl h-10">
                             <SelectValue placeholder="Sem responsável" />
                           </SelectTrigger>
@@ -302,14 +328,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Sticky footer with single save button */}
-              <div className="p-5 border-t bg-slate-50 dark:bg-slate-900">
-                <Button onClick={handleSaveAll} disabled={isSaving} className="rounded-xl w-full h-11">
-                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  Salvar
-                </Button>
               </div>
             </>
           )}
