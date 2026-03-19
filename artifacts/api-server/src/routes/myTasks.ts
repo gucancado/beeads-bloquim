@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, users } from "@workspace/db/schema";
-import { eq, and, asc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -10,6 +10,16 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const { workspaceId, status } = req.query as { workspaceId?: string; status?: string };
   const statuses = status ? status.split(",").filter(Boolean) : [];
+  const filterOverdue = statuses.includes("overdue");
+  const otherStatuses = statuses.filter(s => s !== "overdue");
+
+  const buildStatusFilter = () => {
+    if (statuses.length === 0) return undefined;
+    const parts = [];
+    if (filterOverdue) parts.push(eq(tasks.overdue, true));
+    if (otherStatuses.length > 0) parts.push(inArray(tasks.status, otherStatuses as any[]));
+    return parts.length === 1 ? parts[0] : or(...parts);
+  };
 
   const taskList = await db
     .select({
@@ -25,6 +35,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       completedAt: tasks.completedAt,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
+      overdue: tasks.overdue,
       cardId: cards.id,
       cardTitle: cards.title,
       mapName: maps.name,
@@ -40,7 +51,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       and(
         eq(tasks.assignedTo, userId),
         workspaceId ? eq(tasks.workspaceId, workspaceId) : undefined,
-        statuses.length > 0 ? inArray(tasks.status, statuses as any[]) : undefined
+        buildStatusFilter()
       )
     )
     .orderBy(

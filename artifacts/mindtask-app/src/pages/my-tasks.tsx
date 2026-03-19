@@ -48,6 +48,11 @@ export default function MyTasksPage() {
     }
   };
 
+  const getVisualStatus = (task: { status: string; overdue?: boolean | null }) => {
+    if (task.overdue && task.status !== 'completed' && task.status !== 'blocked') return 'overdue';
+    return task.status;
+  };
+
   const getStatusLabel = (s: string) => {
     switch (s) {
       case 'pending': return 'PENDENTE';
@@ -144,8 +149,8 @@ export default function MyTasksPage() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
-                          {getStatusLabel(task.status)}
+                        <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(getVisualStatus(task as any))}`}>
+                          {getStatusLabel(getVisualStatus(task as any))}
                         </Badge>
                         <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
                           <Flag className="w-3 h-3 mr-1 inline-block" /> {task.priority}
