@@ -141,10 +141,12 @@ export default function MyTasksPage() {
           ) : (
             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
               <div className="divide-y divide-border/50">
-                {tasks?.map(task => (
+                {tasks?.map(task => {
+                  const isOverdue = (task as any).overdue === true && task.status !== 'completed' && task.status !== 'blocked';
+                  return (
                   <div
                     key={task.id}
-                    className="p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
+                    className={`p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4 ${isOverdue ? 'border-l-red-500 bg-red-50/30 dark:bg-red-950/10' : 'border-l-transparent'}`}
                     onClick={() => setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId })}
                   >
                     <div className="flex-1 min-w-0">
@@ -155,6 +157,11 @@ export default function MyTasksPage() {
                         <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
                           <Flag className="w-3 h-3 mr-1 inline-block" /> {task.priority}
                         </Badge>
+                        {isOverdue && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
+                            ⚠ Vencida
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-xl font-bold text-foreground mb-1">{(task as any).cardTitle || task.title}</h3>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
@@ -198,7 +205,8 @@ export default function MyTasksPage() {
                       </Link>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
