@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard, useGetMe } from "@workspace/api-client-react";
-import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, CheckCircle2, Circle } from "lucide-react";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -180,6 +180,29 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
                 {/* Title + actions */}
                 <div className="flex items-end gap-2">
+                  {isTaskReady && (
+                    <button
+                      onClick={() => {
+                        if (taskStatus === "completed") {
+                          const revertTo = (card?.task as any)?.previousStatus || "pending";
+                          handleStatusChange(revertTo);
+                        } else {
+                          handleStatusChange("completed");
+                        }
+                      }}
+                      title={taskStatus === "completed" ? "Marcar como pendente" : "Marcar como concluída"}
+                      className={`shrink-0 mb-0.5 transition-all rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                        taskStatus === "completed"
+                          ? "text-emerald-500 hover:text-emerald-400"
+                          : "text-muted-foreground/40 hover:text-emerald-500"
+                      }`}
+                    >
+                      {taskStatus === "completed"
+                        ? <CheckCircle2 className="w-6 h-6" />
+                        : <Circle className="w-6 h-6" />
+                      }
+                    </button>
+                  )}
                   <div className="flex-1">
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
                     <Input

@@ -219,9 +219,12 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
   const overdue = computeOverdue(task.dueDate, status);
   const visual = toVisualStatus(status, overdue);
 
+  // Only update previousStatus when the status actually changes
+  const previousStatus = task.status !== status ? task.status : task.previousStatus;
+
   const [updatedTask] = await db
     .update(tasks)
-    .set({ status, overdue, completedAt, updatedAt: new Date() })
+    .set({ status, previousStatus, overdue, completedAt, updatedAt: new Date() })
     .where(eq(tasks.id, card.taskId))
     .returning();
 

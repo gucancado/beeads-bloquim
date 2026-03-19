@@ -43,6 +43,7 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"),
   priority: taskPriorityEnum("priority").notNull().default("medium"),
   status: taskStatusEnum("status").notNull().default("pending"),
+  previousStatus: taskStatusEnum("previous_status"),
   overdue: boolean("overdue").notNull().default(false),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
