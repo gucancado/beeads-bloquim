@@ -23,6 +23,8 @@
   --color-ring: hsl(var(--ring));
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
