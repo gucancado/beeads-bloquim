@@ -42,7 +42,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const filterOverdue = statuses.includes("overdue");
   const otherStatuses = statuses.filter(s => s !== "overdue");
 
-  const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : ["me"];
+  const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : [];
 
   const buildStatusFilter = () => {
     if (statuses.length === 0) return undefined;
@@ -53,6 +53,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   };
 
   const buildAssigneeFilter = () => {
+    if (assignees.length === 0) return undefined;
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
@@ -61,7 +62,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     if (hasMe) parts.push(eq(tasks.assignedTo, userId));
     if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
     if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 0 ? eq(tasks.assignedTo, userId) : parts.length === 1 ? parts[0] : or(...parts);
+    return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
   };
 
   const memberships = await db
