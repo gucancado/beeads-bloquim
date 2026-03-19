@@ -145,7 +145,13 @@ export default function MyTasksPage() {
                   return (
                   <div
                     key={task.id}
-                    className={`p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4 ${isOverdue ? 'border-l-red-500 bg-red-100 dark:bg-red-950/40' : 'border-l-transparent'}`}
+                    className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4"
+                    style={{
+                      backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
+                      borderLeftColor: isOverdue ? '#ef4444' : 'transparent',
+                    }}
+                    onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
                     onClick={() => setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId })}
                   >
                     <div className="flex-1 min-w-0">
