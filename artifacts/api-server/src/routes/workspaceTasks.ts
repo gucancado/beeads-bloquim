@@ -53,7 +53,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
 
 const createTaskSchema = z.object({
   title: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
@@ -61,7 +61,7 @@ const createTaskSchema = z.object({
 
 const updateTaskSchema = createTaskSchema.partial();
 
-router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
+router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
   const parsed = createTaskSchema.safeParse(req.body);
   if (!parsed.success) {

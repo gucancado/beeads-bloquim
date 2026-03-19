@@ -105,7 +105,10 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
       invalidate();
       onClose();
     },
-    onError: () => toast({ title: "Erro ao criar tarefa", variant: "destructive" }),
+    onError: (err: any) => {
+      console.error("Erro ao criar tarefa:", err);
+      toast({ title: "Erro ao criar tarefa", description: err?.message ?? String(err), variant: "destructive" });
+    },
   });
 
   const saveMutation = useMutation({
