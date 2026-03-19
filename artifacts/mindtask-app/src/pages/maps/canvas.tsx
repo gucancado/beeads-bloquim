@@ -29,6 +29,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const initializedRef = useRef(false);
+  const nodesRef = useRef<Node[]>([]);
+
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
   const handleOpenPanel = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
@@ -42,7 +45,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         type: 'mindmap',
         position: { x: c.positionX, y: c.positionY },
-        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null, onOpen: handleOpenPanel },
+        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null, onOpen: handleOpenPanel, onAddChild: handleAddChildCard },
       }));
       setNodes(initialNodes);
 
@@ -67,13 +70,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             id: c.id,
             type: 'mindmap',
             position: { x: c.positionX, y: c.positionY },
-            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null, onOpen: handleOpenPanel },
+            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: (c as any).taskDueDate ?? null, taskAssigneeName: (c as any).taskAssigneeName ?? null, onOpen: handleOpenPanel, onAddChild: handleAddChildCard },
           }));
         return [
           ...filtered.map(n => {
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
-            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: (s as any).taskDueDate ?? null, taskAssigneeName: (s as any).taskAssigneeName ?? null, onOpen: handleOpenPanel } };
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: (s as any).taskDueDate ?? null, taskAssigneeName: (s as any).taskAssigneeName ?? null, onOpen: handleOpenPanel, onAddChild: handleAddChildCard } };
           }),
           ...newNodes,
         ];
@@ -95,6 +98,25 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const createConnMut = useCreateConnection();
   const deleteConnMut = useDeleteConnection();
   const createCardMut = useCreateCard();
+
+  const handleAddChildCard = useCallback((parentCardId: string) => {
+    const parentNode = nodesRef.current.find(n => n.id === parentCardId);
+    const newX = parentNode ? parentNode.position.x + 350 : 200;
+    const newY = parentNode ? parentNode.position.y : 200;
+    createCardMut.mutate(
+      { workspaceId, mapId, data: { title: "New Node", positionX: newX, positionY: newY } },
+      {
+        onSuccess: (newCard) => {
+          createConnMut.mutate(
+            { workspaceId, mapId, data: { sourceCardId: parentCardId, targetCardId: newCard.id, sourceHandle: 'source-right', targetHandle: 'target-left' } as any },
+            { onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }) }
+          );
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          setSelectedCardId(newCard.id);
+        },
+      }
+    );
+  }, [workspaceId, mapId, createCardMut, createConnMut, queryClient]);
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {

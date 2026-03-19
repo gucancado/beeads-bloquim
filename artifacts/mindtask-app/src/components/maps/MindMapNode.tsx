@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
-import { Pencil, Calendar, User } from 'lucide-react';
+import { Pencil, Calendar, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface MindMapNodeProps {
@@ -13,6 +13,7 @@ interface MindMapNodeProps {
     taskDueDate?: string | null;
     taskAssigneeName?: string | null;
     onOpen?: (id: string) => void;
+    onAddChild?: (id: string) => void;
   };
   selected: boolean;
 }
@@ -52,7 +53,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   return (
     <div
-      className={`group/node min-w-[220px] max-w-[280px] bg-card rounded-2xl shadow-lg border-2 transition-all duration-200 ${selected ? 'shadow-xl scale-[1.02]' : ''}`}
+      className={`group/node relative min-w-[220px] max-w-[280px] bg-card rounded-2xl shadow-lg border-2 transition-all duration-200 ${selected ? 'shadow-xl scale-[1.02]' : ''}`}
       style={{
         borderColor: selected ? color : 'hsl(var(--border))',
         boxShadow: selected
@@ -60,6 +61,15 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           : undefined,
       }}
     >
+      {/* Add child button — floats to the right, outside the card */}
+      <button
+        className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
+        style={{ backgroundColor: color, color: '#fff' }}
+        title="Adicionar card filho"
+        onClick={(e) => { e.stopPropagation(); data.onAddChild?.(id); }}
+      >
+        <Plus className="w-4 h-4" />
+      </button>
       <Handle type="target" position={Position.Left}  id="target-left"  className={handleCls} style={handleStyleLeft} />
       <Handle type="target" position={Position.Right} id="target-right" className={handleCls} style={handleStyleRight} />
       <Handle type="source" position={Position.Left}  id="source-left"  className={handleCls} style={handleStyleLeft} />
