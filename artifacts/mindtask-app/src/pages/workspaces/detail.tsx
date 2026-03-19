@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember } from "@workspace/api-client-react";
+import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember, useGetMyTasks } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden } from "@/hooks/useHidden";
-import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye } from "lucide-react";
+import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare, Flag, Calendar as CalendarIcon, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { CardPanel } from "@/components/maps/CardPanel";
 
 function MapCard({ map, workspaceId, isAdmin }: {
   map: { id: string; name: string; hidden: boolean; updatedAt: string };
@@ -85,8 +87,14 @@ export default function WorkspaceDetailPage() {
   const [memberRole, setMemberRole] = useState<"admin" | "editor" | "executor">("editor");
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress", "pending"]);
+  const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
 
   const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
+  const { data: workspaceTasks, isLoading: isTasksLoading } = useGetMyTasks({
+    workspaceId,
+    status: selectedStatuses.length > 0 ? selectedStatuses.join(",") as any : undefined,
+  });
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -170,6 +178,66 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const STATUS_OPTIONS = [
+    { value: "in_progress", label: "Em andamento", activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600" },
+    { value: "pending",     label: "Pendente",      activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600" },
+    { value: "blocked",     label: "Interrompida",  activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600" },
+    { value: "completed",   label: "Concluída",     activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" },
+  ];
+
+  const toggleStatus = (value: string) => {
+    setSelectedStatuses(prev =>
+      prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
+    );
+  };
+
+  const getPriorityColor = (p: string) => {
+    switch (p) {
+      case 'critical': return 'text-red-500 bg-red-500/10 border-red-200 dark:border-red-900/50';
+      case 'high': return 'text-orange-500 bg-orange-500/10 border-orange-200 dark:border-orange-900/50';
+      case 'medium': return 'text-blue-500 bg-blue-500/10 border-blue-200 dark:border-blue-900/50';
+      case 'low': return 'text-slate-500 bg-slate-500/10 border-slate-200 dark:border-slate-800';
+      default: return '';
+    }
+  };
+
+  const translatePriority = (p: string) => {
+    switch (p) {
+      case 'critical': return 'Crítica';
+      case 'high': return 'Alta';
+      case 'medium': return 'Média';
+      case 'low': return 'Baixa';
+      default: return p;
+    }
+  };
+
+  const getStatusLabel = (s: string) => {
+    switch (s) {
+      case 'pending': return 'PENDENTE';
+      case 'in_progress': return 'EM ANDAMENTO';
+      case 'completed': return 'CONCLUÍDA';
+      case 'overdue': return 'VENCIDA';
+      case 'blocked': return 'INTERROMPIDA';
+      default: return s.replace('_', ' ').toUpperCase();
+    }
+  };
+
+  const getStatusColor = (s: string) => {
+    switch (s) {
+      case 'overdue': return 'bg-red-500 text-white border-transparent';
+      case 'completed': return 'bg-emerald-500 text-white border-transparent';
+      case 'in_progress': return 'bg-amber-500 text-white border-transparent';
+      case 'pending': return 'bg-blue-500 text-white border-transparent';
+      case 'blocked': return 'bg-purple-500 text-white border-transparent';
+      default: return '';
+    }
+  };
+
+  const handleClosePanel = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+    setOpenCard(null);
+  };
+
   if (isWsLoading) {
     return (
       <AppLayout>
@@ -244,6 +312,9 @@ export default function WorkspaceDetailPage() {
                 <TabsTrigger value="maps" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
                   <Map className="w-5 h-5 mr-2" /> Mapas Mentais
                 </TabsTrigger>
+                <TabsTrigger value="tasks" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
+                  <CheckSquare className="w-5 h-5 mr-2" /> Tarefas
+                </TabsTrigger>
                 <TabsTrigger value="dashboard" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
                   <LayoutDashboard className="w-5 h-5 mr-2" /> Dashboard
                 </TabsTrigger>
@@ -305,6 +376,125 @@ export default function WorkspaceDetailPage() {
                           isAdmin={isAdmin}
                         />
                       ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="tasks" className="mt-0 outline-none">
+                  {/* Filters */}
+                  <div className="flex flex-wrap items-center gap-2 mb-6">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Filtrar:</span>
+                    {STATUS_OPTIONS.map(opt => {
+                      const isActive = selectedStatuses.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => toggleStatus(opt.value)}
+                          className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
+                            isActive
+                              ? opt.activeClass
+                              : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                    {selectedStatuses.length > 0 && (
+                      <button
+                        onClick={() => setSelectedStatuses([])}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                  </div>
+
+                  {isTasksLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                    </div>
+                  ) : workspaceTasks?.length === 0 ? (
+                    <div className="text-center py-24 bg-card rounded-3xl border border-border shadow-sm">
+                      <div className="w-20 h-20 bg-slate-100 dark:bg-slate-900 text-muted-foreground rounded-full flex items-center justify-center mx-auto mb-6">
+                        <CheckSquare className="w-10 h-10" />
+                      </div>
+                      <h3 className="text-2xl font-bold font-display text-foreground">Nenhuma tarefa encontrada</h3>
+                      <p className="text-muted-foreground mt-2 max-w-md mx-auto">Nenhuma tarefa atribuída neste espaço com estes filtros.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-border/50">
+                        {workspaceTasks?.map(task => {
+                          const isOverdue = !!(task as any).overdue && task.status !== 'completed' && task.status !== 'blocked';
+                          const visualStatus = isOverdue ? 'overdue' : task.status;
+                          return (
+                            <div
+                              key={task.id}
+                              className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4"
+                              style={{
+                                backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
+                                borderLeftColor: isOverdue ? '#ef4444' : 'transparent',
+                              }}
+                              onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
+                              onClick={() => setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId })}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(visualStatus)}`}>
+                                    {getStatusLabel(visualStatus)}
+                                  </Badge>
+                                  <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
+                                    <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
+                                  </Badge>
+                                  {isOverdue && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
+                                      ⚠ Vencida
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="text-xl font-bold text-foreground mb-1">{(task as any).cardTitle || task.title}</h3>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-1.5">
+                                    <Map className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="truncate max-w-[180px]">{task.mapName}</span>
+                                  </div>
+                                  {task.dueDate && (
+                                    <div className="flex items-center gap-1.5">
+                                      <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+                                      <span>{format(new Date(task.dueDate), "dd/MM/yyyy")}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1.5">
+                                    <User className="w-3.5 h-3.5 shrink-0" />
+                                    <span>{(task as any).assigneeName ?? "Sem responsável"}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: (task as any).cardId });
+                                  }}
+                                >
+                                  <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+                                </Button>
+                                <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
+                                  <Button variant="outline" size="sm" className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors">
+                                    Ver no Mapa <ArrowRight className="w-4 h-4 ml-1.5" />
+                                  </Button>
+                                </Link>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </TabsContent>
@@ -418,6 +608,15 @@ export default function WorkspaceDetailPage() {
           </div>
         </div>
       </div>
+
+      {openCard && (
+        <CardPanel
+          workspaceId={openCard.workspaceId}
+          mapId={openCard.mapId}
+          cardId={openCard.cardId}
+          onClose={handleClosePanel}
+        />
+      )}
 
       {/* Add Member Dialog */}
       <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
