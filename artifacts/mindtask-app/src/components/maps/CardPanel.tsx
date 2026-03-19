@@ -181,25 +181,24 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 {/* Title + actions */}
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    {/* Status select — left side, pill style, hidden when completed */}
-                    {isTaskReady && taskStatus !== "completed" && (
-                      <Select value={taskStatus} onValueChange={handleStatusChange}>
-                        <SelectTrigger className="h-auto w-auto px-3 py-1 rounded-full border text-xs font-semibold bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground transition-all shadow-none focus:ring-0 gap-1.5">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">⏳ Pendente</SelectItem>
-                          <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
-                          <SelectItem value="blocked">🚫 Interrompida</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
                     {isOverdue && taskStatus !== "completed" && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-1 rounded-full">
                         🔴 Atrasada
                       </span>
                     )}
                     <div className="flex items-center gap-2 ml-auto">
+                      {isTaskReady && taskStatus !== "completed" && (
+                        <Select value={taskStatus} onValueChange={handleStatusChange}>
+                          <SelectTrigger className="h-auto w-auto px-3 py-1 rounded-full border text-xs font-semibold bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground transition-all shadow-none focus:ring-0 gap-1.5">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">⏳ Pendente</SelectItem>
+                            <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
+                            <SelectItem value="blocked">🚫 Interrompida</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                       {isTaskReady && (
                         <button
                           onClick={() => {
