@@ -64,7 +64,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         className={`bg-sidebar text-sidebar-foreground flex flex-col shadow-xl z-20 shrink-0 transition-all duration-300 ease-in-out ${collapsed ? 'w-16' : 'w-72'}`}
       >
         {/* Logo + toggle */}
-        <div className={`flex items-center border-b border-sidebar-border/50 transition-all duration-300 ${collapsed ? 'justify-center p-3.5' : 'gap-3 p-4 pr-3'}`}>
+        <div className="flex items-center gap-3 p-4 pr-3 border-b border-sidebar-border/50 min-h-[65px]">
           {!collapsed && (
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
@@ -73,17 +73,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <span className="font-display font-bold text-xl tracking-tight truncate">MindTask</span>
             </div>
           )}
-          {collapsed && (
-            <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
-              <Compass className="w-5 h-5 text-white" />
-            </div>
-          )}
           <button
             onClick={toggleCollapsed}
             title={collapsed ? "Expandir menu" : "Recolher menu"}
-            className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all ${collapsed ? 'hidden' : ''}`}
+            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
         </div>
 
@@ -180,22 +175,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
 
           {collapsed ? (
-            <div className="flex flex-col items-center gap-2">
-              <button
-                title="Expandir menu"
-                onClick={toggleCollapsed}
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
-              >
-                <PanelLeftOpen className="w-4 h-4" />
-              </button>
-              <button
-                title="Sair"
-                onClick={() => logoutMutation.mutate()}
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              title="Sair"
+              onClick={() => logoutMutation.mutate()}
+              className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           ) : (
             <Button 
               variant="ghost" 
