@@ -200,18 +200,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                   </Button>
                 </div>
 
-                {/* Description */}
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
-                  <Textarea
-                    value={cardDesc}
-                    onChange={e => setCardDesc(e.target.value)}
-                    onBlur={saveCard}
-                    className="bg-background rounded-xl resize-none min-h-[72px]"
-                    placeholder="Descrição opcional..."
-                  />
-                </div>
-
                 <div className="border-t pt-4">
                   {!isTaskReady ? (
                     <div className="flex items-center justify-center py-4 gap-3 text-muted-foreground">
@@ -294,6 +282,18 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      {/* Description */}
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
+                        <Textarea
+                          value={cardDesc}
+                          onChange={e => setCardDesc(e.target.value)}
+                          onBlur={saveCard}
+                          className="bg-background rounded-xl resize-none min-h-[72px]"
+                          placeholder="Descrição opcional..."
+                        />
                       </div>
 
                     </div>
