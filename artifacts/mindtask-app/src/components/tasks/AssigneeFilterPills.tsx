@@ -7,6 +7,7 @@ interface AssigneeFilterPillsProps {
   members: Member[];
   selected: string[];
   onToggle: (id: string) => void;
+  onClear?: () => void;
   meLabel?: string;
   showMe?: boolean;
 }
@@ -15,6 +16,7 @@ export function AssigneeFilterPills({
   members,
   selected,
   onToggle,
+  onClear,
   meLabel = "Eu",
   showMe = false,
 }: AssigneeFilterPillsProps) {
@@ -60,6 +62,14 @@ export function AssigneeFilterPills({
           </button>
         );
       })}
+      {onClear && selected.length > 0 && (
+        <button
+          onClick={onClear}
+          className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer"
+        >
+          Limpar
+        </button>
+      )}
     </>
   );
 }

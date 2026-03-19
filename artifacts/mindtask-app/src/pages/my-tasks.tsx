@@ -78,9 +78,8 @@ export default function MyTasksPage() {
     queryFn: () => {
       const p = new URLSearchParams();
       if (selectedStatuses.length > 0) p.set("status", selectedStatuses.join(","));
-      if (selectedAssignees.length > 0) p.set("assignedTo", selectedAssignees.join(","));
-      const qs = p.toString() ? `?${p.toString()}` : "";
-      return customFetch(`/api/my-tasks${qs}`);
+      p.set("assignedTo", selectedAssignees.join(","));
+      return customFetch(`/api/my-tasks?${p.toString()}`);
     },
   });
 
@@ -178,6 +177,7 @@ export default function MyTasksPage() {
                 members={members?.filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => ({ userId: m.userId, name: m.name })) ?? []}
                 selected={selectedAssignees}
                 onToggle={toggleAssignee}
+                onClear={() => setSelectedAssignees([])}
                 showMe
                 meLabel="Eu"
               />

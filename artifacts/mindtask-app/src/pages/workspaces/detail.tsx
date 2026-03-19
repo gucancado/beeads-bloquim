@@ -450,6 +450,7 @@ export default function WorkspaceDetailPage() {
                             members={workspaceMembers.map(m => ({ userId: m.userId, name: m.user.name }))}
                             selected={selectedAssignees}
                             onToggle={toggleAssignee}
+                            onClear={() => setSelectedAssignees([])}
                           />
                         </>
                       )}

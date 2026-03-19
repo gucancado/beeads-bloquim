@@ -42,7 +42,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const filterOverdue = statuses.includes("overdue");
   const otherStatuses = statuses.filter(s => s !== "overdue");
 
-  const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : [];
+  const assignees = assignedTo !== undefined ? assignedTo.split(",").filter(Boolean) : ["me"];
 
   const buildStatusFilter = () => {
     if (statuses.length === 0) return undefined;
