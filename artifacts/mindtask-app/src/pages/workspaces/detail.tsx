@@ -85,6 +85,15 @@ export default function WorkspaceDetailPage() {
 
   const isAdmin = workspace?.role === "admin";
 
+  const translateRole = (role: string) => {
+    switch (role) {
+      case 'admin': return 'Admin';
+      case 'editor': return 'Editor';
+      case 'executor': return 'Executor';
+      default: return role;
+    }
+  };
+
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'admin': return <ShieldAlert className="w-3.5 h-3.5" />;
@@ -119,7 +128,7 @@ export default function WorkspaceDetailPage() {
         <div className="bg-card border-b border-border pt-12 px-8 lg:px-12 pb-0">
           <div className="max-w-6xl mx-auto">
             <div className="flex items-center gap-3 text-muted-foreground mb-4 text-sm">
-              <Link href="/workspaces"><span className="hover:text-foreground cursor-pointer transition-colors">Workspaces</span></Link>
+              <Link href="/workspaces"><span className="hover:text-foreground cursor-pointer transition-colors">Espaços de Trabalho</span></Link>
               <span>/</span>
               <span className="text-foreground font-medium">{workspace.name}</span>
             </div>
@@ -129,7 +138,7 @@ export default function WorkspaceDetailPage() {
                 <h1 className="text-4xl font-display font-bold text-foreground">{workspace.name}</h1>
                 <p className="text-muted-foreground mt-2 text-lg flex items-center gap-2">
                   <Users className="w-5 h-5" />
-                  {workspace.members.length} membro{workspace.members.length !== 1 ? 's' : ''} · Papel: <span className="capitalize font-medium">{workspace.role}</span>
+                  {workspace.members.length} membro{workspace.members.length !== 1 ? 's' : ''} · Papel: <span className="font-medium">{translateRole(workspace.role)}</span>
                 </p>
               </div>
               <div className="flex gap-3">
@@ -304,7 +313,7 @@ export default function WorkspaceDetailPage() {
                           <div className="flex items-center gap-3">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getRoleBadgeClass(member.role)}`}>
                               {getRoleIcon(member.role)}
-                              {member.role}
+                              {translateRole(member.role)}
                             </span>
                             {isAdmin && member.role !== 'admin' && (
                               <Button

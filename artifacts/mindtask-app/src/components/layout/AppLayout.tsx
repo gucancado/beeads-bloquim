@@ -59,18 +59,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <ScrollArea className="flex-1 py-6 px-4">
           <nav className="space-y-8">
             <div>
-              <p className="px-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-3">Overview</p>
+              <p className="px-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-3">Visão geral</p>
               <div className="space-y-1">
                 <Link href="/workspaces">
                   <span className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${isActive('/workspaces') && location === '/workspaces' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}>
                     <Folders className="w-5 h-5" />
-                    All Workspaces
+                    Todos os Espaços
                   </span>
                 </Link>
                 <Link href="/my-tasks">
                   <span className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${isActive('/my-tasks') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}>
                     <CheckSquare className="w-5 h-5" />
-                    My Tasks
+                    Minhas Tarefas
                   </span>
                 </Link>
               </div>
@@ -78,7 +78,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
             <div>
               <div className="px-2 mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Your Workspaces</p>
+                <p className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Seus Espaços</p>
                 <Link href="/workspaces">
                   <span className="text-sidebar-foreground/40 hover:text-primary transition-colors cursor-pointer">
                     <Plus className="w-4 h-4" />
@@ -89,7 +89,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {isWorkspacesLoading ? (
                 <div className="px-4 py-2 flex items-center gap-2 text-sidebar-foreground/40 text-sm">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Loading...</span>
+                  <span>Carregando...</span>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -102,7 +102,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     </Link>
                   ))}
                   {workspaces?.length === 0 && (
-                    <p className="px-3 text-sm text-sidebar-foreground/40 italic">No workspaces yet</p>
+                    <p className="px-3 text-sm text-sidebar-foreground/40 italic">Nenhum espaço ainda</p>
                   )}
                 </div>
               )}
@@ -126,7 +126,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             onClick={() => logoutMutation.mutate()}
           >
             <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
+            Sair
           </Button>
         </div>
       </aside>

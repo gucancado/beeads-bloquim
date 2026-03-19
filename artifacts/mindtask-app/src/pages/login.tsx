@@ -26,8 +26,8 @@ export default function LoginPage() {
       },
       onError: (error: any) => {
         toast({
-          title: "Login failed",
-          description: error.message || "Invalid credentials. Please try again.",
+          title: "Falha ao entrar",
+          description: error.message || "Credenciais inválidas. Tente novamente.",
           variant: "destructive"
         });
       }
@@ -47,20 +47,20 @@ export default function LoginPage() {
             <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-primary/25">
               <Compass className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="text-3xl font-display font-bold text-foreground">Welcome Back</h1>
-            <p className="text-muted-foreground mt-2">Sign in to continue to MindTask</p>
+            <h1 className="text-3xl font-display font-bold text-foreground">Bem-vindo de volta</h1>
+            <p className="text-muted-foreground mt-2">Entre para continuar no MindTask</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6 bg-card p-8 rounded-3xl shadow-xl border border-border/50">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="email">E-mail</Label>
                 <div className="relative">
                   <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="you@example.com" 
+                    placeholder="voce@exemplo.com" 
                     className="pl-10 h-12 rounded-xl bg-background"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -70,7 +70,7 @@ export default function LoginPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Senha</Label>
                 <div className="relative">
                   <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input 
@@ -91,14 +91,14 @@ export default function LoginPage() {
               className="w-full h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/25 hover:-translate-y-0.5 transition-all"
               disabled={loginMutation.isPending}
             >
-              {loginMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
+              {loginMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Entrar"}
             </Button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Não tem uma conta?{" "}
             <Link href="/register">
-              <span className="text-primary font-semibold hover:underline cursor-pointer">Create one now</span>
+              <span className="text-primary font-semibold hover:underline cursor-pointer">Crie uma agora</span>
             </Link>
           </p>
         </div>
@@ -107,13 +107,13 @@ export default function LoginPage() {
       <div className="hidden lg:block lg:flex-1 relative overflow-hidden bg-slate-950">
         <img 
           src={`${import.meta.env.BASE_URL}images/auth-bg.png`} 
-          alt="Abstract mesh background" 
+          alt="Fundo abstrato" 
           className="absolute inset-0 w-full h-full object-cover opacity-80"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent" />
         <div className="absolute bottom-16 left-16 right-16">
-          <h2 className="text-4xl font-display font-bold text-white mb-4">Connect Ideas.<br/>Execute Tasks.</h2>
-          <p className="text-lg text-slate-300 max-w-lg">Transform your abstract mind maps into actionable task boards instantly. Planning meets execution.</p>
+          <h2 className="text-4xl font-display font-bold text-white mb-4">Conecte Ideias.<br/>Execute Tarefas.</h2>
+          <p className="text-lg text-slate-300 max-w-lg">Transforme seus mapas mentais em fluxos de trabalho organizados na hora. Planejamento encontra execução.</p>
         </div>
       </div>
     </div>

@@ -104,7 +104,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     const newX = parentNode ? parentNode.position.x + 350 : 200;
     const newY = parentNode ? parentNode.position.y : 200;
     createCardMut.mutate(
-      { workspaceId, mapId, data: { title: "New Node", positionX: newX, positionY: newY } },
+      { workspaceId, mapId, data: { title: "Novo Nó", positionX: newX, positionY: newY } },
       {
         onSuccess: (newCard) => {
           createConnMut.mutate(
@@ -179,7 +179,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     const centerX = 200 + Math.random() * 200;
     const centerY = 200 + Math.random() * 200;
     createCardMut.mutate(
-      { workspaceId, mapId, data: { title: "New Node", positionX: centerX, positionY: centerY } },
+      { workspaceId, mapId, data: { title: "Novo Nó", positionX: centerX, positionY: centerY } },
       {
         onSuccess: (newCard) => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
@@ -221,7 +221,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         <div className="absolute top-4 right-4 z-10">
           <Button onClick={handleAddCard} disabled={createCardMut.isPending} className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20">
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-            Add Node
+            Adicionar Nó
           </Button>
         </div>
 

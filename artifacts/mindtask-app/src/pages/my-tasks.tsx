@@ -15,6 +15,16 @@ interface OpenCard {
   cardId: string;
 }
 
+function translatePriority(p: string) {
+  switch (p) {
+    case 'critical': return 'Crítica';
+    case 'high': return 'Alta';
+    case 'medium': return 'Média';
+    case 'low': return 'Baixa';
+    default: return p;
+  }
+}
+
 const STATUS_OPTIONS = [
   { value: "in_progress", label: "Em andamento",  activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"                  },
   { value: "pending",     label: "Pendente",       activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600"                     },
@@ -90,9 +100,9 @@ export default function MyTasksPage() {
                   <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                     <CheckSquare className="w-5 h-5" />
                   </div>
-                  <h1 className="text-4xl font-display font-bold text-foreground">My Tasks</h1>
+                  <h1 className="text-4xl font-display font-bold text-foreground">Minhas Tarefas</h1>
                 </div>
-                <p className="text-muted-foreground text-lg ml-1">Everything assigned to you across all workspaces.</p>
+                <p className="text-muted-foreground text-lg ml-1">Todas as tarefas atribuídas a você em todos os espaços.</p>
               </div>
             </div>
 
@@ -134,8 +144,8 @@ export default function MyTasksPage() {
               <div className="w-20 h-20 bg-slate-100 dark:bg-slate-900 text-muted-foreground rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckSquare className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold font-display text-foreground">You're all caught up!</h3>
-              <p className="text-muted-foreground mt-2 max-w-md mx-auto">You have no assigned tasks matching these filters.</p>
+              <h3 className="text-2xl font-bold font-display text-foreground">Você está em dia!</h3>
+              <p className="text-muted-foreground mt-2 max-w-md mx-auto">Nenhuma tarefa atribuída a você com estes filtros.</p>
             </div>
           ) : (
             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
@@ -160,7 +170,7 @@ export default function MyTasksPage() {
                           {getStatusLabel(task.status)}
                         </Badge>
                         <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
-                          <Flag className="w-3 h-3 mr-1 inline-block" /> {task.priority}
+                          <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
                         </Badge>
                         {isOverdue && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
