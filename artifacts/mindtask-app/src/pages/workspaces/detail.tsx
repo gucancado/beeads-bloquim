@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember, customFetch } from "@workspace/api-client-react";
+import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember, useListWorkspaceMembers, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden } from "@/hooks/useHidden";
 import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare, Flag, Calendar as CalendarIcon, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
+import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 
 function MapCard({ map, workspaceId, isAdmin }: {
   map: { id: string; name: string; hidden: boolean; updatedAt: string };
@@ -89,18 +90,23 @@ export default function WorkspaceDetailPage() {
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress", "pending"]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
+  const { data: workspaceMembers } = useListWorkspaceMembers(workspaceId);
 
-  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatuses];
+  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatuses, selectedAssignees];
   const { data: workspaceTasks, isLoading: isTasksLoading } = useQuery<any[]>({
     queryKey: tasksQueryKey,
     queryFn: () => {
-      const params = selectedStatuses.length > 0 ? `?status=${selectedStatuses.join(",")}` : "";
-      return customFetch(`/api/workspaces/${workspaceId}/tasks${params}`);
+      const p = new URLSearchParams();
+      if (selectedStatuses.length > 0) p.set("status", selectedStatuses.join(","));
+      if (selectedAssignees.length > 0) p.set("assignedTo", selectedAssignees.join(","));
+      const qs = p.toString() ? `?${p.toString()}` : "";
+      return customFetch(`/api/workspaces/${workspaceId}/tasks${qs}`);
     },
   });
 
@@ -146,6 +152,17 @@ export default function WorkspaceDetailPage() {
       }
     }
   });
+
+  const toggleAssignee = (id: string) => {
+    setSelectedAssignees(prev =>
+      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
+    );
+  };
+
+  const clearAllFilters = () => {
+    setSelectedStatuses([]);
+    setSelectedAssignees([]);
+  };
 
   const handleCreateMap = (e: React.FormEvent) => {
     e.preventDefault();
@@ -408,7 +425,7 @@ export default function WorkspaceDetailPage() {
                   {/* Header row: filters + nova tarefa button */}
                   <div className="flex flex-wrap items-center gap-3 mb-6">
                     <div className="flex flex-wrap items-center gap-2 flex-1">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Filtrar:</span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Status:</span>
                       {STATUS_OPTIONS.map(opt => {
                         const isActive = selectedStatuses.includes(opt.value);
                         return (
@@ -425,9 +442,20 @@ export default function WorkspaceDetailPage() {
                           </button>
                         );
                       })}
-                      {selectedStatuses.length > 0 && (
+                      {(workspaceMembers && workspaceMembers.length > 0) && (
+                        <>
+                          <span className="w-px h-4 bg-border mx-1" />
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Responsável:</span>
+                          <AssigneeFilterPills
+                            members={workspaceMembers.map(m => ({ userId: m.userId, name: m.user.name }))}
+                            selected={selectedAssignees}
+                            onToggle={toggleAssignee}
+                          />
+                        </>
+                      )}
+                      {(selectedStatuses.length > 0 || selectedAssignees.length > 0) && (
                         <button
-                          onClick={() => setSelectedStatuses([])}
+                          onClick={clearAllFilters}
                           className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
                         >
                           Limpar filtros

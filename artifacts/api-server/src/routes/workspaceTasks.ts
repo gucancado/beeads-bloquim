@@ -10,8 +10,19 @@ const router: IRouter = Router({ mergeParams: true });
 
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
-  const { status } = req.query as { status?: string };
+  const { status, assignedTo } = req.query as { status?: string; assignedTo?: string };
   const statuses = status ? status.split(",").filter(Boolean) : [];
+  const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : [];
+
+  const buildAssigneeFilter = () => {
+    if (assignees.length === 0) return undefined;
+    const hasUnassigned = assignees.includes("unassigned");
+    const uuids = assignees.filter(a => a !== "unassigned");
+    const parts = [];
+    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
+    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
+    return parts.length === 1 ? parts[0] : or(...parts);
+  };
 
   const taskList = await db
     .select({
@@ -41,6 +52,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       and(
         eq(tasks.workspaceId, workspaceId),
         statuses.length > 0 ? inArray(tasks.status, statuses as any[]) : undefined,
+        buildAssigneeFilter(),
       )
     )
     .orderBy(
