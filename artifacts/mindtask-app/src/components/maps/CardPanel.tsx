@@ -200,6 +200,26 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                   </Button>
                 </div>
 
+                {/* Assignee */}
+                {isTaskReady && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                      <User className="w-3 h-3" /> Responsável
+                    </label>
+                    <Select value={taskAssignee} onValueChange={handleAssigneeChange}>
+                      <SelectTrigger className="bg-background rounded-xl h-10">
+                        <SelectValue placeholder="Sem responsável" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Sem responsável</SelectItem>
+                        {members?.map(m => (
+                          <SelectItem key={m.userId} value={m.userId}>{m.user.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="border-t pt-4">
                   {!isTaskReady ? (
                     <div className="flex items-center justify-center py-4 gap-3 text-muted-foreground">
@@ -264,24 +284,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             className="bg-background rounded-xl h-10 text-sm"
                           />
                         </div>
-                      </div>
-
-                      {/* Assignee */}
-                      <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
-                          <User className="w-3 h-3" /> Responsável
-                        </label>
-                        <Select value={taskAssignee} onValueChange={handleAssigneeChange}>
-                          <SelectTrigger className="bg-background rounded-xl h-10">
-                            <SelectValue placeholder="Sem responsável" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">Sem responsável</SelectItem>
-                            {members?.map(m => (
-                              <SelectItem key={m.userId} value={m.userId}>{m.user.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                       </div>
 
                       {/* Description */}
