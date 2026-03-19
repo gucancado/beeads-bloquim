@@ -180,35 +180,55 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
                 {/* Title + actions */}
                 <div>
-                  <div className="flex items-center justify-end gap-2 mb-1">
-                    {isTaskReady && (
-                      <button
-                        onClick={() => {
-                          if (taskStatus === "completed") {
-                            const revertTo = (card?.task as any)?.previousStatus || "pending";
-                            handleStatusChange(revertTo);
-                          } else {
-                            handleStatusChange("completed");
-                          }
-                        }}
-                        className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all ${
-                          taskStatus === "completed"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                            : "bg-background text-muted-foreground border-border hover:border-emerald-400 hover:text-emerald-600"
-                        }`}
-                      >
-                        {taskStatus === "completed" ? "✓ Concluída" : "Concluir"}
-                      </button>
+                  <div className="flex items-center gap-2 mb-1">
+                    {/* Status select — left side, pill style, hidden when completed */}
+                    {isTaskReady && taskStatus !== "completed" && (
+                      <Select value={taskStatus} onValueChange={handleStatusChange}>
+                        <SelectTrigger className="h-auto w-auto px-3 py-1 rounded-full border text-xs font-semibold bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground transition-all shadow-none focus:ring-0 gap-1.5">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">⏳ Pendente</SelectItem>
+                          <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
+                          <SelectItem value="blocked">🚫 Interrompida</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowDeleteCard(true)}
-                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                      title="Deletar card"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {isOverdue && taskStatus !== "completed" && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-1 rounded-full">
+                        🔴 Atrasada
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2 ml-auto">
+                      {isTaskReady && (
+                        <button
+                          onClick={() => {
+                            if (taskStatus === "completed") {
+                              const revertTo = (card?.task as any)?.previousStatus || "pending";
+                              handleStatusChange(revertTo);
+                            } else {
+                              handleStatusChange("completed");
+                            }
+                          }}
+                          className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all ${
+                            taskStatus === "completed"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                              : "bg-background text-muted-foreground border-border hover:border-emerald-400 hover:text-emerald-600"
+                          }`}
+                        >
+                          {taskStatus === "completed" ? "✓ Concluída" : "Concluir"}
+                        </button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowDeleteCard(true)}
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                        title="Deletar card"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
@@ -249,31 +269,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Status */}
-                      {taskStatus !== "completed" && (
-                      <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5 block">
-                          <span className={`w-2 h-2 rounded-full inline-block ${getStatusDot(taskStatus)}`} />
-                          Status
-                          {isOverdue && (
-                            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
-                              🔴 Atrasada
-                            </span>
-                          )}
-                        </label>
-                        <Select value={taskStatus} onValueChange={handleStatusChange}>
-                          <SelectTrigger className="bg-background rounded-xl h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">⏳ Pendente</SelectItem>
-                            <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
-                            <SelectItem value="blocked">🚫 Interrompida</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      )}
-
                       <div className="grid grid-cols-2 gap-3">
                         {/* Priority */}
                         <div>
