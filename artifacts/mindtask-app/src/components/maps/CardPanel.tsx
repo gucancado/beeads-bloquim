@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard } from "@workspace/api-client-react";
-import { Loader2, Trash2, X, Flag, Calendar, User, AlertTriangle, Check } from "lucide-react";
+import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -200,14 +200,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                       title="Deletar card"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={onClose}
-                      className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800"
-                    >
-                      <X className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
