@@ -2,19 +2,29 @@ import { useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useComments, useCreateComment, useToggleCommentHidden, CommentItem } from "@/hooks/useComments";
+import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, CommentItem } from "@/hooks/useComments";
 import { Button } from "@/components/ui/button";
 import { Loader2, Bold, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-interface CommentsSectionProps {
-  workspaceId: string;
-  mapId: string;
-  cardId: string;
-  currentUserId: string;
-  isAdmin: boolean;
-}
+type CommentsSectionProps =
+  | {
+      workspaceId: string;
+      mapId: string;
+      cardId: string;
+      taskId?: never;
+      currentUserId: string;
+      isAdmin: boolean;
+    }
+  | {
+      workspaceId: string;
+      taskId: string;
+      mapId?: never;
+      cardId?: never;
+      currentUserId: string;
+      isAdmin: boolean;
+    };
 
 function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => void; isPending: boolean }) {
   const [isEmpty, setIsEmpty] = useState(true);
@@ -159,22 +169,48 @@ function CommentCard({
   );
 }
 
-export function CommentsSection({ workspaceId, mapId, cardId, currentUserId, isAdmin }: CommentsSectionProps) {
+function CardCommentsSection({ workspaceId, mapId, cardId, currentUserId, isAdmin }: { workspaceId: string; mapId: string; cardId: string; currentUserId: string; isAdmin: boolean }) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const { data: comments, isLoading } = useComments(workspaceId, mapId, cardId);
   const createMut = useCreateComment(workspaceId, mapId, cardId);
   const toggleMut = useToggleCommentHidden(workspaceId, mapId, cardId);
 
-  const handleSubmit = (html: string) => {
-    createMut.mutate(html);
-  };
-
+  const handleSubmit = (html: string) => { createMut.mutate(html); };
   const handleToggle = (commentId: string) => {
     setTogglingId(commentId);
     toggleMut.mutate(commentId, { onSettled: () => setTogglingId(null) });
   };
 
+  return <CommentsList comments={comments} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={handleSubmit} onToggle={handleToggle} togglingId={togglingId} isPending={createMut.isPending} />;
+}
+
+function TaskCommentsSection({ workspaceId, taskId, currentUserId, isAdmin }: { workspaceId: string; taskId: string; currentUserId: string; isAdmin: boolean }) {
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const { data: comments, isLoading } = useTaskComments(workspaceId, taskId);
+  const createMut = useCreateTaskComment(workspaceId, taskId);
+  const toggleMut = useToggleTaskCommentHidden(workspaceId, taskId);
+
+  const handleSubmit = (html: string) => { createMut.mutate(html); };
+  const handleToggle = (commentId: string) => {
+    setTogglingId(commentId);
+    toggleMut.mutate(commentId, { onSettled: () => setTogglingId(null) });
+  };
+
+  return <CommentsList comments={comments} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={handleSubmit} onToggle={handleToggle} togglingId={togglingId} isPending={createMut.isPending} />;
+}
+
+function CommentsList({ comments, isLoading, currentUserId, isAdmin, onSubmit, onToggle, togglingId, isPending }: {
+  comments: CommentItem[] | undefined;
+  isLoading: boolean;
+  currentUserId: string;
+  isAdmin: boolean;
+  onSubmit: (html: string) => void;
+  onToggle: (id: string) => void;
+  togglingId: string | null;
+  isPending: boolean;
+}) {
   return (
     <div className="border-t pt-5 space-y-4">
       <div className="flex items-center gap-2">
@@ -184,7 +220,7 @@ export function CommentsSection({ workspaceId, mapId, cardId, currentUserId, isA
         </h3>
       </div>
 
-      <RichTextEditor onSubmit={handleSubmit} isPending={createMut.isPending} />
+      <RichTextEditor onSubmit={onSubmit} isPending={isPending} />
 
       {isLoading ? (
         <div className="flex justify-center py-3">
@@ -198,7 +234,7 @@ export function CommentsSection({ workspaceId, mapId, cardId, currentUserId, isA
               comment={c}
               currentUserId={currentUserId}
               isAdmin={isAdmin}
-              onToggleHidden={handleToggle}
+              onToggleHidden={onToggle}
               isToggling={togglingId === c.id}
             />
           ))}
@@ -209,3 +245,14 @@ export function CommentsSection({ workspaceId, mapId, cardId, currentUserId, isA
     </div>
   );
 }
+
+export function CommentsSection(props: CommentsSectionProps) {
+  const { workspaceId, currentUserId, isAdmin } = props;
+
+  if (props.taskId) {
+    return <TaskCommentsSection workspaceId={workspaceId} taskId={props.taskId} currentUserId={currentUserId} isAdmin={isAdmin} />;
+  }
+
+  return <CardCommentsSection workspaceId={workspaceId} mapId={props.mapId!} cardId={props.cardId!} currentUserId={currentUserId} isAdmin={isAdmin} />;
+}
+

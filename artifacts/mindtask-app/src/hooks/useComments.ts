@@ -73,3 +73,43 @@ export function useToggleCommentHidden(workspaceId: string, mapId: string, cardI
     },
   });
 }
+
+export function useTaskComments(workspaceId: string, taskId: string | null) {
+  return useQuery<CommentItem[]>({
+    queryKey: [`task-comments`, workspaceId, taskId],
+    queryFn: () =>
+      apiFetch<CommentItem[]>(
+        `${BASE}/api/workspaces/${workspaceId}/tasks/${taskId}/comments`
+      ),
+    enabled: !!taskId,
+    staleTime: 0,
+  });
+}
+
+export function useCreateTaskComment(workspaceId: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (content: string) =>
+      apiFetch<CommentItem>(
+        `${BASE}/api/workspaces/${workspaceId}/tasks/${taskId}/comments`,
+        { method: "POST", body: JSON.stringify({ content }) }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`task-comments`, workspaceId, taskId] });
+    },
+  });
+}
+
+export function useToggleTaskCommentHidden(workspaceId: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) =>
+      apiFetch<CommentItem>(
+        `${BASE}/api/workspaces/${workspaceId}/tasks/${taskId}/comments/${commentId}`,
+        { method: "PATCH" }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`task-comments`, workspaceId, taskId] });
+    },
+  });
+}

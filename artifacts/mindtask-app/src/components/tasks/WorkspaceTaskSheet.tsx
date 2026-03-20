@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { customFetch } from "@workspace/api-client-react";
+import { customFetch, useGetMe } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { CommentsSection } from "@/components/maps/CommentsSection";
 
 interface Member { userId: string; name: string; role: string; }
 
@@ -47,6 +48,9 @@ function translatePriority(p: string) {
 export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: me } = useGetMe({ query: { enabled: open } });
+  const currentUserId = me?.id ?? "";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -189,7 +193,8 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
     }
   };
 
-  const members = membersData as any[] | undefined;
+  const members = membersData as Member[] | undefined;
+  const isAdmin = members?.find((m) => m.userId === currentUserId)?.role === "admin" ?? false;
 
   return (
     <>
@@ -270,8 +275,8 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Sem responsável</SelectItem>
-                    {members?.map((m: any) => (
-                      <SelectItem key={m.userId} value={m.userId}>{m.user?.name ?? m.name}</SelectItem>
+                    {members?.map((m) => (
+                      <SelectItem key={m.userId} value={m.userId}>{m.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -339,6 +344,15 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                   </Button>
                 )}
               </div>
+
+              {isEditing && taskId && (
+                <CommentsSection
+                  workspaceId={workspaceId}
+                  taskId={taskId}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                />
+              )}
             </div>
           )}
         </SheetContent>
