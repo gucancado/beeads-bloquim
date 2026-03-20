@@ -496,17 +496,17 @@ export default function WorkspaceDetailPage() {
                           return (
                             <div
                               key={task.id}
-                              className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer border-l-4"
+                              className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
                               style={{
                                 backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
-                                borderLeftColor: isOverdue ? '#ef4444' : 'transparent',
                               }}
                               onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
                               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
                               onClick={() => openTaskItem(task)}
                             >
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-xl font-bold text-foreground mb-1">{task.cardTitle || task.title}</h3>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                                   <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(visualStatus)}`}>
                                     {getStatusLabel(visualStatus)}
                                   </Badge>
@@ -518,14 +518,6 @@ export default function WorkspaceDetailPage() {
                                       Avulsa
                                     </span>
                                   )}
-                                  {isOverdue && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full">
-                                      ⚠ Vencida
-                                    </span>
-                                  )}
-                                </div>
-                                <h3 className="text-xl font-bold text-foreground mb-1">{task.cardTitle || task.title}</h3>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                                   {task.mapName && (
                                     <div className="flex items-center gap-1.5">
                                       <Map className="w-3.5 h-3.5 shrink-0" />
@@ -556,8 +548,8 @@ export default function WorkspaceDetailPage() {
                                 </Button>
                                 {!isStandalone && (
                                   <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                                    <Button variant="outline" size="sm" className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors">
-                                      Ver no Mapa <ArrowRight className="w-4 h-4 ml-1.5" />
+                                    <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7">
+                                      Ver no Mapa <ArrowRight className="w-3 h-3 ml-1" />
                                     </Button>
                                   </Link>
                                 )}
