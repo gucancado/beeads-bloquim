@@ -22,7 +22,7 @@ export default function LoginPage() {
           localStorage.setItem("mindtask_token", data.token);
         }
         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-        setLocation("/workspaces");
+        setLocation("/my-tasks");
       },
       onError: (error: any) => {
         toast({

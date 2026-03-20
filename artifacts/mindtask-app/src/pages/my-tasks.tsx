@@ -146,9 +146,8 @@ export default function MyTasksPage() {
                   <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                     <CheckSquare className="w-5 h-5" />
                   </div>
-                  <h1 className="text-4xl font-display font-bold text-foreground">Minhas Tarefas</h1>
+                  <h1 className="text-4xl font-display font-bold text-foreground">Suas tarefas</h1>
                 </div>
-                <p className="text-muted-foreground text-lg ml-1">Tarefas dos seus espaços de trabalho.</p>
               </div>
             </div>
 
