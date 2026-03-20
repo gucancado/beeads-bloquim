@@ -15,11 +15,35 @@ import { useQueryClient } from "@tanstack/react-query";
 const nodeTypes = { mindmap: MindMapNode };
 const edgeTypes = { deletable: DeletableEdge };
 
-const EDGE_STYLE = {
+const INACTIVE_STATUSES = new Set(['blocked', 'pending']);
+
+const EDGE_BASE = {
   type: 'deletable' as const,
-  animated: true,
   style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
 };
+
+function isEdgeAnimated(sourceId: string, targetId: string, cards: Array<{ id: string; statusVisual: string }>): boolean {
+  const source = cards.find(c => c.id === sourceId);
+  const target = cards.find(c => c.id === targetId);
+  if (source && INACTIVE_STATUSES.has(source.statusVisual)) return false;
+  if (target && INACTIVE_STATUSES.has(target.statusVisual)) return false;
+  return true;
+}
+
+function buildEdgeFromConn(
+  conn: { id: string; sourceCardId: string; targetCardId: string },
+  cards: Array<{ id: string; statusVisual: string }>,
+): Edge {
+  return {
+    id: conn.id,
+    source: conn.sourceCardId,
+    target: conn.targetCardId,
+    sourceHandle: (conn as any).sourceHandle ?? undefined,
+    targetHandle: (conn as any).targetHandle ?? undefined,
+    ...EDGE_BASE,
+    animated: isEdgeAnimated(conn.sourceCardId, conn.targetCardId, cards),
+  };
+}
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
@@ -58,14 +82,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       }));
       setNodes(initialNodes);
 
-      const initialEdges: Edge[] = mapData.connections.map(c => ({
-        id: c.id,
-        source: c.sourceCardId,
-        target: c.targetCardId,
-        sourceHandle: (c as any).sourceHandle ?? undefined,
-        targetHandle: (c as any).targetHandle ?? undefined,
-        ...EDGE_STYLE,
-      }));
+      const initialEdges: Edge[] = mapData.connections.map(c => buildEdgeFromConn(c, mapData.cards));
       setEdges(initialEdges);
       initializedRef.current = true;
     } else {
@@ -97,8 +114,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const existingIds = new Set(filtered.map(e => e.id));
         const newEdges: Edge[] = mapData.connections
           .filter(c => !existingIds.has(c.id))
-          .map(c => ({ id: c.id, source: c.sourceCardId, target: c.targetCardId, sourceHandle: (c as any).sourceHandle ?? undefined, targetHandle: (c as any).targetHandle ?? undefined, ...EDGE_STYLE }));
-        return [...filtered, ...newEdges];
+          .map(c => buildEdgeFromConn(c, mapData.cards));
+        const updatedFiltered = filtered.map(e =>
+          e.id.startsWith('temp-')
+            ? e
+            : { ...e, animated: isEdgeAnimated(e.source, e.target, mapData.cards) },
+        );
+        return [...updatedFiltered, ...newEdges];
       });
     }
   }, [mapData]);
@@ -141,13 +163,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (params: Connection) => {
       if (!params.source || !params.target) return;
       const tempId = `temp-${Date.now()}`;
+      const animated = mapData ? isEdgeAnimated(params.source, params.target, mapData.cards) : true;
       const newEdge: Edge = {
         id: tempId,
         source: params.source,
         target: params.target,
         sourceHandle: params.sourceHandle ?? undefined,
         targetHandle: params.targetHandle ?? undefined,
-        ...EDGE_STYLE,
+        ...EDGE_BASE,
+        animated,
       };
       setEdges((eds) => addEdge(newEdge, eds));
 
@@ -168,7 +192,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         },
       );
     },
-    [setEdges, createConnMut, workspaceId, mapId, queryClient],
+    [setEdges, createConnMut, workspaceId, mapId, queryClient, mapData],
   );
 
   const onEdgesChangeWithDelete = useCallback(
