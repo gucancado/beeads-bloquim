@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { maps, cards, cardConnections, tasks, users } from "@workspace/db/schema";
+import { maps, cards, cardConnections, tasks, users, userMapAccess } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
@@ -124,6 +124,21 @@ router.delete("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]),
     .delete(maps)
     .where(and(eq(maps.id, req.params.mapId), eq(maps.workspaceId, req.params.workspaceId)));
   res.json({ success: true, message: "Map deleted" });
+});
+
+router.post("/:mapId/access", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { mapId } = req.params;
+  const userId = req.user!.userId;
+
+  await db
+    .insert(userMapAccess)
+    .values({ userId, mapId, lastAccessedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [userMapAccess.userId, userMapAccess.mapId],
+      set: { lastAccessedAt: new Date() },
+    });
+
+  res.status(204).end();
 });
 
 export default router;

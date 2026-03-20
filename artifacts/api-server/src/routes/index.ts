@@ -8,6 +8,7 @@ import connectionsRouter from "./connections";
 import myTasksRouter from "./myTasks";
 import commentsRouter from "./comments";
 import workspaceTasksRouter from "./workspaceTasks";
+import recentMapsRouter from "./recentMaps";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/workspaces/:workspaceId/maps/:mapId/cards", commentsRouter);
 router.use("/workspaces/:workspaceId/maps/:mapId/connections", connectionsRouter);
 router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
 router.use("/my-tasks", myTasksRouter);
+router.use("/maps/recent", recentMapsRouter);
 
 export default router;

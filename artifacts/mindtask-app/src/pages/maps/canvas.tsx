@@ -6,7 +6,7 @@ import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
 import { CardPanel } from "@/components/maps/CardPanel";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection } from "@workspace/api-client-react";
+import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, customFetch } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -32,6 +32,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const nodesRef = useRef<Node[]>([]);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+  useEffect(() => {
+    if (!workspaceId || !mapId) return;
+    customFetch(`/api/workspaces/${workspaceId}/maps/${mapId}/access`, { method: "POST" })
+      .catch(() => {})
+      .finally(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/maps/recent"] });
+      });
+  }, [workspaceId, mapId]);
 
   const handleOpenPanel = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
