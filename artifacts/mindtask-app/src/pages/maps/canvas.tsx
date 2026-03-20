@@ -19,8 +19,14 @@ const INACTIVE_STATUSES = new Set(['blocked', 'pending']);
 
 const EDGE_BASE = {
   type: 'deletable' as const,
-  style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
 };
+
+const EDGE_STYLE_ACTIVE = { strokeWidth: 2, stroke: 'hsl(var(--primary))' };
+const EDGE_STYLE_INACTIVE = { strokeWidth: 2, stroke: '#4b5563', strokeDasharray: '5 5' };
+
+function edgeStyle(animated: boolean) {
+  return animated ? EDGE_STYLE_ACTIVE : EDGE_STYLE_INACTIVE;
+}
 
 interface ConnectionWithHandles {
   id: string;
@@ -42,6 +48,7 @@ function buildEdgeFromConn(
   conn: ConnectionWithHandles,
   cards: Array<{ id: string; statusVisual: string }>,
 ): Edge {
+  const animated = isEdgeAnimated(conn.sourceCardId, conn.targetCardId, cards);
   return {
     id: conn.id,
     source: conn.sourceCardId,
@@ -49,7 +56,8 @@ function buildEdgeFromConn(
     sourceHandle: conn.sourceHandle ?? undefined,
     targetHandle: conn.targetHandle ?? undefined,
     ...EDGE_BASE,
-    animated: isEdgeAnimated(conn.sourceCardId, conn.targetCardId, cards),
+    animated,
+    style: edgeStyle(animated),
   };
 }
 
@@ -123,11 +131,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const newEdges: Edge[] = mapData.connections
           .filter(c => !existingIds.has(c.id))
           .map(c => buildEdgeFromConn(c, mapData.cards));
-        const updatedFiltered = filtered.map(e =>
-          e.id.startsWith('temp-')
-            ? e
-            : { ...e, animated: isEdgeAnimated(e.source, e.target, mapData.cards) },
-        );
+        const updatedFiltered = filtered.map(e => {
+          if (e.id.startsWith('temp-')) return e;
+          const animated = isEdgeAnimated(e.source, e.target, mapData.cards);
+          return { ...e, animated, style: edgeStyle(animated) };
+        });
         return [...updatedFiltered, ...newEdges];
       });
     }
@@ -180,6 +188,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         targetHandle: params.targetHandle ?? undefined,
         ...EDGE_BASE,
         animated,
+        style: edgeStyle(animated),
       };
       setEdges((eds) => addEdge(newEdge, eds));
 
