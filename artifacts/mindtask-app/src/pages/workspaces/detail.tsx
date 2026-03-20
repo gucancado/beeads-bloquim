@@ -241,7 +241,6 @@ export default function WorkspaceDetailPage() {
       case 'pending': return 'PENDENTE';
       case 'in_progress': return 'EM ANDAMENTO';
       case 'completed': return 'CONCLUÍDA';
-      case 'overdue': return 'VENCIDA';
       case 'blocked': return 'INTERROMPIDA';
       default: return s.replace('_', ' ').toUpperCase();
     }
@@ -249,7 +248,6 @@ export default function WorkspaceDetailPage() {
 
   const getStatusColor = (s: string) => {
     switch (s) {
-      case 'overdue': return 'bg-red-500 text-white border-transparent';
       case 'completed': return 'bg-emerald-500 text-white border-transparent';
       case 'in_progress': return 'bg-amber-500 text-white border-transparent';
       case 'pending': return 'bg-blue-500 text-white border-transparent';
@@ -491,7 +489,6 @@ export default function WorkspaceDetailPage() {
                       <div className="divide-y divide-border/50">
                         {workspaceTasks?.map(task => {
                           const isOverdue = !!task.overdue && task.status !== 'completed' && task.status !== 'blocked';
-                          const visualStatus = isOverdue ? 'overdue' : task.status;
                           const isStandalone = !task.mapId;
                           return (
                             <div
@@ -507,8 +504,8 @@ export default function WorkspaceDetailPage() {
                               <div className="flex-1 min-w-0">
                                 <h3 className="text-xl font-bold text-foreground mb-1">{task.cardTitle || task.title}</h3>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                                  <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(visualStatus)}`}>
-                                    {getStatusLabel(visualStatus)}
+                                  <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
+                                    {getStatusLabel(task.status)}
                                   </Badge>
                                   <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
                                     <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}

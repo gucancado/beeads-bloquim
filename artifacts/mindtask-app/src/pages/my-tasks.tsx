@@ -98,7 +98,6 @@ export default function MyTasksPage() {
       case 'pending': return 'PENDENTE';
       case 'in_progress': return 'EM ANDAMENTO';
       case 'completed': return 'CONCLUÍDA';
-      case 'overdue': return 'VENCIDA';
       case 'blocked': return 'INTERROMPIDA';
       default: return s.replace('_', ' ').toUpperCase();
     }
@@ -106,7 +105,6 @@ export default function MyTasksPage() {
 
   const getStatusColor = (s: string) => {
     switch (s) {
-      case 'overdue': return 'bg-red-500 text-white border-transparent';
       case 'completed': return 'bg-emerald-500 text-white border-transparent';
       case 'in_progress': return 'bg-amber-500 text-white border-transparent';
       case 'pending': return 'bg-blue-500 text-white border-transparent';
