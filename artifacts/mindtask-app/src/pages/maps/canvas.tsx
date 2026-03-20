@@ -22,6 +22,14 @@ const EDGE_BASE = {
   style: { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
 };
 
+interface ConnectionWithHandles {
+  id: string;
+  sourceCardId: string;
+  targetCardId: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+
 function isEdgeAnimated(sourceId: string, targetId: string, cards: Array<{ id: string; statusVisual: string }>): boolean {
   const source = cards.find(c => c.id === sourceId);
   const target = cards.find(c => c.id === targetId);
@@ -31,15 +39,15 @@ function isEdgeAnimated(sourceId: string, targetId: string, cards: Array<{ id: s
 }
 
 function buildEdgeFromConn(
-  conn: { id: string; sourceCardId: string; targetCardId: string },
+  conn: ConnectionWithHandles,
   cards: Array<{ id: string; statusVisual: string }>,
 ): Edge {
   return {
     id: conn.id,
     source: conn.sourceCardId,
     target: conn.targetCardId,
-    sourceHandle: (conn as any).sourceHandle ?? undefined,
-    targetHandle: (conn as any).targetHandle ?? undefined,
+    sourceHandle: conn.sourceHandle ?? undefined,
+    targetHandle: conn.targetHandle ?? undefined,
     ...EDGE_BASE,
     animated: isEdgeAnimated(conn.sourceCardId, conn.targetCardId, cards),
   };
