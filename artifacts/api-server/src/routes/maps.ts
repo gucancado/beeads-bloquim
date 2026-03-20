@@ -127,8 +127,19 @@ router.delete("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]),
 });
 
 router.post("/:mapId/access", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
-  const { mapId } = req.params;
+  const { mapId, workspaceId } = req.params;
   const userId = req.user!.userId;
+
+  const [map] = await db
+    .select({ id: maps.id })
+    .from(maps)
+    .where(and(eq(maps.id, mapId), eq(maps.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!map) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   await db
     .insert(userMapAccess)

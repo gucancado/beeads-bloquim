@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, CheckSquare, Compass, Folders, Loader2, Map, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useQueryClient } from "@tanstack/react-query";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
 
 interface RecentMap {
