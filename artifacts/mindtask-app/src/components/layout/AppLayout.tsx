@@ -99,17 +99,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* Nav */}
         <ScrollArea className="flex-1 py-4 px-2">
           <nav className="space-y-6">
-            {!collapsed && (
-              <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Visão geral</p>
-            )}
             <div className={`space-y-1 ${collapsed ? 'mt-2' : ''}`}>
               <Link href="/workspaces">
                 <span
-                  title="Todos os Espaços"
+                  title="Espaços de Trabalho"
                   className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/workspaces') && location === '/workspaces' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
                 >
                   <Folders className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span>Todos os Espaços</span>}
+                  {!collapsed && <span>Espaços de Trabalho</span>}
                 </span>
               </Link>
               <Link href="/my-tasks">
