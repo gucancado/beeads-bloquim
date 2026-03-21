@@ -305,19 +305,11 @@ export default function WorkspaceDetailPage() {
                 <h1 className="text-4xl font-display font-bold text-foreground">{workspace.name}</h1>
                 <p className="text-muted-foreground mt-2 text-lg flex items-center gap-2">
                   <Users className="w-5 h-5" />
-                  {workspace.members.length} membro{workspace.members.length !== 1 ? 's' : ''} · Papel: <span className="font-medium">{translateRole(workspace.role)}</span>
+                  {workspace.members.length} · Você é <span className="font-medium">{translateRole(workspace.role)}</span>
                 </p>
               </div>
               <div className="flex gap-3">
-                {isAdmin && (
-                  <Button variant="outline" className="rounded-xl h-11 px-5" onClick={() => setIsMemberDialogOpen(true)}>
-                    <UserPlus className="w-4 h-4 mr-2" /> Convidar
-                  </Button>
-                )}
                 <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>
-                  <Button className="rounded-xl h-11 px-5 shadow-lg shadow-primary/20" onClick={() => setIsMapDialogOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" /> Novo Mapa
-                  </Button>
                   <DialogContent className="sm:max-w-md rounded-2xl">
                     <DialogHeader>
                       <DialogTitle className="text-2xl font-display">Criar Mapa Mental</DialogTitle>
@@ -392,18 +384,17 @@ export default function WorkspaceDetailPage() {
                     <div className="flex items-center justify-center py-20">
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
-                  ) : maps?.length === 0 ? (
+                  ) : maps?.length === 0 && showHiddenMaps ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground">
-                        {showHiddenMaps ? "Nenhum mapa oculto" : "Nenhum mapa criado"}
-                      </h3>
-                      <p className="text-muted-foreground mt-2 mb-6">
-                        {showHiddenMaps ? "Não há mapas ocultos neste espaço." : "Comece a planejar visualmente com um mapa mental."}
-                      </p>
-                      {!showHiddenMaps && (
-                        <Button onClick={() => setIsMapDialogOpen(true)} className="rounded-xl">Criar primeiro mapa</Button>
-                      )}
+                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum mapa oculto</h3>
+                      <p className="text-muted-foreground mt-2">Não há mapas ocultos neste espaço.</p>
+                    </div>
+                  ) : maps?.length === 0 && !isAdmin ? (
+                    <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
+                      <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum mapa criado</h3>
+                      <p className="text-muted-foreground mt-2">Comece a planejar visualmente com um mapa mental.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -415,6 +406,17 @@ export default function WorkspaceDetailPage() {
                           isAdmin={isAdmin}
                         />
                       ))}
+                      {isAdmin && !showHiddenMaps && (
+                        <button
+                          onClick={() => setIsMapDialogOpen(true)}
+                          className="bg-card rounded-2xl p-6 border-2 border-dashed border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 cursor-pointer hover:-translate-y-1 flex flex-col items-center justify-center gap-3 min-h-[160px] text-muted-foreground hover:text-primary group"
+                        >
+                          <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                            <Plus className="w-6 h-6" />
+                          </div>
+                          <span className="text-sm font-semibold">Novo Mapa</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </TabsContent>
@@ -621,46 +623,47 @@ export default function WorkspaceDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="members" className="mt-0 outline-none">
-                  <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-                      <h3 className="text-lg font-bold font-display">Membros do Workspace</h3>
-                      {isAdmin && (
-                        <Button size="sm" className="rounded-lg" onClick={() => setIsMemberDialogOpen(true)}>
-                          <UserPlus className="w-4 h-4 mr-2" /> Adicionar Membro
-                        </Button>
-                      )}
-                    </div>
-                    <div className="divide-y divide-border">
-                      {workspace.members.map(member => (
-                        <div key={member.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
-                              {member.user.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{member.user.name}</p>
-                              <p className="text-sm text-muted-foreground">{member.user.email}</p>
-                            </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {workspace.members.map(member => (
+                      <div key={member.id} className="bg-card rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg shrink-0">
+                            {member.user.name.charAt(0).toUpperCase()}
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getRoleBadgeClass(member.role)}`}>
-                              {getRoleIcon(member.role)}
-                              {translateRole(member.role)}
-                            </span>
-                            {isAdmin && member.role !== 'admin' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                                onClick={() => setRemovingMemberId(member.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground truncate">{member.user.name}</p>
+                            <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getRoleBadgeClass(member.role)}`}>
+                            {getRoleIcon(member.role)}
+                            {translateRole(member.role)}
+                          </span>
+                          {isAdmin && member.role !== 'admin' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                              onClick={() => setRemovingMemberId(member.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setIsMemberDialogOpen(true)}
+                        className="bg-card rounded-2xl p-6 border-2 border-dashed border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 cursor-pointer hover:-translate-y-1 flex flex-col items-center justify-center gap-3 min-h-[140px] text-muted-foreground hover:text-primary group"
+                      >
+                        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                          <UserPlus className="w-6 h-6" />
+                        </div>
+                        <span className="text-sm font-semibold">Adicionar Membro</span>
+                      </button>
+                    )}
                   </div>
                 </TabsContent>
               </div>
