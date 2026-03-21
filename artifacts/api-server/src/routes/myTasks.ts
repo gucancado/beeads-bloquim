@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users } from "@workspace/db/schema";
-import { eq, and, or, asc, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, or, asc, sql, inArray, isNull, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -28,6 +28,57 @@ router.get("/members", requireAuth, async (req: AuthRequest, res) => {
     .orderBy(users.name);
 
   return res.json(members);
+});
+
+router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { assignedTo } = req.query as { assignedTo?: string };
+
+  const assignees = assignedTo !== undefined ? assignedTo.split(",").filter(Boolean) : ["me"];
+
+  const buildAssigneeFilter = () => {
+    if (assignees.length === 0) return undefined;
+    const hasMe = assignees.includes("me");
+    const hasUnassigned = assignees.includes("unassigned");
+    const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
+
+    const parts = [];
+    if (hasMe) parts.push(eq(tasks.assignedTo, userId));
+    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
+    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
+    return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+  };
+
+  const memberships = await db
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.userId, userId));
+
+  if (memberships.length === 0) {
+    return res.json({ pending: 0, in_progress: 0, completed: 0, blocked: 0 });
+  }
+
+  const memberWorkspaceIds = memberships.map(m => m.workspaceId);
+
+  const rows = await db
+    .select({ status: tasks.status, cnt: count() })
+    .from(tasks)
+    .where(
+      and(
+        inArray(tasks.workspaceId, memberWorkspaceIds),
+        buildAssigneeFilter(),
+      )
+    )
+    .groupBy(tasks.status);
+
+  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0 } as Record<string, number>;
+  for (const row of rows) {
+    if (row.status && row.status in result) {
+      result[row.status] = Number(row.cnt);
+    }
+  }
+
+  return res.json(result);
 });
 
 router.get("/", requireAuth, async (req: AuthRequest, res) => {

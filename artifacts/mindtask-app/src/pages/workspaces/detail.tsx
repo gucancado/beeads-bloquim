@@ -110,6 +110,17 @@ export default function WorkspaceDetailPage() {
     },
   });
 
+  const countsQueryKey = [`/api/workspaces/${workspaceId}/tasks/counts`, selectedAssignees];
+  const { data: statusCounts } = useQuery<Record<string, number>>({
+    queryKey: countsQueryKey,
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (selectedAssignees.length > 0) p.set("assignedTo", selectedAssignees.join(","));
+      const qs = p.toString() ? `?${p.toString()}` : "";
+      return customFetch(`/api/workspaces/${workspaceId}/tasks/counts${qs}`);
+    },
+  });
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -204,10 +215,10 @@ export default function WorkspaceDetailPage() {
   };
 
   const STATUS_OPTIONS = [
-    { value: "in_progress", label: "Em andamento", activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600" },
-    { value: "pending",     label: "Pendente",      activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600" },
-    { value: "blocked",     label: "Interrompida",  activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600" },
-    { value: "completed",   label: "Concluída",     activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" },
+    { value: "in_progress", label: "em andamento", labelPlural: "em andamento",  activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600" },
+    { value: "pending",     label: "pendente",      labelPlural: "pendentes",     activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600" },
+    { value: "blocked",     label: "interrompida",  labelPlural: "interrompidas", activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600" },
+    { value: "completed",   label: "concluída",     labelPlural: "concluídas",    activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" },
   ];
 
   const toggleStatus = (value: string) => {
@@ -259,11 +270,13 @@ export default function WorkspaceDetailPage() {
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
+    queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setOpenCard(null);
   };
 
   const handleCloseTaskSheet = () => {
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
+    queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setTaskSheetOpen(false);
     setEditingTaskId(null);
   };
@@ -428,6 +441,7 @@ export default function WorkspaceDetailPage() {
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Status:</span>
                       {STATUS_OPTIONS.map(opt => {
                         const isActive = selectedStatuses.includes(opt.value);
+                        const cnt = statusCounts?.[opt.value] ?? 0;
                         return (
                           <button
                             key={opt.value}
@@ -438,7 +452,7 @@ export default function WorkspaceDetailPage() {
                                 : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
                             }`}
                           >
-                            {opt.label}
+                            {cnt} {cnt > 1 ? opt.labelPlural : opt.label}
                           </button>
                         );
                       })}

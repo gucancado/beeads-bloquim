@@ -1,12 +1,48 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaceMembers, users } from "@workspace/db/schema";
-import { eq, and, isNull, or, inArray, asc, sql } from "drizzle-orm";
+import { eq, and, isNull, or, inArray, asc, sql, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
+
+router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const { assignedTo } = req.query as { assignedTo?: string };
+  const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : [];
+
+  const buildAssigneeFilter = () => {
+    if (assignees.length === 0) return undefined;
+    const hasUnassigned = assignees.includes("unassigned");
+    const uuids = assignees.filter(a => a !== "unassigned");
+    const parts = [];
+    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
+    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
+    return parts.length === 1 ? parts[0] : or(...parts);
+  };
+
+  const rows = await db
+    .select({ status: tasks.status, cnt: count() })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.workspaceId, workspaceId),
+        buildAssigneeFilter(),
+      )
+    )
+    .groupBy(tasks.status);
+
+  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0 } as Record<string, number>;
+  for (const row of rows) {
+    if (row.status && row.status in result) {
+      result[row.status] = Number(row.cnt);
+    }
+  }
+
+  res.json(result);
+});
 
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;

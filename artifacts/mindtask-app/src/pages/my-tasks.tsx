@@ -36,10 +36,10 @@ function translatePriority(p: string) {
 }
 
 const STATUS_OPTIONS = [
-  { value: "in_progress", label: "Em andamento",  activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"       },
-  { value: "pending",     label: "Pendente",       activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600"         },
-  { value: "blocked",     label: "Interrompida",   activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600"   },
-  { value: "completed",   label: "Concluída",      activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"},
+  { value: "in_progress", label: "em andamento",  labelPlural: "em andamento",   activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"       },
+  { value: "pending",     label: "pendente",       labelPlural: "pendentes",      activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600"         },
+  { value: "blocked",     label: "interrompida",   labelPlural: "interrompidas",  activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600"   },
+  { value: "completed",   label: "concluída",      labelPlural: "concluídas",     activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"},
 ];
 
 export default function MyTasksPage() {
@@ -83,6 +83,16 @@ export default function MyTasksPage() {
     },
   });
 
+  const countsQueryKey = ["/api/my-tasks/counts", selectedAssignees];
+  const { data: statusCounts } = useQuery<Record<string, number>>({
+    queryKey: countsQueryKey,
+    queryFn: () => {
+      const p = new URLSearchParams();
+      p.set("assignedTo", selectedAssignees.join(","));
+      return customFetch(`/api/my-tasks/counts?${p.toString()}`);
+    },
+  });
+
   const getPriorityColor = (p: string) => {
     switch (p) {
       case 'critical': return 'text-red-500 bg-red-500/10 border-red-200 dark:border-red-900/50';
@@ -115,11 +125,13 @@ export default function MyTasksPage() {
 
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+    queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setOpenCard(null);
   };
 
   const handleCloseSheet = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+    queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setStandaloneTask(null);
   };
 
@@ -153,6 +165,7 @@ export default function MyTasksPage() {
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Status:</span>
               {STATUS_OPTIONS.map(opt => {
                 const isActive = selectedStatuses.includes(opt.value);
+                const cnt = statusCounts?.[opt.value] ?? 0;
                 return (
                   <button
                     key={opt.value}
@@ -163,7 +176,7 @@ export default function MyTasksPage() {
                         : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
                     }`}
                   >
-                    {opt.label}
+                    {cnt} {cnt > 1 ? opt.labelPlural : opt.label}
                   </button>
                 );
               })}
