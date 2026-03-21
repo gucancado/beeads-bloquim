@@ -70,7 +70,7 @@ export default function RegisterPage() {
               <Compass className="w-8 h-8 text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-display font-bold text-foreground">Criar Conta</h1>
-            <p className="text-muted-foreground mt-2">Junte-se ao MindTask hoje</p>
+            <p className="text-muted-foreground mt-2">Junte-se ao Bloquim hoje</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6 bg-card p-8 rounded-3xl shadow-xl border border-border/50">

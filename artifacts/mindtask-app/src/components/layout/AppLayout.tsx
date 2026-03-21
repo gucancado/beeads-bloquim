@@ -84,7 +84,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
                 <Compass className="w-5 h-5 text-white" />
               </div>
-              <span className="font-display font-bold text-xl tracking-tight truncate">MindTask</span>
+              <span className="font-display font-bold text-xl tracking-tight truncate">Bloquim</span>
             </div>
           )}
           <button

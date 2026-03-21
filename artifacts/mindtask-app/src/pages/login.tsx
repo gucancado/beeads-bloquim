@@ -48,7 +48,7 @@ export default function LoginPage() {
               <Compass className="w-8 h-8 text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-display font-bold text-foreground">Bem-vindo de volta</h1>
-            <p className="text-muted-foreground mt-2">Entre para continuar no MindTask</p>
+            <p className="text-muted-foreground mt-2">Entre para continuar no Bloquim</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6 bg-card p-8 rounded-3xl shadow-xl border border-border/50">
