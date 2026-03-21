@@ -59,7 +59,7 @@ function MapCard({ map, workspaceId, isAdmin }: {
         <button
           onClick={handleToggle}
           disabled={toggleHidden.isPending}
-          title={map.hidden ? "Tornar visível" : "Ocultar mapa"}
+          title={map.hidden ? "Tornar visível" : "Ocultar plano"}
           className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground z-10"
         >
           {toggleHidden.isPending ? (
@@ -119,7 +119,7 @@ export default function WorkspaceDetailPage() {
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps`] });
         setIsMapDialogOpen(false);
         setMapName("");
-        toast({ title: "Mapa criado com sucesso!" });
+        toast({ title: "Plano criado com sucesso!" });
       }
     }
   });
@@ -312,12 +312,12 @@ export default function WorkspaceDetailPage() {
                 <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>
                   <DialogContent className="sm:max-w-md rounded-2xl">
                     <DialogHeader>
-                      <DialogTitle className="text-2xl font-display">Criar Mapa Mental</DialogTitle>
-                      <DialogDescription>Dê um nome para o seu novo mapa de planejamento visual.</DialogDescription>
+                      <DialogTitle className="text-2xl font-display">Criar Plano</DialogTitle>
+                      <DialogDescription>Dê um nome para o seu novo plano de planejamento visual.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateMap} className="space-y-6 mt-2">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Nome do Mapa</label>
+                        <label className="text-sm font-medium">Nome do Plano</label>
                         <Input
                           placeholder="ex: Roadmap Q3, Sprint Planejamento"
                           value={mapName}
@@ -329,7 +329,7 @@ export default function WorkspaceDetailPage() {
                       <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setIsMapDialogOpen(false)} className="rounded-xl">Cancelar</Button>
                         <Button type="submit" disabled={createMapMutation.isPending || !mapName.trim()} className="rounded-xl">
-                          {createMapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Mapa"}
+                          {createMapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Plano"}
                         </Button>
                       </DialogFooter>
                     </form>
@@ -341,7 +341,7 @@ export default function WorkspaceDetailPage() {
             <Tabs defaultValue="maps" className="w-full">
               <TabsList className="bg-transparent border-b-0 h-auto p-0 flex gap-6 pb-px">
                 <TabsTrigger value="maps" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
-                  <Map className="w-5 h-5 mr-2" /> Mapas Mentais
+                  <Map className="w-5 h-5 mr-2" /> Planos
                 </TabsTrigger>
                 <TabsTrigger value="tasks" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
                   <CheckSquare className="w-5 h-5 mr-2" /> Tarefas
@@ -359,7 +359,7 @@ export default function WorkspaceDetailPage() {
                   {isAdmin && (
                     <div className="flex items-center justify-between mb-6">
                       <p className="text-sm text-muted-foreground">
-                        {maps?.length ?? 0} mapa{(maps?.length ?? 0) !== 1 ? 's' : ''} {showHiddenMaps ? '(incluindo ocultos)' : ''}
+                        {maps?.length ?? 0} plano{(maps?.length ?? 0) !== 1 ? 's' : ''} {showHiddenMaps ? '(incluindo ocultos)' : ''}
                       </p>
                       <Button
                         variant="outline"
@@ -376,7 +376,7 @@ export default function WorkspaceDetailPage() {
                   {showHiddenMaps && isAdmin && (
                     <div className="mb-6 flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-sm text-amber-700 dark:text-amber-400">
                       <EyeOff className="w-4 h-4 shrink-0" />
-                      <span>Mostrando mapas ocultos. Apenas administradores podem ver e restaurar mapas ocultos.</span>
+                      <span>Mostrando planos ocultos. Apenas administradores podem ver e restaurar planos ocultos.</span>
                     </div>
                   )}
 
@@ -387,14 +387,14 @@ export default function WorkspaceDetailPage() {
                   ) : maps?.length === 0 && showHiddenMaps ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum mapa oculto</h3>
-                      <p className="text-muted-foreground mt-2">Não há mapas ocultos neste espaço.</p>
+                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum plano oculto</h3>
+                      <p className="text-muted-foreground mt-2">Não há planos ocultos neste espaço.</p>
                     </div>
                   ) : maps?.length === 0 && !isAdmin ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum mapa criado</h3>
-                      <p className="text-muted-foreground mt-2">Comece a planejar visualmente com um mapa mental.</p>
+                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum plano criado</h3>
+                      <p className="text-muted-foreground mt-2">Comece a planejar visualmente com um plano.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -414,7 +414,7 @@ export default function WorkspaceDetailPage() {
                           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
                             <Plus className="w-6 h-6" />
                           </div>
-                          <span className="text-sm font-semibold">Novo Mapa</span>
+                          <span className="text-sm font-semibold">Novo Plano</span>
                         </button>
                       )}
                     </div>
@@ -557,7 +557,7 @@ export default function WorkspaceDetailPage() {
                             {!isStandalone && (
                               <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
                                 <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7">
-                                  Ver no Mapa <ArrowRight className="w-3 h-3 ml-1" />
+                                  Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
                                 </Button>
                               </Link>
                             )}
@@ -597,7 +597,7 @@ export default function WorkspaceDetailPage() {
                   {dashboard ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
-                        <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider mb-2">Total de Mapas</p>
+                        <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider mb-2">Total de Planos</p>
                         <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalMaps}</p>
                       </div>
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
@@ -752,7 +752,7 @@ export default function WorkspaceDetailPage() {
                       <ShieldAlert className="w-4 h-4 text-red-500" />
                       <div>
                         <p className="font-medium">Admin</p>
-                        <p className="text-xs text-muted-foreground">Gerencia membros, mapas e tarefas</p>
+                        <p className="text-xs text-muted-foreground">Gerencia membros, planos e tarefas</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -761,7 +761,7 @@ export default function WorkspaceDetailPage() {
                       <Shield className="w-4 h-4 text-blue-500" />
                       <div>
                         <p className="font-medium">Editor</p>
-                        <p className="text-xs text-muted-foreground">Cria e edita mapas e tarefas</p>
+                        <p className="text-xs text-muted-foreground">Cria e edita planos e tarefas</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -793,7 +793,7 @@ export default function WorkspaceDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover membro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Este usuário perderá acesso ao workspace e a todos os seus mapas. Esta ação não pode ser desfeita.
+              Este usuário perderá acesso ao workspace e a todos os seus planos. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

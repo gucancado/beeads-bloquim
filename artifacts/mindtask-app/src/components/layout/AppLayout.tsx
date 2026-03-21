@@ -126,7 +126,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             {!collapsed && (
               <div>
                 <div className="px-3 mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Mapas Recentes</p>
+                  <p className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Planos Recentes</p>
                 </div>
 
                 {isRecentMapsLoading ? (
@@ -148,7 +148,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       </Link>
                     ))}
                     {recentMaps?.length === 0 && (
-                      <p className="px-3 text-sm text-sidebar-foreground/40 italic">Nenhum mapa acessado ainda</p>
+                      <p className="px-3 text-sm text-sidebar-foreground/40 italic">Nenhum plano acessado ainda</p>
                     )}
                   </div>
                 )}

@@ -274,7 +274,7 @@ export default function MyTasksPage() {
                     {task.mapId && (
                       <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
                         <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7">
-                          Ver no Mapa <ArrowRight className="w-3 h-3 ml-1" />
+                          Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
                         </Button>
                       </Link>
                     )}

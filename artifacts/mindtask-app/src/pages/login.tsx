@@ -113,7 +113,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent" />
         <div className="absolute bottom-16 left-16 right-16">
           <h2 className="text-4xl font-display font-bold text-white mb-4">Conecte Ideias.<br/>Execute Tarefas.</h2>
-          <p className="text-lg text-slate-300 max-w-lg">Transforme seus mapas mentais em fluxos de trabalho organizados na hora. Planejamento encontra execução.</p>
+          <p className="text-lg text-slate-300 max-w-lg">Transforme seus planos em fluxos de trabalho organizados na hora. Planejamento encontra execução.</p>
         </div>
       </div>
     </div>

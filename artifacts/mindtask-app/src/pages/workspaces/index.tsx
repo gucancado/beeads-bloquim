@@ -186,7 +186,7 @@ export default function WorkspacesPage() {
               <p className="text-muted-foreground mt-2 mb-8 max-w-md mx-auto">
                 {showHidden
                   ? "Você não possui espaços ocultos no momento."
-                  : "Crie um espaço para começar a organizar seus mapas mentais e tarefas."}
+                  : "Crie um espaço para começar a organizar seus planos e tarefas."}
               </p>
               {!showHidden && (
                 <Button onClick={() => setIsOpen(true)} className="rounded-xl px-8 h-12">

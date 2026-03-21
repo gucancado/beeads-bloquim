@@ -133,7 +133,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          toast({ title: "Card removido do mapa." });
+          toast({ title: "Card removido do plano." });
           onClose();
         }
       }
@@ -342,7 +342,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
               <AlertTriangle className="w-5 h-5 text-destructive" /> Deletar card?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              O card e sua tarefa serão removidos permanentemente do mapa. Esta ação não pode ser desfeita.
+              O card e sua tarefa serão removidos permanentemente do plano. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
