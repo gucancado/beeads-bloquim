@@ -30,17 +30,15 @@ function statusLabel(s: string) {
   }
 }
 
+const STRIP_HANDLE_CLS = [
+  '!absolute !inset-0 !w-full !h-full',
+  '!border-none !bg-transparent !rounded-none !transform-none',
+  '!opacity-100 !cursor-crosshair',
+].join(' ');
+
 function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
-
-  const handleCls = [
-    'transition-all opacity-0 group-hover/node:opacity-100',
-    '!w-4 !h-4 !border-2 !rounded-full !bg-background',
-    'hover:!opacity-100 hover:!scale-125',
-  ].join(' ');
-  const handleStyleLeft  = { borderColor: color, left:  -12 };
-  const handleStyleRight = { borderColor: color, right: -12 };
 
   const dueDateStr = data.taskDueDate
     ? format(new Date(data.taskDueDate), 'dd/MM/yy')
@@ -70,12 +68,29 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       >
         <Plus className="w-4 h-4" />
       </button>
-      <Handle type="target" position={Position.Left}  id="target-left"  className={handleCls} style={handleStyleLeft} />
-      <Handle type="target" position={Position.Right} id="target-right" className={handleCls} style={handleStyleRight} />
-      <Handle type="source" position={Position.Left}  id="source-left"  className={handleCls} style={handleStyleLeft} />
-      <Handle type="source" position={Position.Right} id="source-right" className={handleCls} style={handleStyleRight} />
 
-      <div className="p-4 relative overflow-hidden rounded-xl">
+      {/* Left connection strip */}
+      <div className="group/strip-l absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
+        <div
+          className="absolute inset-0 rounded-l-2xl opacity-0 group-hover/strip-l:opacity-30 transition-opacity duration-150 pointer-events-none"
+          style={{ backgroundColor: color }}
+        />
+        <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
+        <Handle type="source" position={Position.Left} id="source-left" className={STRIP_HANDLE_CLS} />
+      </div>
+
+      {/* Right connection strip */}
+      <div className="group/strip-r absolute right-0 top-0 h-full w-3 z-10 rounded-r-2xl">
+        <div
+          className="absolute inset-0 rounded-r-2xl opacity-0 group-hover/strip-r:opacity-30 transition-opacity duration-150 pointer-events-none"
+          style={{ backgroundColor: color }}
+        />
+        <Handle type="target" position={Position.Right} id="target-right" className={STRIP_HANDLE_CLS} />
+        <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} />
+      </div>
+
+      {/* Card content */}
+      <div className="px-5 py-4 relative overflow-hidden rounded-xl">
         <div
           className="absolute top-0 left-0 w-full h-1.5 rounded-t-xl"
           style={{ backgroundColor: color, opacity: isMuted ? 0.3 : 1 }}
