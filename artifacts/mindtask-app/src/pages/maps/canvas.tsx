@@ -178,14 +178,48 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) return;
+
+      const srcHandle = params.sourceHandle ?? '';
+      const tgtHandle = params.targetHandle ?? '';
+      const srcIsRight = srcHandle.includes('right');
+      const srcIsLeft  = srcHandle.includes('left');
+      const tgtIsRight = tgtHandle.includes('right');
+      const tgtIsLeft  = tgtHandle.includes('left');
+
+      // Reject same-side connections (right→right or left→left)
+      if ((srcIsRight && tgtIsRight) || (srcIsLeft && tgtIsLeft)) return;
+
+      // Normalize direction: right side is always source, left side is always target
+      let sourceNodeId: string;
+      let targetNodeId: string;
+      if (srcIsRight && tgtIsLeft) {
+        sourceNodeId = params.source;
+        targetNodeId = params.target;
+      } else if (srcIsLeft && tgtIsRight) {
+        // User dragged left→right: swap so connection goes right→left
+        sourceNodeId = params.target;
+        targetNodeId = params.source;
+      } else {
+        return;
+      }
+
+      // Reject self-connections
+      if (sourceNodeId === targetNodeId) return;
+
+      // Reject duplicate connections between the same pair of nodes
+      const alreadyConnected = edges.some(
+        e => e.source === sourceNodeId && e.target === targetNodeId,
+      );
+      if (alreadyConnected) return;
+
       const tempId = `temp-${Date.now()}`;
-      const animated = mapData ? isEdgeAnimated(params.source, params.target, mapData.cards) : true;
+      const animated = mapData ? isEdgeAnimated(sourceNodeId, targetNodeId, mapData.cards) : true;
       const newEdge: Edge = {
         id: tempId,
-        source: params.source,
-        target: params.target,
-        sourceHandle: params.sourceHandle ?? undefined,
-        targetHandle: params.targetHandle ?? undefined,
+        source: sourceNodeId,
+        target: targetNodeId,
+        sourceHandle: 'source-right',
+        targetHandle: 'target-left',
         ...EDGE_BASE,
         animated,
         style: edgeStyle(animated),
@@ -193,13 +227,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       setEdges((eds) => addEdge(newEdge, eds));
 
       createConnMut.mutate(
-        { workspaceId, mapId, data: { sourceCardId: params.source!, targetCardId: params.target!, sourceHandle: params.sourceHandle ?? undefined, targetHandle: params.targetHandle ?? undefined } as any },
+        {
+          workspaceId, mapId,
+          data: { sourceCardId: sourceNodeId, targetCardId: targetNodeId, sourceHandle: 'source-right', targetHandle: 'target-left' } as any,
+        },
         {
           onSuccess: (conn) => {
             setEdges(eds => eds.map(e =>
-              e.id === tempId
-                ? { ...e, id: conn.id }
-                : e,
+              e.id === tempId ? { ...e, id: conn.id } : e,
             ));
             queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           },
@@ -209,7 +244,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         },
       );
     },
-    [setEdges, createConnMut, workspaceId, mapId, queryClient, mapData],
+    [setEdges, createConnMut, workspaceId, mapId, queryClient, mapData, edges],
   );
 
   const onEdgesChangeWithDelete = useCallback(
