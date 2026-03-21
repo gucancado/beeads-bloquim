@@ -486,79 +486,111 @@ export default function WorkspaceDetailPage() {
                         <Plus className="w-4 h-4 mr-1.5" /> Nova Tarefa
                       </Button>
                     </div>
-                  ) : (
-                    <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-border/50">
-                        {workspaceTasks?.map(task => {
-                          const isOverdue = !!task.overdue && task.status !== 'completed' && task.status !== 'blocked';
-                          const isStandalone = !task.mapId;
-                          return (
-                            <div
-                              key={task.id}
-                              className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
-                              style={{
-                                backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
-                              }}
-                              onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
-                              onClick={() => openTaskItem(task)}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-xl font-bold text-foreground mb-1">{task.cardTitle || task.title}</h3>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                                  <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
-                                    {getStatusLabel(task.status)}
-                                  </Badge>
-                                  <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
-                                    <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
-                                  </Badge>
-                                  {isStandalone && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full uppercase tracking-wide">
-                                      Avulsa
-                                    </span>
-                                  )}
-                                  {task.mapName && (
-                                    <div className="flex items-center gap-1.5">
-                                      <Map className="w-3.5 h-3.5 shrink-0" />
-                                      <span className="truncate max-w-[180px]">{task.mapName}</span>
-                                    </div>
-                                  )}
-                                  {task.dueDate && (
-                                    <div className="flex items-center gap-1.5">
-                                      <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
-                                      <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
-                                    </div>
-                                  )}
-                                  <div className="flex items-center gap-1.5">
-                                    <User className="w-3.5 h-3.5 shrink-0" />
-                                    <span>{task.assigneeName ?? "Sem responsável"}</span>
-                                  </div>
-                                </div>
-                              </div>
+                  ) : (() => {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+                    const todayTasks = (workspaceTasks ?? []).filter(task => {
+                      if (task.dueDate) return new Date(task.dueDate) <= today;
+                      return !!task.overdue;
+                    });
+                    const upcomingTasks = (workspaceTasks ?? []).filter(task => {
+                      if (task.dueDate) return new Date(task.dueDate) > today;
+                      return !task.overdue;
+                    });
 
-                              <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                                  onClick={(e) => { e.stopPropagation(); openTaskItem(task); }}
-                                >
-                                  <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
-                                </Button>
-                                {!isStandalone && (
-                                  <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                                    <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7">
-                                      Ver no Mapa <ArrowRight className="w-3 h-3 ml-1" />
-                                    </Button>
-                                  </Link>
-                                )}
+                    const renderTask = (task: any) => {
+                      const isOverdue = !!task.overdue && task.status !== 'completed' && task.status !== 'blocked';
+                      const isStandalone = !task.mapId;
+                      return (
+                        <div
+                          key={task.id}
+                          className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
+                          style={{
+                            backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
+                          }}
+                          onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
+                          onClick={() => openTaskItem(task)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-xl font-bold text-foreground mb-1">{task.cardTitle || task.title}</h3>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                              <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
+                                {getStatusLabel(task.status)}
+                              </Badge>
+                              <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
+                                <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
+                              </Badge>
+                              {isStandalone && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                  Avulsa
+                                </span>
+                              )}
+                              {task.mapName && (
+                                <div className="flex items-center gap-1.5">
+                                  <Map className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="truncate max-w-[180px]">{task.mapName}</span>
+                                </div>
+                              )}
+                              {task.dueDate && (
+                                <div className="flex items-center gap-1.5">
+                                  <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+                                  <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 shrink-0" />
+                                <span>{task.assigneeName ?? "Sem responsável"}</span>
                               </div>
                             </div>
-                          );
-                        })}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                              onClick={(e) => { e.stopPropagation(); openTaskItem(task); }}
+                            >
+                              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+                            </Button>
+                            {!isStandalone && (
+                              <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
+                                <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7">
+                                  Ver no Mapa <ArrowRight className="w-3 h-3 ml-1" />
+                                </Button>
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div className="flex flex-col gap-6">
+                        {todayTasks.length > 0 && (
+                          <div>
+                            <p className="text-xs font-light text-muted-foreground mb-2 px-1">Para hoje</p>
+                            <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+                              <div className="divide-y divide-border/50">
+                                {todayTasks.map(renderTask)}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {upcomingTasks.length > 0 && (
+                          <div>
+                            <p className="text-xs font-light text-muted-foreground mb-2 px-1">Próximas</p>
+                            <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+                              <div className="divide-y divide-border/50">
+                                {upcomingTasks.map(renderTask)}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </TabsContent>
 
                 <TabsContent value="dashboard" className="mt-0 outline-none">
