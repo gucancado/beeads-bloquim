@@ -526,7 +526,7 @@ export default function WorkspaceDetailPage() {
                                   {task.dueDate && (
                                     <div className="flex items-center gap-1.5">
                                       <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
-                                      <span>{format(new Date(task.dueDate), "dd/MM/yyyy")}</span>
+                                      <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
                                     </div>
                                   )}
                                   <div className="flex items-center gap-1.5">

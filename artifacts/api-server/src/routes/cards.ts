@@ -44,7 +44,12 @@ const updateTaskDetailsSchema = z.object({
 
 function computeOverdue(dueDate: Date | null | undefined, status: string): boolean {
   if (status === "completed") return false;
-  return !!dueDate && dueDate < new Date();
+  if (!dueDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  return due < today;
 }
 
 function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "no_task" {

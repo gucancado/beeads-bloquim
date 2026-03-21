@@ -5,12 +5,14 @@ import { sql } from "drizzle-orm";
 
 export async function syncOverdueFlags() {
   const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
 
-  // Mark as overdue: due_date in the past, not completed, not yet flagged
+  // Mark as overdue: due_date strictly before today (date-only), not completed, not yet flagged
   const toOverdue = await db
     .select({ id: tasks.id, status: tasks.status })
     .from(tasks)
-    .where(and(lt(tasks.dueDate, now), ne(tasks.status, "completed"), eq(tasks.overdue, false)));
+    .where(and(lt(tasks.dueDate, today), ne(tasks.status, "completed"), eq(tasks.overdue, false)));
 
   for (const t of toOverdue) {
     await db.update(tasks).set({ overdue: true, updatedAt: now }).where(eq(tasks.id, t.id));
@@ -29,7 +31,11 @@ export async function syncOverdueFlags() {
 
   for (const t of toClear) {
     const [full] = await db.select({ dueDate: tasks.dueDate }).from(tasks).where(eq(tasks.id, t.id)).limit(1);
-    if (full?.dueDate && full.dueDate < now) continue; // still overdue
+    if (full?.dueDate) {
+      const due = new Date(full.dueDate);
+      due.setHours(0, 0, 0, 0);
+      if (due < today) continue; // still overdue
+    }
     await db.update(tasks).set({ overdue: false, updatedAt: now }).where(eq(tasks.id, t.id));
     // Restore statusVisual to task status
     const [fullTask] = await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, t.id)).limit(1);
