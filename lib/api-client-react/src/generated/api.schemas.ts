@@ -26,6 +26,7 @@ export const TaskStatus = {
   in_progress: "in_progress",
   completed: "completed",
   overdue: "overdue",
+  blocked: "blocked",
 } as const;
 
 export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
@@ -84,12 +85,22 @@ export interface CreateWorkspaceRequest {
   name: string;
 }
 
+export interface WorkspaceTaskCounts {
+  overdue: number;
+  blocked: number;
+  in_progress: number;
+  pending: number;
+  total: number;
+  completed: number;
+}
+
 export interface WorkspaceResponse {
   id: string;
   name: string;
   createdBy: string;
   createdAt: string;
   role: WorkspaceRole;
+  taskCounts: WorkspaceTaskCounts;
 }
 
 export interface WorkspaceMemberResponse {

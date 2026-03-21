@@ -41,3 +41,4 @@ export * from "./workspaceDetailResponse";
 export * from "./workspaceMemberResponse";
 export * from "./workspaceResponse";
 export * from "./workspaceRole";
+export * from "./workspaceTaskCounts";

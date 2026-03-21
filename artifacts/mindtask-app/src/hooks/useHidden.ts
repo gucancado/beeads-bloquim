@@ -61,6 +61,14 @@ export function useListWorkspacesWithHidden(showHidden: boolean) {
         role: string;
         createdAt: string;
         createdBy: string;
+        taskCounts: {
+          overdue: number;
+          blocked: number;
+          in_progress: number;
+          pending: number;
+          total: number;
+          completed: number;
+        };
       }>>;
     },
   });

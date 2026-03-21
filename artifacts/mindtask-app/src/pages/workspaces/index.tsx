@@ -19,8 +19,28 @@ function translateRole(role: string) {
   }
 }
 
+type TaskCounts = {
+  overdue: number;
+  blocked: number;
+  in_progress: number;
+  pending: number;
+  total: number;
+  completed: number;
+};
+
+const STATUS_BADGES: Array<{
+  key: keyof TaskCounts;
+  label: string;
+  className: string;
+}> = [
+  { key: "overdue", label: "vencidas", className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60" },
+  { key: "blocked", label: "interrompidas", className: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900/60" },
+  { key: "in_progress", label: "em andamento", className: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60" },
+  { key: "pending", label: "pendentes", className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" },
+];
+
 function WorkspaceCard({ ws, showHidden }: {
-  ws: { id: string; name: string; hidden: boolean; role: string };
+  ws: { id: string; name: string; hidden: boolean; role: string; taskCounts?: TaskCounts };
   showHidden: boolean;
 }) {
   const toggleHidden = useToggleWorkspaceHidden(ws.id);
@@ -31,6 +51,11 @@ function WorkspaceCard({ ws, showHidden }: {
     e.stopPropagation();
     toggleHidden.mutate(!ws.hidden);
   };
+
+  const counts = ws.taskCounts ?? { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
+  const hasAnyCounts = STATUS_BADGES.some((b) => counts[b.key] > 0);
+  const noTasks = counts.total === 0;
+  const allCompleted = counts.total > 0 && counts.completed === counts.total;
 
   return (
     <div className={`relative group ${ws.hidden ? 'opacity-60' : ''}`}>
@@ -47,6 +72,24 @@ function WorkspaceCard({ ws, showHidden }: {
               </span>
             )}
           </div>
+          {noTasks ? (
+            <p className="text-[13px] text-muted-foreground mt-3">Sem tarefas</p>
+          ) : allCompleted ? (
+            <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-3">Tarefas concluídas</p>
+          ) : hasAnyCounts ? (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {STATUS_BADGES.map((badge) =>
+                counts[badge.key] > 0 ? (
+                  <span
+                    key={badge.key}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badge.className}`}
+                  >
+                    {counts[badge.key]} {badge.label}
+                  </span>
+                ) : null
+              )}
+            </div>
+          ) : null}
           <div className="mt-auto pt-6 flex items-center justify-between text-sm text-muted-foreground">
             <span>{translateRole(ws.role)}</span>
             <span className="flex items-center text-primary font-medium opacity-0 group-hover/card:opacity-100 transition-opacity -translate-x-2 group-hover/card:translate-x-0 duration-300">

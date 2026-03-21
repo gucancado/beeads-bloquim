@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WorkspaceRole } from "./workspaceRole";
+import type { WorkspaceTaskCounts } from "./workspaceTaskCounts";
 
 export interface WorkspaceResponse {
   id: string;
@@ -13,4 +14,5 @@ export interface WorkspaceResponse {
   createdBy: string;
   createdAt: Date;
   role: WorkspaceRole;
+  taskCounts: WorkspaceTaskCounts;
 }

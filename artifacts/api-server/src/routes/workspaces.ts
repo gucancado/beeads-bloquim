@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { workspaces, workspaceMembers, users, maps, cards, tasks } from "@workspace/db/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, ne } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -35,6 +35,40 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .from(workspaces)
     .where(inArray(workspaces.id, workspaceIds));
 
+  const taskCounts = await db
+    .select({
+      workspaceId: tasks.workspaceId,
+      status: tasks.status,
+      overdue: tasks.overdue,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(tasks)
+    .where(
+      inArray(tasks.workspaceId, workspaceIds)
+    )
+    .groupBy(tasks.workspaceId, tasks.status, tasks.overdue);
+
+  const countsByWorkspace: Record<string, { overdue: number; blocked: number; in_progress: number; pending: number; total: number; completed: number }> = {};
+  for (const row of taskCounts) {
+    if (!countsByWorkspace[row.workspaceId]) {
+      countsByWorkspace[row.workspaceId] = { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
+    }
+    const entry = countsByWorkspace[row.workspaceId];
+    entry.total += row.count;
+    const s = row.status as string;
+    if (s === "completed") {
+      entry.completed += row.count;
+    } else if (row.overdue) {
+      entry.overdue += row.count;
+    } else if (s === "blocked") {
+      entry.blocked += row.count;
+    } else if (s === "in_progress") {
+      entry.in_progress += row.count;
+    } else if (s === "pending") {
+      entry.pending += row.count;
+    }
+  }
+
   const result = workspaceList
     .filter((w) => {
       if (!w.hidden) return true;
@@ -44,7 +78,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     })
     .map((w) => {
       const membership = memberships.find((m) => m.workspaceId === w.id)!;
-      return { ...w, role: membership.role };
+      const counts = countsByWorkspace[w.id] ?? { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
+      return { ...w, role: membership.role, taskCounts: counts };
     });
 
   res.json(result);

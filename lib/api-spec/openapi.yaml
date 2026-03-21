@@ -870,7 +870,7 @@ components:
 
     TaskStatus:
       type: string
-      enum: [pending, in_progress, completed, overdue]
+      enum: [pending, in_progress, completed, overdue, blocked]
 
     TaskPriority:
       type: string
@@ -938,6 +938,23 @@ components:
           type: string
       required: [name]
 
+    WorkspaceTaskCounts:
+      type: object
+      properties:
+        overdue:
+          type: integer
+        blocked:
+          type: integer
+        in_progress:
+          type: integer
+        pending:
+          type: integer
+        total:
+          type: integer
+        completed:
+          type: integer
+      required: [overdue, blocked, in_progress, pending, total, completed]
+
     WorkspaceResponse:
       type: object
       properties:
@@ -954,7 +971,9 @@ components:
           format: date-time
         role:
           $ref: "#/components/schemas/WorkspaceRole"
-      required: [id, name, createdBy, createdAt, role]
+        taskCounts:
+          $ref: "#/components/schemas/WorkspaceTaskCounts"
+      required: [id, name, createdBy, createdAt, role, taskCounts]
 
     WorkspaceDetailResponse:
       type: object
