@@ -47,14 +47,13 @@ export default function LoginPage() {
             <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-primary/25">
               <Compass className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="text-3xl font-display font-bold text-foreground">Bem-vindo de volta</h1>
-            <p className="text-muted-foreground mt-2">Entre para continuar no Bloquim</p>
+            <p className="text-muted-foreground mt-2">oi! quer ver o que tem no seu bloquim?<br/>então entra aí =)</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6 bg-card p-8 rounded-3xl shadow-xl border border-border/50">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="email">e-mail</Label>
                 <div className="relative">
                   <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input 
@@ -70,7 +69,7 @@ export default function LoginPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+                <Label htmlFor="password">senha</Label>
                 <div className="relative">
                   <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input 
@@ -91,31 +90,19 @@ export default function LoginPage() {
               className="w-full h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/25 hover:-translate-y-0.5 transition-all"
               disabled={loginMutation.isPending}
             >
-              {loginMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Entrar"}
+              {loginMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "entrar"}
             </Button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            Não tem uma conta?{" "}
+            não tem uma conta?{" "}
             <Link href="/register">
-              <span className="text-primary font-semibold hover:underline cursor-pointer">Crie uma agora</span>
+              <span className="text-primary font-semibold hover:underline cursor-pointer">cria uma, uai</span>
             </Link>
           </p>
         </div>
       </div>
       
-      <div className="hidden lg:block lg:flex-1 relative overflow-hidden bg-slate-950">
-        <img 
-          src={`${import.meta.env.BASE_URL}images/auth-bg.png`} 
-          alt="Fundo abstrato" 
-          className="absolute inset-0 w-full h-full object-cover opacity-80"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent" />
-        <div className="absolute bottom-16 left-16 right-16">
-          <h2 className="text-4xl font-display font-bold text-white mb-4">Conecte Ideias.<br/>Execute Tarefas.</h2>
-          <p className="text-lg text-slate-300 max-w-lg">Transforme seus planos em fluxos de trabalho organizados na hora. Planejamento encontra execução.</p>
-        </div>
-      </div>
     </div>
   );
 }
