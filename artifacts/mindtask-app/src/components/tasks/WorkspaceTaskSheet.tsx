@@ -11,7 +11,7 @@ import { customFetch, useGetMe } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 
-interface Member { userId: string; name: string; role: string; }
+interface Member { userId: string; role: string; user: { id: string; name: string; email: string; }; }
 
 interface WorkspaceTask {
   id: string;
@@ -194,7 +194,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
   };
 
   const members = membersData as Member[] | undefined;
-  const isAdmin = members?.find((m) => m.userId === currentUserId)?.role === "admin" ?? false;
+  const isAdmin = members?.find((m) => m.user.id === currentUserId)?.role === "admin" ?? false;
 
   return (
     <>
@@ -276,7 +276,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                   <SelectContent>
                     <SelectItem value="unassigned">Sem responsável</SelectItem>
                     {members?.map((m) => (
-                      <SelectItem key={m.userId} value={m.userId}>{m.name}</SelectItem>
+                      <SelectItem key={m.user.id} value={m.user.id}>{m.user.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
