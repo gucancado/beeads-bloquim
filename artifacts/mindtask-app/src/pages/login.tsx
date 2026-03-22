@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { ThemeToggleFloat } from "@/components/layout/ThemeToggleFloat";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -41,6 +42,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex bg-background">
+      <ThemeToggleFloat />
       <div className="flex-1 flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { ThemeToggleFloat } from "@/components/layout/ThemeToggleFloat";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -50,6 +51,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen w-full flex bg-background">
+      <ThemeToggleFloat />
       <div className="hidden lg:block lg:flex-1 relative overflow-hidden bg-slate-950">
         <img 
           src={`${import.meta.env.BASE_URL}images/auth-bg.png`} 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 interface RecentMap {
   mapId: string;
@@ -209,6 +210,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   </AvatarFallback>
                 </Avatar>
               </button>
+              <ThemeToggle collapsed />
               <button
                 title="Sair"
                 onClick={() => logoutMutation.mutate()}
@@ -218,14 +220,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
           ) : (
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10"
-              onClick={() => logoutMutation.mutate()}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
+            <>
+              <ThemeToggle />
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10"
+                onClick={() => logoutMutation.mutate()}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
+            </>
           )}
         </div>
       </aside>
