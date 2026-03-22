@@ -150,7 +150,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                 onClick={handleAvatarClick}
                 disabled={isUploadingAvatar}
                 className="absolute inset-0 rounded-2xl flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                title="Alterar foto de perfil"
+                title="alterar foto de perfil"
               >
                 {isUploadingAvatar
                   ? <Loader2 className="w-5 h-5 text-white animate-spin" />
@@ -165,7 +165,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Perfil do usuário</p>
+              <p className="text-xs font-semibold text-muted-foreground tracking-wider mb-0.5 lowercase">Perfil do usuário</p>
               <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
           </div>
@@ -176,7 +176,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
 
           {/* Name section */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-2 block lowercase">
               Nome
             </label>
             {editingName ? (
@@ -205,7 +205,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                   className="rounded-xl px-3"
                   onClick={() => { setName(user?.name ?? ""); setEditingName(false); }}
                 >
-                  Cancelar
+                  <span className="lowercase">Cancelar</span>
                 </Button>
               </div>
             ) : (
@@ -214,7 +214,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                 <button
                   onClick={() => setEditingName(true)}
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
-                  title="Editar nome"
+                  title="editar nome"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -224,7 +224,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
 
           {/* Email (read-only) */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-2 block lowercase">
               E-mail
             </label>
             <p className="text-base text-muted-foreground">{user?.email}</p>
@@ -233,7 +233,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
           {/* Workspaces */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <label className="text-xs font-semibold text-muted-foreground tracking-wider lowercase">
                 Espaços de trabalho
               </label>
               {myWorkspaces && (
@@ -247,7 +247,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                 <span className="text-sm">Carregando...</span>
               </div>
             ) : myWorkspaces?.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic py-4 text-center">
+              <p className="text-sm text-muted-foreground italic py-4 text-center lowercase">
                 Você ainda não pertence a nenhum espaço.
               </p>
             ) : (
@@ -264,11 +264,11 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-medium truncate">{ws.name}</p>
                         {ws.hidden && (
-                          <EyeOff className="w-3 h-3 text-muted-foreground/50 shrink-0" title="Oculto" />
+                          <EyeOff className="w-3 h-3 text-muted-foreground/50 shrink-0" title="oculto" />
                         )}
                       </div>
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border shrink-0 ${roleColor(ws.role)}`}>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border shrink-0 lowercase ${roleColor(ws.role)}`}>
                       {translateRole(ws.role)}
                     </span>
                   </div>

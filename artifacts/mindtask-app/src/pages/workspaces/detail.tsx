@@ -41,12 +41,12 @@ function MapCard({ map, workspaceId, isAdmin }: {
           <div className="flex items-start justify-between gap-2 mb-1">
             <h3 className="text-lg font-bold font-display text-foreground group-hover/card:text-primary transition-colors">{map.name}</h3>
             {map.hidden && (
-              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 lowercase">
                 <EyeOff className="w-3 h-3" /> Oculto
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">Atualizado em {format(new Date(map.updatedAt), 'dd/MM/yyyy')}</p>
+          <p className="text-sm text-muted-foreground mt-1 lowercase">Atualizado em {format(new Date(map.updatedAt), 'dd/MM/yyyy')}</p>
           <div className="mt-6 flex justify-end">
             <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-foreground group-hover/card:bg-primary group-hover/card:text-primary-foreground transition-colors">
               <ArrowRight className="w-4 h-4" />
@@ -59,7 +59,7 @@ function MapCard({ map, workspaceId, isAdmin }: {
         <button
           onClick={handleToggle}
           disabled={toggleHidden.isPending}
-          title={map.hidden ? "Tornar visível" : "Ocultar plano"}
+          title={map.hidden ? "tornar visível" : "ocultar plano"}
           className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground z-10"
         >
           {toggleHidden.isPending ? (
@@ -239,21 +239,21 @@ export default function WorkspaceDetailPage() {
 
   const translatePriority = (p: string) => {
     switch (p) {
-      case 'critical': return 'Crítica';
-      case 'high': return 'Alta';
-      case 'medium': return 'Média';
-      case 'low': return 'Baixa';
+      case 'critical': return 'crítica';
+      case 'high': return 'alta';
+      case 'medium': return 'média';
+      case 'low': return 'baixa';
       default: return p;
     }
   };
 
   const getStatusLabel = (s: string) => {
     switch (s) {
-      case 'pending': return 'PENDENTE';
-      case 'in_progress': return 'EM ANDAMENTO';
-      case 'completed': return 'CONCLUÍDA';
-      case 'blocked': return 'INTERROMPIDA';
-      default: return s.replace('_', ' ').toUpperCase();
+      case 'pending': return 'pendente';
+      case 'in_progress': return 'em andamento';
+      case 'completed': return 'concluída';
+      case 'blocked': return 'interrompida';
+      default: return s.replace('_', ' ');
     }
   };
 
@@ -308,7 +308,7 @@ export default function WorkspaceDetailPage() {
         <div className="bg-card border-b border-border pt-12 px-8 lg:px-12 pb-0">
           <div className="max-w-6xl mx-auto">
             <div className="flex items-center gap-3 text-muted-foreground mb-4 text-sm">
-              <Link href="/workspaces"><span className="hover:text-foreground cursor-pointer transition-colors">Espaços de Trabalho</span></Link>
+              <Link href="/workspaces"><span className="hover:text-foreground cursor-pointer transition-colors lowercase">Espaços de Trabalho</span></Link>
               <span>/</span>
               <span className="text-foreground font-medium">{workspace.name}</span>
             </div>
@@ -325,12 +325,12 @@ export default function WorkspaceDetailPage() {
                 <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>
                   <DialogContent className="sm:max-w-md rounded-2xl">
                     <DialogHeader>
-                      <DialogTitle className="text-2xl font-display">Criar Plano</DialogTitle>
-                      <DialogDescription>Dê um nome para o seu novo plano de planejamento visual.</DialogDescription>
+                      <DialogTitle className="text-2xl font-display lowercase">Criar Plano</DialogTitle>
+                      <DialogDescription className="lowercase">Dê um nome para o seu novo plano de planejamento visual.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateMap} className="space-y-6 mt-2">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Nome do Plano</label>
+                        <label className="text-sm font-medium lowercase">Nome do Plano</label>
                         <Input
                           placeholder="ex: Roadmap Q3, Sprint Planejamento"
                           value={mapName}
@@ -340,8 +340,8 @@ export default function WorkspaceDetailPage() {
                         />
                       </div>
                       <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsMapDialogOpen(false)} className="rounded-xl">Cancelar</Button>
-                        <Button type="submit" disabled={createMapMutation.isPending || !mapName.trim()} className="rounded-xl">
+                        <Button type="button" variant="outline" onClick={() => setIsMapDialogOpen(false)} className="rounded-xl lowercase">Cancelar</Button>
+                        <Button type="submit" disabled={createMapMutation.isPending || !mapName.trim()} className="rounded-xl lowercase">
                           {createMapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Plano"}
                         </Button>
                       </DialogFooter>
@@ -353,16 +353,16 @@ export default function WorkspaceDetailPage() {
 
             <Tabs defaultValue="maps" className="w-full">
               <TabsList className="bg-transparent border-b-0 h-auto p-0 flex gap-6 pb-px">
-                <TabsTrigger value="maps" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
+                <TabsTrigger value="maps" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
                   <Map className="w-5 h-5 mr-2" /> Planos
                 </TabsTrigger>
-                <TabsTrigger value="tasks" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
+                <TabsTrigger value="tasks" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
                   <CheckSquare className="w-5 h-5 mr-2" /> Tarefas
                 </TabsTrigger>
-                <TabsTrigger value="dashboard" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
+                <TabsTrigger value="dashboard" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
                   <LayoutDashboard className="w-5 h-5 mr-2" /> Dashboard
                 </TabsTrigger>
-                <TabsTrigger value="members" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary">
+                <TabsTrigger value="members" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
                   <Users className="w-5 h-5 mr-2" /> Membros
                 </TabsTrigger>
               </TabsList>
@@ -381,7 +381,7 @@ export default function WorkspaceDetailPage() {
                         onClick={() => setShowHiddenMaps((v) => !v)}
                       >
                         {showHiddenMaps ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        {showHiddenMaps ? "Ocultar ocultos" : "Ver ocultos"}
+                        <span className="lowercase">{showHiddenMaps ? "Ocultar ocultos" : "Ver ocultos"}</span>
                       </Button>
                     </div>
                   )}
@@ -389,7 +389,7 @@ export default function WorkspaceDetailPage() {
                   {showHiddenMaps && isAdmin && (
                     <div className="mb-6 flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-sm text-amber-700 dark:text-amber-400">
                       <EyeOff className="w-4 h-4 shrink-0" />
-                      <span>Mostrando planos ocultos. Apenas administradores podem ver e restaurar planos ocultos.</span>
+                      <span className="lowercase">Mostrando planos ocultos. Apenas administradores podem ver e restaurar planos ocultos.</span>
                     </div>
                   )}
 
@@ -400,14 +400,14 @@ export default function WorkspaceDetailPage() {
                   ) : maps?.length === 0 && showHiddenMaps ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum plano oculto</h3>
-                      <p className="text-muted-foreground mt-2">Não há planos ocultos neste espaço.</p>
+                      <h3 className="text-xl font-bold font-display text-foreground lowercase">Nenhum plano oculto</h3>
+                      <p className="text-muted-foreground mt-2 lowercase">Não há planos ocultos neste espaço.</p>
                     </div>
                   ) : maps?.length === 0 && !isAdmin ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground">Nenhum plano criado</h3>
-                      <p className="text-muted-foreground mt-2">Comece a planejar visualmente com um plano.</p>
+                      <h3 className="text-xl font-bold font-display text-foreground lowercase">Nenhum plano criado</h3>
+                      <p className="text-muted-foreground mt-2 lowercase">Comece a planejar visualmente com um plano.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -427,7 +427,7 @@ export default function WorkspaceDetailPage() {
                           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
                             <Plus className="w-6 h-6" />
                           </div>
-                          <span className="text-sm font-semibold">Novo Plano</span>
+                          <span className="text-sm font-semibold lowercase">Novo Plano</span>
                         </button>
                       )}
                     </div>
@@ -438,7 +438,7 @@ export default function WorkspaceDetailPage() {
                   {/* Header row: filters + nova tarefa button */}
                   <div className="flex flex-wrap items-center gap-3 mb-6">
                     <div className="flex flex-wrap items-center gap-2 flex-1">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Status:</span>
+                      <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">Status:</span>
                       {STATUS_OPTIONS.map(opt => {
                         const isActive = selectedStatuses.includes(opt.value);
                         const cnt = statusCounts?.[opt.value] ?? 0;
@@ -459,7 +459,7 @@ export default function WorkspaceDetailPage() {
                       {(workspaceMembers && workspaceMembers.length > 0) && (
                         <>
                           <span className="w-px h-4 bg-border mx-1" />
-                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Responsável:</span>
+                          <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">Responsável:</span>
                           <AssigneeFilterPills
                             members={workspaceMembers.map(m => ({ userId: m.userId, name: m.user.name }))}
                             selected={selectedAssignees}
@@ -473,12 +473,12 @@ export default function WorkspaceDetailPage() {
                           onClick={clearAllFilters}
                           className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
                         >
-                          Limpar filtros
+                          <span className="lowercase">Limpar filtros</span>
                         </button>
                       )}
                     </div>
                     <Button
-                      className="rounded-xl h-9 px-4 shrink-0"
+                      className="rounded-xl h-9 px-4 shrink-0 lowercase"
                       onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
                     >
                       <Plus className="w-4 h-4 mr-1.5" /> Nova Tarefa
@@ -494,9 +494,9 @@ export default function WorkspaceDetailPage() {
                       <div className="w-20 h-20 bg-slate-100 dark:bg-slate-900 text-muted-foreground rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckSquare className="w-10 h-10" />
                       </div>
-                      <h3 className="text-2xl font-bold font-display text-foreground">Nenhuma tarefa encontrada</h3>
-                      <p className="text-muted-foreground mt-2 max-w-md mx-auto">Nenhuma tarefa neste espaço com estes filtros.</p>
-                      <Button className="mt-6 rounded-xl" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
+                      <h3 className="text-2xl font-bold font-display text-foreground lowercase">Nenhuma tarefa encontrada</h3>
+                      <p className="text-muted-foreground mt-2 max-w-md mx-auto lowercase">Nenhuma tarefa neste espaço com estes filtros.</p>
+                      <Button className="mt-6 rounded-xl lowercase" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
                         <Plus className="w-4 h-4 mr-1.5" /> Nova Tarefa
                       </Button>
                     </div>
@@ -536,7 +536,7 @@ export default function WorkspaceDetailPage() {
                                 <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
                               </Badge>
                               {isStandalone && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase">
                                   Avulsa
                                 </span>
                               )}
@@ -554,7 +554,11 @@ export default function WorkspaceDetailPage() {
                               )}
                               <div className="flex items-center gap-1.5">
                                 <User className="w-3.5 h-3.5 shrink-0" />
-                                <span>{task.assigneeName ?? "Sem responsável"}</span>
+                                {task.assigneeName ? (
+                                  <span>{task.assigneeName}</span>
+                                ) : (
+                                  <span className="lowercase">Sem responsável</span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -566,11 +570,11 @@ export default function WorkspaceDetailPage() {
                               className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
                               onClick={(e) => { e.stopPropagation(); openTaskItem(task); }}
                             >
-                              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+                              <Pencil className="w-3.5 h-3.5 mr-1.5" /> <span className="lowercase">Editar</span>
                             </Button>
                             {!isStandalone && (
                               <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                                <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7">
+                                <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7 lowercase">
                                   Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
                                 </Button>
                               </Link>
@@ -584,7 +588,7 @@ export default function WorkspaceDetailPage() {
                       <div className="flex flex-col gap-6">
                         {todayTasks.length > 0 && (
                           <div>
-                            <p className="text-xs font-light text-muted-foreground mb-2 px-1">Para hoje</p>
+                            <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Pra hoje</p>
                             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                               <div className="divide-y divide-border/50">
                                 {todayTasks.map(renderTask)}
@@ -594,7 +598,7 @@ export default function WorkspaceDetailPage() {
                         )}
                         {upcomingTasks.length > 0 && (
                           <div>
-                            <p className="text-xs font-light text-muted-foreground mb-2 px-1">Próximas</p>
+                            <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Próximas</p>
                             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                               <div className="divide-y divide-border/50">
                                 {upcomingTasks.map(renderTask)}
@@ -611,22 +615,22 @@ export default function WorkspaceDetailPage() {
                   {dashboard ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
-                        <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider mb-2">Total de Planos</p>
+                        <p className="text-muted-foreground text-sm font-medium tracking-wider mb-2 lowercase">Total de Planos</p>
                         <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalMaps}</p>
                       </div>
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
-                        <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider mb-2">Total de Cards</p>
+                        <p className="text-muted-foreground text-sm font-medium tracking-wider mb-2 lowercase">Total de Cards</p>
                         <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalCards}</p>
                       </div>
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
-                        <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider mb-2">Total de Tarefas</p>
+                        <p className="text-muted-foreground text-sm font-medium tracking-wider mb-2 lowercase">Total de Tarefas</p>
                         <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalTasks}</p>
                       </div>
 
                       <div className="md:col-span-2 bg-card p-8 rounded-2xl border shadow-sm">
                         <div className="flex items-center gap-3 mb-6">
                           <BarChart3 className="w-5 h-5 text-primary" />
-                          <h3 className="text-xl font-bold font-display">Tarefas por Status</h3>
+                          <h3 className="text-xl font-bold font-display lowercase">Tarefas por Status</h3>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                           {[
@@ -637,14 +641,14 @@ export default function WorkspaceDetailPage() {
                           ].map(item => (
                             <div key={item.label} className={`p-4 rounded-xl ${item.bg} border ${item.border} text-center`}>
                               <p className={`text-3xl font-bold ${item.text} mb-1`}>{item.value}</p>
-                              <p className={`text-sm font-medium ${item.text} uppercase tracking-wider`}>{item.label}</p>
+                              <p className={`text-sm font-medium ${item.text} tracking-wider lowercase`}>{item.label}</p>
                             </div>
                           ))}
                         </div>
                       </div>
 
                       <div className="bg-card p-8 rounded-2xl border shadow-sm">
-                        <h3 className="text-xl font-bold font-display mb-6">Por Prioridade</h3>
+                        <h3 className="text-xl font-bold font-display mb-6 lowercase">Por Prioridade</h3>
                         <div className="space-y-4">
                           {[
                             { label: 'Crítica', value: dashboard.tasksByPriority.critical, color: 'bg-red-500' },
@@ -655,7 +659,7 @@ export default function WorkspaceDetailPage() {
                             <div key={item.label} className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                                <span className="font-medium text-foreground">{item.label}</span>
+                                <span className="font-medium text-foreground lowercase">{item.label}</span>
                               </div>
                               <span className="text-muted-foreground font-bold">{item.value}</span>
                             </div>
@@ -664,7 +668,7 @@ export default function WorkspaceDetailPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="py-10 text-center text-muted-foreground">Nenhum dado disponível ainda.</div>
+                    <div className="py-10 text-center text-muted-foreground lowercase">Nenhum dado disponível ainda.</div>
                   )}
                 </TabsContent>
 
@@ -682,7 +686,7 @@ export default function WorkspaceDetailPage() {
                           </div>
                         </div>
                         <div className="flex items-center justify-between mt-auto">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getRoleBadgeClass(member.role)}`}>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider lowercase ${getRoleBadgeClass(member.role)}`}>
                             {getRoleIcon(member.role)}
                             {translateRole(member.role)}
                           </span>
@@ -707,7 +711,7 @@ export default function WorkspaceDetailPage() {
                         <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
                           <UserPlus className="w-6 h-6" />
                         </div>
-                        <span className="text-sm font-semibold">Adicionar Membro</span>
+                        <span className="text-sm font-semibold lowercase">Adicionar Membro</span>
                       </button>
                     )}
                   </div>
@@ -738,12 +742,12 @@ export default function WorkspaceDetailPage() {
       <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-display">Convidar Membro</DialogTitle>
-            <DialogDescription>Adicione um usuário cadastrado pelo e-mail e defina seu papel no workspace.</DialogDescription>
+            <DialogTitle className="text-2xl font-display lowercase">Convidar Membro</DialogTitle>
+            <DialogDescription className="lowercase">Adicione um usuário cadastrado pelo e-mail e defina seu papel no workspace.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddMember} className="space-y-5 mt-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium">E-mail do Usuário</label>
+              <label className="text-sm font-medium lowercase">E-mail do Usuário</label>
               <Input
                 type="email"
                 placeholder="usuario@exemplo.com"
@@ -755,7 +759,7 @@ export default function WorkspaceDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Papel no Workspace</label>
+              <label className="text-sm font-medium lowercase">Papel no Workspace</label>
               <Select value={memberRole} onValueChange={(v) => setMemberRole(v as any)}>
                 <SelectTrigger className="h-12 rounded-xl">
                   <SelectValue />
@@ -792,8 +796,8 @@ export default function WorkspaceDetailPage() {
               </Select>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsMemberDialogOpen(false)} className="rounded-xl">Cancelar</Button>
-              <Button type="submit" disabled={addMemberMutation.isPending || !memberEmail.trim()} className="rounded-xl">
+              <Button type="button" variant="outline" onClick={() => setIsMemberDialogOpen(false)} className="rounded-xl lowercase">Cancelar</Button>
+              <Button type="submit" disabled={addMemberMutation.isPending || !memberEmail.trim()} className="rounded-xl lowercase">
                 {addMemberMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><UserPlus className="w-4 h-4 mr-2" />Convidar</>}
               </Button>
             </DialogFooter>
@@ -805,18 +809,18 @@ export default function WorkspaceDetailPage() {
       <AlertDialog open={!!removingMemberId} onOpenChange={(open) => !open && setRemovingMemberId(null)}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover membro?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="lowercase">Remover membro?</AlertDialogTitle>
+            <AlertDialogDescription className="lowercase">
               Este usuário perderá acesso ao workspace e a todos os seus planos. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl lowercase">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => removingMemberId && removeMemberMutation.mutate({ workspaceId, memberId: removingMemberId })}
             >
-              {removeMemberMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Remover"}
+              {removeMemberMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="lowercase">Remover</span>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

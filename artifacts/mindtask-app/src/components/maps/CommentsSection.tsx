@@ -62,7 +62,7 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
           type="button"
           onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
           className={`p-1.5 rounded-md transition-colors ${editor?.isActive("bold") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="Negrito"
+          title="negrito"
         >
           <Bold className="w-3.5 h-3.5" />
         </button>
@@ -70,7 +70,7 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
           type="button"
           onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
           className={`p-1.5 rounded-md transition-colors ${editor?.isActive("italic") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="Itálico"
+          title="itálico"
         >
           <Italic className="w-3.5 h-3.5" />
         </button>
@@ -78,7 +78,7 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
           type="button"
           onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
           className={`p-1.5 rounded-md transition-colors ${editor?.isActive("bulletList") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="Lista"
+          title="lista"
         >
           <List className="w-3.5 h-3.5" />
         </button>
@@ -95,7 +95,7 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
           onClick={handleSubmit}
         >
           {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-          Comentar
+          <span className="lowercase">Comentar</span>
         </Button>
       </div>
     </div>
@@ -144,7 +144,7 @@ function CommentCard({
             onClick={() => onToggleHidden(comment.id)}
             disabled={isToggling}
             className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title={comment.hidden ? "Mostrar comentário" : "Ocultar comentário"}
+            title={comment.hidden ? "mostrar comentário" : "ocultar comentário"}
           >
             {isToggling ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -215,7 +215,7 @@ function CommentsList({ comments, isLoading, currentUserId, isAdmin, onSubmit, o
     <div className="border-t pt-5 space-y-4">
       <div className="flex items-center gap-2">
         <MessageSquare className="w-4 h-4 text-muted-foreground" />
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <h3 className="text-xs font-semibold text-muted-foreground tracking-wider lowercase">
           Comentários {comments && comments.length > 0 ? `(${comments.length})` : ""}
         </h3>
       </div>
@@ -240,7 +240,7 @@ function CommentsList({ comments, isLoading, currentUserId, isAdmin, onSubmit, o
           ))}
         </div>
       ) : (
-        <p className="text-xs text-center text-muted-foreground py-2">Nenhum comentário ainda. Seja o primeiro!</p>
+        <p className="text-xs text-center text-muted-foreground py-2 lowercase">Nenhum comentário ainda. Seja o primeiro!</p>
       )}
     </div>
   );

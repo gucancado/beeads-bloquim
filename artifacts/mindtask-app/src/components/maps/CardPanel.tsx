@@ -182,7 +182,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     {isOverdue && taskStatus !== "completed" && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-1 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-1 rounded-full lowercase">
                         🔴 Atrasada
                       </span>
                     )}
@@ -193,9 +193,9 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">⏳ Pendente</SelectItem>
-                            <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
-                            <SelectItem value="blocked">🚫 Interrompida</SelectItem>
+                            <SelectItem value="pending"><span className="lowercase">⏳ Pendente</span></SelectItem>
+                            <SelectItem value="in_progress"><span className="lowercase">🔄 Em andamento</span></SelectItem>
+                            <SelectItem value="blocked"><span className="lowercase">🚫 Interrompida</span></SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -223,14 +223,14 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         size="icon"
                         onClick={() => setShowDeleteCard(true)}
                         className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                        title="Deletar card"
+                        title="deletar card"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
+                    <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Título</label>
                     <Input
                       value={cardTitle}
                       onChange={e => setCardTitle(e.target.value)}
@@ -243,7 +243,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                 {/* Assignee */}
                 {isTaskReady && (
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                    <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                       <User className="w-3 h-3" /> Responsável
                     </label>
                     <Select value={taskAssignee} onValueChange={handleAssigneeChange}>
@@ -251,7 +251,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         <SelectValue placeholder="Sem responsável" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="unassigned">Sem responsável</SelectItem>
+                        <SelectItem value="unassigned"><span className="lowercase">Sem responsável</span></SelectItem>
                         {members?.map(m => (
                           <SelectItem key={m.userId} value={m.userId}>{m.user.name}</SelectItem>
                         ))}
@@ -264,14 +264,14 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                   {!isTaskReady ? (
                     <div className="flex items-center justify-center py-4 gap-3 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Preparando tarefa…</span>
+                      <span className="text-sm lowercase">Preparando tarefa…</span>
                     </div>
                   ) : (
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         {/* Priority */}
                         <div>
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                          <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                             <Flag className="w-3 h-3" /> Prioridade
                           </label>
                           <Select value={taskPriority} onValueChange={handlePriorityChange}>
@@ -279,17 +279,17 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="low">Baixa</SelectItem>
-                              <SelectItem value="medium">Média</SelectItem>
-                              <SelectItem value="high">Alta</SelectItem>
-                              <SelectItem value="critical">Crítica</SelectItem>
+                              <SelectItem value="low"><span className="lowercase">Baixa</span></SelectItem>
+                              <SelectItem value="medium"><span className="lowercase">Média</span></SelectItem>
+                              <SelectItem value="high"><span className="lowercase">Alta</span></SelectItem>
+                              <SelectItem value="critical"><span className="lowercase">Crítica</span></SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         {/* Due Date */}
                         <div>
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                          <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                             <Calendar className="w-3 h-3" /> Prazo
                           </label>
                           <Input
@@ -304,7 +304,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
                       {/* Description */}
                       <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Descrição</label>
                         <Textarea
                           value={cardDesc}
                           onChange={e => setCardDesc(e.target.value)}
@@ -338,17 +338,17 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       <AlertDialog open={showDeleteCard} onOpenChange={setShowDeleteCard}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2 lowercase">
               <AlertTriangle className="w-5 h-5 text-destructive" /> Deletar card?
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="lowercase">
               O card e sua tarefa serão removidos permanentemente do plano. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl lowercase">Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 lowercase"
               onClick={handleDeleteCard}
             >
               {deleteCardMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Deletar"}

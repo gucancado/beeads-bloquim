@@ -20,12 +20,12 @@ interface MindMapNodeProps {
 
 function statusLabel(s: string) {
   switch (s) {
-    case 'pending': return 'Pendente';
-    case 'in_progress': return 'Em andamento';
-    case 'completed': return 'Concluída';
-    case 'overdue': return 'Vencida';
-    case 'blocked': return 'Interrompida';
-    case 'no_task': return 'Sem tarefa';
+    case 'pending': return 'pendente';
+    case 'in_progress': return 'em andamento';
+    case 'completed': return 'concluída';
+    case 'overdue': return 'vencida';
+    case 'blocked': return 'interrompida';
+    case 'no_task': return 'sem tarefa';
     default: return s.replace('_', ' ');
   }
 }
@@ -132,7 +132,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
         <div className="mt-3 pt-3 border-t flex items-center gap-2">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-[10px] font-semibold tracking-wider text-muted-foreground lowercase">
             {statusLabel(data.statusVisual)}
           </span>
         </div>

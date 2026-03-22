@@ -86,12 +86,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
                 <Compass className="w-5 h-5 text-white" />
               </div>
-              <span className="font-display font-bold text-xl tracking-tight truncate">Bloquim</span>
+              <span className="font-display font-bold text-xl tracking-tight truncate lowercase">Bloquim</span>
             </div>
           )}
           <button
             onClick={toggleCollapsed}
-            title={collapsed ? "Expandir menu" : "Recolher menu"}
+            title={collapsed ? "expandir menu" : "recolher menu"}
             className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
           >
             {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -104,20 +104,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className={`space-y-1 ${collapsed ? 'mt-2' : ''}`}>
               <Link href="/workspaces">
                 <span
-                  title="Espaços de Trabalho"
+                  title="espaços de trabalho"
                   className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/workspaces') && location === '/workspaces' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
                 >
                   <Folders className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span>Espaços de Trabalho</span>}
+                  {!collapsed && <span className="lowercase">Espaços de Trabalho</span>}
                 </span>
               </Link>
               <Link href="/my-tasks">
                 <span
-                  title="Suas tarefas"
+                  title="suas tarefas"
                   className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/my-tasks') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
                 >
                   <CheckSquare className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span>Suas tarefas</span>}
+                  {!collapsed && <span className="lowercase">Suas tarefas</span>}
                 </span>
               </Link>
             </div>
@@ -125,7 +125,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             {!collapsed && (
               <div>
                 <div className="px-3 mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">Planos Recentes</p>
+                  <p className="text-xs font-semibold text-sidebar-foreground/50 tracking-wider lowercase">Planos Recentes</p>
                 </div>
 
                 {isRecentMapsLoading ? (
@@ -147,7 +147,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       </Link>
                     ))}
                     {recentMaps?.length === 0 && (
-                      <p className="px-3 text-sm text-sidebar-foreground/40 italic">Nenhum plano acessado ainda</p>
+                      <p className="px-3 text-sm text-sidebar-foreground/40 italic lowercase">Nenhum plano acessado ainda</p>
                     )}
                   </div>
                 )}
@@ -177,7 +177,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <button
               onClick={() => setProfileOpen(true)}
               className="w-full flex items-center gap-3 px-2 py-3 mb-2 rounded-xl hover:bg-sidebar-accent/50 transition-colors text-left"
-              title="Editar perfil"
+              title="editar perfil"
             >
               <Avatar className="w-9 h-9 rounded-full shrink-0">
                 {(user as { avatarUrl?: string | null }).avatarUrl && (
@@ -197,7 +197,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {collapsed ? (
             <div className="flex flex-col items-center gap-1">
               <button
-                title={`${user.name} · Editar perfil`}
+                title={`${user.name} · editar perfil`}
                 onClick={() => setProfileOpen(true)}
                 className="w-10 h-10 rounded-full hover:ring-2 hover:ring-primary/40 transition-all shrink-0"
               >
@@ -212,7 +212,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </button>
               <ThemeToggle collapsed />
               <button
-                title="Sair"
+                title="sair"
                 onClick={() => logoutMutation.mutate()}
                 className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
               >
@@ -228,7 +228,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 onClick={() => logoutMutation.mutate()}
               >
                 <LogOut className="w-4 h-4 mr-2" />
-                Sair
+                <span className="lowercase">Sair</span>
               </Button>
             </>
           )}

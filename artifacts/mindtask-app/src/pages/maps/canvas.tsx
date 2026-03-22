@@ -306,13 +306,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         <div className="absolute top-4 right-4 z-10">
           <Button onClick={handleAddCard} disabled={createCardMut.isPending} className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20">
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-            Adicionar Nó
+            <span className="lowercase">Adicionar Nó</span>
           </Button>
         </div>
 
         <div className="absolute bottom-4 left-4 z-10">
           <p className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-border/40 shadow-sm">
-            Passe o mouse e clique no lápis para editar • Arraste para conectar • Clique na ligação para removê-la
+            <span className="lowercase">Passe o mouse e clique no lápis para editar • Arraste para conectar • Clique na ligação para removê-la</span>
           </p>
         </div>
 

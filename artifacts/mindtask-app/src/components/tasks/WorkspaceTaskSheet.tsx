@@ -37,10 +37,10 @@ interface Props {
 
 function translatePriority(p: string) {
   switch (p) {
-    case 'critical': return 'Crítica';
-    case 'high': return 'Alta';
-    case 'medium': return 'Média';
-    case 'low': return 'Baixa';
+    case 'critical': return 'crítica';
+    case 'high': return 'alta';
+    case 'medium': return 'média';
+    case 'low': return 'baixa';
     default: return p;
   }
 }
@@ -215,9 +215,9 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pending">⏳ Pendente</SelectItem>
-                        <SelectItem value="in_progress">🔄 Em andamento</SelectItem>
-                        <SelectItem value="blocked">🚫 Interrompida</SelectItem>
+                        <SelectItem value="pending"><span className="lowercase">⏳ Pendente</span></SelectItem>
+                        <SelectItem value="in_progress"><span className="lowercase">🔄 Em andamento</span></SelectItem>
+                        <SelectItem value="blocked"><span className="lowercase">🚫 Interrompida</span></SelectItem>
                       </SelectContent>
                     </Select>
                   )}
@@ -230,7 +230,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                           : "bg-background text-muted-foreground border-border hover:border-emerald-400 hover:text-emerald-600"
                       }`}
                     >
-                      {status === "completed" ? "✓ Concluída" : "Concluir"}
+                      <span className="lowercase">{status === "completed" ? "✓ Concluída" : "Concluir"}</span>
                     </button>
                   )}
                   {isEditing && (
@@ -248,7 +248,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
               {/* Title */}
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Título</label>
+                <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Título</label>
                 <Input
                   value={title}
                   onChange={e => setTitle(e.target.value)}
@@ -260,7 +260,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
               {/* Assignee */}
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                   <User className="w-3 h-3" /> Responsável
                 </label>
                 <Select
@@ -274,7 +274,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                     <SelectValue placeholder="Sem responsável" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unassigned">Sem responsável</SelectItem>
+                    <SelectItem value="unassigned"><span className="lowercase">Sem responsável</span></SelectItem>
                     {members?.map((m) => (
                       <SelectItem key={m.user.id} value={m.user.id}>{m.user.name}</SelectItem>
                     ))}
@@ -286,7 +286,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                 {/* Priority + Due Date */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                    <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                       <Flag className="w-3 h-3" /> Prioridade
                     </label>
                     <Select
@@ -308,7 +308,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                     </Select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1 block">
+                    <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                       <Calendar className="w-3 h-3" /> Prazo
                     </label>
                     <Input
@@ -323,7 +323,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
                 {/* Description */}
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</label>
+                  <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Descrição</label>
                   <Textarea
                     value={description}
                     onChange={e => setDescription(e.target.value)}
@@ -340,7 +340,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                     disabled={createMutation.isPending || !title.trim()}
                     className="w-full rounded-xl"
                   >
-                    {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Tarefa"}
+                    {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="lowercase">Criar Tarefa</span>}
                   </Button>
                 )}
               </div>
@@ -361,17 +361,17 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2 lowercase">
               <AlertTriangle className="w-5 h-5 text-destructive" /> Excluir tarefa?
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="lowercase">
               A tarefa será removida permanentemente. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl lowercase">Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 lowercase"
               onClick={handleDelete}
             >
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Excluir"}
