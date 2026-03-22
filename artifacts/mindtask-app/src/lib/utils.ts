@@ -11,7 +11,7 @@ export function getStatusColor(status: string) {
     case 'in_progress': return 'bg-amber-500 text-white';
     case 'completed': return 'bg-emerald-500 text-white';
     case 'overdue': return 'bg-red-500 text-white';
-    case 'blocked': return 'bg-purple-500 text-white';
+    case 'blocked': return 'bg-primary text-primary-foreground';
     case 'no_task': return 'bg-slate-400 text-white';
     default: return 'bg-slate-400 text-white';
   }
