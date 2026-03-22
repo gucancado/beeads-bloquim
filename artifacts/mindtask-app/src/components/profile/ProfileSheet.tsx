@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Save, Building2, Pencil, EyeOff } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Loader2, Save, Building2, Pencil, EyeOff, Camera } from "lucide-react";
 import { useMyWorkspaces, useUpdateMe } from "@/hooks/useProfile";
 import { useGetMe } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ProfileSheetProps {
   open: boolean;
@@ -34,9 +36,12 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
   const { data: myWorkspaces, isLoading: loadingWorkspaces } = useMyWorkspaces();
   const updateMe = useUpdateMe();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [editingName, setEditingName] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (user?.name) setName(user.name);
@@ -48,7 +53,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
       return;
     }
     try {
-      await updateMe.mutateAsync(name.trim());
+      await updateMe.mutateAsync({ name: name.trim() });
       setEditingName(false);
       toast({ title: "Nome atualizado com sucesso." });
     } catch {
@@ -61,6 +66,69 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
     if (e.key === "Escape") { setName(user?.name ?? ""); setEditingName(false); }
   };
 
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Selecione um arquivo de imagem.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const token = localStorage.getItem("mindtask_token");
+
+      const urlRes = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+
+      if (!urlRes.ok) {
+        throw new Error("Falha ao obter URL de upload");
+      }
+
+      const { uploadURL, objectPath } = await urlRes.json();
+
+      const uploadRes = await fetch(uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error("Falha ao fazer upload da imagem");
+      }
+
+      const avatarUrl = `/api/storage${objectPath}`;
+      await updateMe.mutateAsync({ avatarUrl });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+
+      toast({ title: "Foto de perfil atualizada com sucesso." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erro ao atualizar foto de perfil.", variant: "destructive" });
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const avatarUrl = (user as { avatarUrl?: string | null } | undefined)?.avatarUrl;
+  const initials = user?.name?.charAt(0).toUpperCase() ?? "?";
+
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <SheetContent
@@ -71,8 +139,30 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
         {/* Header */}
         <div className="p-6 border-b bg-slate-50 dark:bg-slate-900">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-primary/15 text-primary flex items-center justify-center font-bold text-2xl shrink-0 shadow-sm">
-              {user?.name?.charAt(0).toUpperCase() ?? "?"}
+            <div className="relative shrink-0 group">
+              <Avatar className="w-14 h-14 rounded-2xl shadow-sm">
+                {avatarUrl && <AvatarImage src={avatarUrl} alt={user?.name} className="object-cover" />}
+                <AvatarFallback className="rounded-2xl bg-primary/15 text-primary font-bold text-2xl">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <button
+                onClick={handleAvatarClick}
+                disabled={isUploadingAvatar}
+                className="absolute inset-0 rounded-2xl flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                title="Alterar foto de perfil"
+              >
+                {isUploadingAvatar
+                  ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  : <Camera className="w-5 h-5 text-white" />}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Perfil do usuário</p>

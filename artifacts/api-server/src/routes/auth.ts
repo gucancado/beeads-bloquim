@@ -5,8 +5,10 @@ import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, signToken, AuthRequest } from "../middlewares/auth";
 import { z } from "zod";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const objectStorageService = new ObjectStorageService();
 
 const registerSchema = z.object({
   name: z.string().min(1),
@@ -90,11 +92,17 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  res.json({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
+  res.json({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, avatarUrl: user.avatarUrl ?? null });
 });
 
+const AVATAR_STORAGE_PATH_PREFIX = "/api/storage/objects/";
+
 const updateMeSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100).optional(),
+  avatarUrl: z.union([
+    z.string().startsWith(AVATAR_STORAGE_PATH_PREFIX),
+    z.null(),
+  ]).optional(),
 });
 
 router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
@@ -104,9 +112,37 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
+  const updates: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+  if (parsed.data.avatarUrl !== undefined) updates.avatarUrl = parsed.data.avatarUrl;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "Validation error", message: "No fields to update" });
+    return;
+  }
+
+  if (parsed.data.avatarUrl) {
+    const avatarUrl = parsed.data.avatarUrl;
+    if (avatarUrl.startsWith(AVATAR_STORAGE_PATH_PREFIX)) {
+      const objectPath = `/objects/${avatarUrl.slice(AVATAR_STORAGE_PATH_PREFIX.length)}`;
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        const { setObjectAclPolicy } = await import("../lib/objectAcl");
+        await setObjectAclPolicy(objectFile, {
+          owner: req.user!.userId,
+          visibility: "public",
+        });
+      } catch (err) {
+        console.error("Failed to set ACL for avatar object:", err);
+        res.status(400).json({ error: "Invalid avatar", message: "Could not associate the uploaded file. Please try uploading again." });
+        return;
+      }
+    }
+  }
+
   const [updated] = await db
     .update(users)
-    .set({ name: parsed.data.name })
+    .set(updates)
     .where(eq(users.id, req.user!.userId))
     .returning();
 
@@ -115,7 +151,7 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  res.json({ id: updated.id, name: updated.name, email: updated.email, createdAt: updated.createdAt });
+  res.json({ id: updated.id, name: updated.name, email: updated.email, createdAt: updated.createdAt, avatarUrl: updated.avatarUrl ?? null });
 });
 
 router.get("/me/workspaces", requireAuth, async (req: AuthRequest, res) => {

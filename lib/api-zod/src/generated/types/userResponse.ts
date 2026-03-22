@@ -11,4 +11,5 @@ export interface UserResponse {
   name: string;
   email: string;
   createdAt: Date;
+  avatarUrl?: string | null;
 }

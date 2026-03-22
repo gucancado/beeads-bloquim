@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, CheckSquare, Compass, Folders, Loader2, Map, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
 
 interface RecentMap {
@@ -177,9 +178,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
               className="w-full flex items-center gap-3 px-2 py-3 mb-2 rounded-xl hover:bg-sidebar-accent/50 transition-colors text-left"
               title="Editar perfil"
             >
-              <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm shrink-0">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
+              <Avatar className="w-9 h-9 rounded-full shrink-0">
+                {(user as { avatarUrl?: string | null }).avatarUrl && (
+                  <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
+                )}
+                <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
+                  {user.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
                 <p className="text-xs text-sidebar-foreground/50 truncate">{user.email}</p>
@@ -192,9 +198,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <button
                 title={`${user.name} · Editar perfil`}
                 onClick={() => setProfileOpen(true)}
-                className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm hover:ring-2 hover:ring-primary/40 transition-all"
+                className="w-10 h-10 rounded-full hover:ring-2 hover:ring-primary/40 transition-all shrink-0"
               >
-                {user.name.charAt(0).toUpperCase()}
+                <Avatar className="w-10 h-10 rounded-full">
+                  {(user as { avatarUrl?: string | null }).avatarUrl && (
+                    <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
+                  )}
+                  <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
+                    {user.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
               </button>
               <button
                 title="Sair"

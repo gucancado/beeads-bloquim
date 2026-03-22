@@ -9,6 +9,7 @@ import myTasksRouter from "./myTasks";
 import commentsRouter, { taskRouter as taskCommentsRouter } from "./comments";
 import workspaceTasksRouter from "./workspaceTasks";
 import recentMapsRouter from "./recentMaps";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -23,5 +24,6 @@ router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskCommentsRouter);
 router.use("/my-tasks", myTasksRouter);
 router.use("/maps/recent", recentMapsRouter);
+router.use(storageRouter);
 
 export default router;

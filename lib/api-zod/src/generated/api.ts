@@ -39,6 +39,7 @@ export const LoginResponse = zod.object({
     name: zod.string(),
     email: zod.string(),
     createdAt: zod.date(),
+    avatarUrl: zod.string().nullish(),
   }),
   token: zod.string(),
 });
@@ -59,27 +60,26 @@ export const GetMeResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   createdAt: zod.date(),
+  avatarUrl: zod.string().nullish(),
 });
 
 /**
  * @summary List workspaces for current user
  */
-export const WorkspaceTaskCounts = zod.object({
-  overdue: zod.number(),
-  blocked: zod.number(),
-  in_progress: zod.number(),
-  pending: zod.number(),
-  total: zod.number(),
-  completed: zod.number(),
-});
-
 export const ListWorkspacesResponseItem = zod.object({
   id: zod.string().uuid(),
   name: zod.string(),
   createdBy: zod.string().uuid(),
   createdAt: zod.date(),
   role: zod.enum(["admin", "editor", "executor"]),
-  taskCounts: WorkspaceTaskCounts,
+  taskCounts: zod.object({
+    overdue: zod.number(),
+    blocked: zod.number(),
+    in_progress: zod.number(),
+    pending: zod.number(),
+    total: zod.number(),
+    completed: zod.number(),
+  }),
 });
 export const ListWorkspacesResponse = zod.array(ListWorkspacesResponseItem);
 
@@ -114,6 +114,7 @@ export const GetWorkspaceResponse = zod.object({
         name: zod.string(),
         email: zod.string(),
         createdAt: zod.date(),
+        avatarUrl: zod.string().nullish(),
       }),
       createdAt: zod.date(),
     }),
@@ -147,6 +148,14 @@ export const UpdateWorkspaceResponse = zod.object({
   createdBy: zod.string().uuid(),
   createdAt: zod.date(),
   role: zod.enum(["admin", "editor", "executor"]),
+  taskCounts: zod.object({
+    overdue: zod.number(),
+    blocked: zod.number(),
+    in_progress: zod.number(),
+    pending: zod.number(),
+    total: zod.number(),
+    completed: zod.number(),
+  }),
 });
 
 /**
@@ -178,6 +187,7 @@ export const ListWorkspaceMembersResponseItem = zod.object({
     name: zod.string(),
     email: zod.string(),
     createdAt: zod.date(),
+    avatarUrl: zod.string().nullish(),
   }),
   createdAt: zod.date(),
 });
@@ -219,6 +229,7 @@ export const UpdateWorkspaceMemberResponse = zod.object({
     name: zod.string(),
     email: zod.string(),
     createdAt: zod.date(),
+    avatarUrl: zod.string().nullish(),
   }),
   createdAt: zod.date(),
 });
@@ -397,11 +408,18 @@ export const GetCardResponse = zod.object({
           name: zod.string(),
           email: zod.string(),
           createdAt: zod.date(),
+          avatarUrl: zod.string().nullish(),
         })
         .nullish(),
       dueDate: zod.date().nullish(),
       priority: zod.enum(["low", "medium", "high", "critical"]),
-      status: zod.enum(["pending", "in_progress", "completed", "overdue", "blocked"]),
+      status: zod.enum([
+        "pending",
+        "in_progress",
+        "completed",
+        "overdue",
+        "blocked",
+      ]),
       completedAt: zod.date().nullish(),
       createdAt: zod.date(),
       updatedAt: zod.date(),
@@ -528,7 +546,13 @@ export const UpdateTaskStatusParams = zod.object({
 });
 
 export const UpdateTaskStatusBody = zod.object({
-  status: zod.enum(["pending", "in_progress", "completed", "overdue", "blocked"]),
+  status: zod.enum([
+    "pending",
+    "in_progress",
+    "completed",
+    "overdue",
+    "blocked",
+  ]),
 });
 
 export const UpdateTaskStatusResponse = zod.object({
@@ -544,11 +568,18 @@ export const UpdateTaskStatusResponse = zod.object({
       name: zod.string(),
       email: zod.string(),
       createdAt: zod.date(),
+      avatarUrl: zod.string().nullish(),
     })
     .nullish(),
   dueDate: zod.date().nullish(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
-  status: zod.enum(["pending", "in_progress", "completed", "overdue", "blocked"]),
+  status: zod.enum([
+    "pending",
+    "in_progress",
+    "completed",
+    "overdue",
+    "blocked",
+  ]),
   completedAt: zod.date().nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -584,11 +615,18 @@ export const UpdateTaskDetailsResponse = zod.object({
       name: zod.string(),
       email: zod.string(),
       createdAt: zod.date(),
+      avatarUrl: zod.string().nullish(),
     })
     .nullish(),
   dueDate: zod.date().nullish(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
-  status: zod.enum(["pending", "in_progress", "completed", "overdue", "blocked"]),
+  status: zod.enum([
+    "pending",
+    "in_progress",
+    "completed",
+    "overdue",
+    "blocked",
+  ]),
   completedAt: zod.date().nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -613,7 +651,13 @@ export const GetMyTasksResponseItem = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
-  status: zod.enum(["pending", "in_progress", "completed", "overdue", "blocked"]),
+  status: zod.enum([
+    "pending",
+    "in_progress",
+    "completed",
+    "overdue",
+    "blocked",
+  ]),
   completedAt: zod.date().nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -648,4 +692,39 @@ export const GetDashboardResponse = zod.object({
     high: zod.number(),
     critical: zod.number(),
   }),
+});
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1).describe("Original file name."),
+  size: zod.number().min(1).describe("File size in bytes."),
+  contentType: zod
+    .string()
+    .min(1)
+    .describe("MIME type of the file (e.g. image\/jpeg)."),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url().describe("Presigned GCS URL for PUT upload."),
+  objectPath: zod
+    .string()
+    .describe(
+      "Normalized object path (e.g. \/objects\/uploads\/uuid). Store this in your database.",
+    ),
+  metadata: zod
+    .object({
+      name: zod.string().min(1).describe("Original file name."),
+      size: zod.number().min(1).describe("File size in bytes."),
+      contentType: zod
+        .string()
+        .min(1)
+        .describe("MIME type of the file (e.g. image\/jpeg)."),
+    })
+    .optional(),
 });

@@ -31,16 +31,22 @@ export function useMyWorkspaces() {
   });
 }
 
+interface UpdateMePayload {
+  name?: string;
+  avatarUrl?: string | null;
+}
+
 export function useUpdateMe() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (payload: UpdateMePayload | string) => {
+      const body = typeof payload === "string" ? { name: payload } : payload;
       const res = await customFetch("/api/auth/me", {
         method: "PATCH",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to update profile");
-      return res.json() as Promise<{ id: string; name: string; email: string }>;
+      return res.json() as Promise<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });

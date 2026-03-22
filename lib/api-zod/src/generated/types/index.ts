@@ -36,6 +36,8 @@ export * from "./updateCardRequest";
 export * from "./updateMemberRoleRequest";
 export * from "./updateTaskDetailsRequest";
 export * from "./updateTaskStatusRequest";
+export * from "./uploadUrlRequest";
+export * from "./uploadUrlResponse";
 export * from "./userResponse";
 export * from "./workspaceDetailResponse";
 export * from "./workspaceMemberResponse";
