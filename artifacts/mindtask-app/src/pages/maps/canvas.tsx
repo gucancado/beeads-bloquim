@@ -21,8 +21,8 @@ const EDGE_BASE = {
   type: 'deletable' as const,
 };
 
-const EDGE_STYLE_ACTIVE = { strokeWidth: 2, stroke: 'hsl(var(--primary))' };
-const EDGE_STYLE_INACTIVE = { strokeWidth: 2, stroke: '#4b5563', strokeDasharray: '5 5' };
+const EDGE_STYLE_ACTIVE = { strokeWidth: 2, stroke: '#374151' };
+const EDGE_STYLE_INACTIVE = { strokeWidth: 2, stroke: '#d1d5db', strokeDasharray: '5 5' };
 
 function edgeStyle(animated: boolean) {
   return animated ? EDGE_STYLE_ACTIVE : EDGE_STYLE_INACTIVE;
