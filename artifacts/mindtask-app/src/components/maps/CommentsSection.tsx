@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, CommentItem } from "@/hooks/useComments";
@@ -27,6 +27,7 @@ type CommentsSectionProps =
 
 function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => void; isPending: boolean }) {
   const [isEmpty, setIsEmpty] = useState(true);
+  const submitRef = useRef<() => void>(() => {});
 
   const editor = useEditor({
     extensions: [
@@ -36,21 +37,31 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
       attributes: {
         class: "comment-editor-area",
       },
+      handleKeyDown: (_view, event) => {
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          submitRef.current();
+          return true;
+        }
+        return false;
+      },
     },
     onUpdate: ({ editor }) => {
       setIsEmpty(!editor.getText().trim());
     },
   });
 
-  const handleSubmit = () => {
-    if (!editor) return;
+  const handleSubmit = useCallback(() => {
+    if (!editor || isPending) return;
     const html = editor.getHTML();
     const text = editor.getText().trim();
     if (!text) return;
     onSubmit(html);
     editor.commands.clearContent();
     setIsEmpty(true);
-  };
+  }, [editor, onSubmit, isPending]);
+
+  submitRef.current = handleSubmit;
 
   return (
     <div className="border border-border rounded-xl bg-background focus-within:ring-2 focus-within:ring-primary/30 transition-all">
@@ -87,8 +98,9 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
       <div className="flex justify-end px-2 pb-1.5">
         <Button
           type="button"
+          variant="outline"
           size="sm"
-          className="h-7 rounded-lg gap-1.5 text-xs"
+          className="h-7 rounded-lg gap-1.5 text-xs text-muted-foreground border-border bg-white hover:bg-slate-50 dark:bg-background dark:hover:bg-slate-900"
           disabled={isEmpty || isPending}
           onClick={handleSubmit}
         >

@@ -413,7 +413,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl">
+        <DialogContent hideClose className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl">
           {isEditing && isLoading ? (
             <div className="flex-1 flex items-center justify-center p-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
