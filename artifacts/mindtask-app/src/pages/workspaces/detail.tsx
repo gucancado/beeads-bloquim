@@ -553,7 +553,15 @@ export default function WorkspaceDetailPage() {
                                 </div>
                               )}
                               <div className="flex items-center gap-1.5">
-                                <User className="w-3.5 h-3.5 shrink-0" />
+                                {task.assigneeAvatarUrl ? (
+                                  <img
+                                    src={task.assigneeAvatarUrl}
+                                    alt={task.assigneeName ?? ""}
+                                    className="w-4 h-4 rounded-full object-cover shrink-0"
+                                  />
+                                ) : (
+                                  <User className="w-3.5 h-3.5 shrink-0" />
+                                )}
                                 {task.assigneeName ? (
                                   <span>{task.assigneeName}</span>
                                 ) : (

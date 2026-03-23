@@ -147,6 +147,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       mapName: maps.name,
       workspaceName: workspaces.name,
       assigneeName: users.name,
+      assigneeAvatarUrl: users.avatarUrl,
     })
     .from(tasks)
     .leftJoin(cards, eq(cards.taskId, tasks.id))

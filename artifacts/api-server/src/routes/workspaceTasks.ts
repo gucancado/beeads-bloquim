@@ -79,6 +79,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       cardTitle: cards.title,
       mapName: maps.name,
       assigneeName: users.name,
+      assigneeAvatarUrl: users.avatarUrl,
     })
     .from(tasks)
     .leftJoin(cards, eq(cards.taskId, tasks.id))
