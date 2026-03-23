@@ -3,6 +3,7 @@ import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
 import { Pencil, Calendar, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MindMapNodeProps {
   id: string;
@@ -12,6 +13,7 @@ interface MindMapNodeProps {
     taskId?: string | null;
     taskDueDate?: string | null;
     taskAssigneeName?: string | null;
+    taskAssigneeAvatarUrl?: string | null;
     onOpen?: (id: string) => void;
     onAddChild?: (id: string) => void;
   };
@@ -48,6 +50,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     data.taskDueDate &&
     new Date(data.taskDueDate) < new Date() &&
     data.statusVisual !== 'completed';
+
+  const hasAssignee = !!data.taskAssigneeName;
+  const hasDueDate = !!dueDateStr;
 
   return (
     <div
@@ -113,16 +118,33 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           </button>
         </div>
 
-        {(dueDateStr || data.taskAssigneeName) && (
-          <div className="mt-3 flex flex-col gap-1.5">
-            {data.taskAssigneeName && (
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <User className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">{data.taskAssigneeName}</span>
-              </div>
+        {(hasAssignee || hasDueDate) && (
+          <div className="mt-3 flex items-center justify-between gap-2">
+            {hasAssignee && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center cursor-default nodrag">
+                      {data.taskAssigneeAvatarUrl ? (
+                        <img
+                          src={data.taskAssigneeAvatarUrl}
+                          alt={data.taskAssigneeName ?? ''}
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{data.taskAssigneeName}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
-            {dueDateStr && (
-              <div className={`flex items-center gap-1.5 text-[11px] font-medium ${isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
+
+            {hasDueDate && (
+              <div className={`flex items-center gap-1 text-[11px] font-medium ml-auto ${isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
                 <Calendar className="w-3 h-3 flex-shrink-0" />
                 <span>{dueDateStr}</span>
               </div>

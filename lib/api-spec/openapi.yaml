@@ -1192,6 +1192,22 @@ components:
         updatedAt:
           type: string
           format: date-time
+        taskDueDate:
+          type: string
+          format: date-time
+          nullable: true
+        taskAssigneeName:
+          type: string
+          nullable: true
+        taskAssigneeId:
+          type: string
+          format: uuid
+          nullable: true
+        taskOverdue:
+          type: boolean
+        taskAssigneeAvatarUrl:
+          type: string
+          nullable: true
       required: [id, mapId, title, positionX, positionY, statusVisual, createdAt, updatedAt]
 
     CardDetailResponse:
