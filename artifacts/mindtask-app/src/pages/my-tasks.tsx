@@ -153,9 +153,6 @@ export default function MyTasksPage() {
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
-                    <CheckSquare className="w-5 h-5" />
-                  </div>
                   <h1 className="text-4xl font-display font-bold text-foreground lowercase">Suas tarefas</h1>
                 </div>
               </div>
