@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout, customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { LogOut, CheckSquare, Compass, Folders, Loader2, Map, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
@@ -220,17 +219,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-1">
               <ThemeToggle />
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10"
+              <button
+                title="sair"
                 onClick={() => logoutMutation.mutate()}
+                className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                <span className="lowercase">Sair</span>
-              </Button>
-            </>
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>

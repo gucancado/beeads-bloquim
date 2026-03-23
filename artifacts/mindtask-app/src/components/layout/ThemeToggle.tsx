@@ -28,26 +28,13 @@ export function ThemeToggle({ collapsed }: ThemeToggleProps) {
     );
   }
 
-  if (collapsed) {
-    return (
-      <button
-        title={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
-        onClick={toggle}
-        className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
-      >
-        {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-      </button>
-    );
-  }
-
   return (
     <button
-      title={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
+      title={isDark ? "mudar para tema claro" : "mudar para tema escuro"}
       onClick={toggle}
-      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all"
+      className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
     >
-      {isDark ? <Sun className="w-4 h-4 shrink-0" /> : <Moon className="w-4 h-4 shrink-0" />}
-      <span className="text-sm">{isDark ? "Tema Claro" : "Tema Escuro"}</span>
+      {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
     </button>
   );
 }
