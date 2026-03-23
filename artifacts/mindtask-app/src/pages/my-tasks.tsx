@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
-import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, ArrowRight, Pencil, Building2, User } from "lucide-react";
+import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
@@ -265,47 +264,41 @@ export default function MyTasksPage() {
                           <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
                         </div>
                       )}
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center">
-                              {task.assigneeAvatarUrl ? (
-                                <img
-                                  src={task.assigneeAvatarUrl}
-                                  alt={task.assigneeName ?? ""}
-                                  className="w-8 h-8 rounded-full object-cover shrink-0"
-                                />
-                              ) : (
-                                <User className="w-6 h-6 shrink-0" />
-                              )}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {task.assigneeName ?? "Sem responsável"}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openTaskItem(task);
-                      }}
-                    >
-                      <Pencil className="w-3.5 h-3.5 mr-1.5" /> <span className="lowercase">Editar</span>
-                    </Button>
+                  <div className="flex flex-col items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center">
+                            {task.assigneeAvatarUrl ? (
+                              <img
+                                src={task.assigneeAvatarUrl}
+                                alt={task.assigneeName ?? ""}
+                                className="w-8 h-8 rounded-full object-cover shrink-0"
+                              />
+                            ) : (
+                              <User className="w-6 h-6 shrink-0" />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {task.assigneeName ?? "Sem responsável"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     {task.mapId && (
-                      <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                        <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7 lowercase">
-                          Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
-                        </Button>
-                      </Link>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
+                              <MapIcon className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent>ver plano</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                   </div>
                 </div>
