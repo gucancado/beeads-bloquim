@@ -1,22 +1,113 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard, useGetMe } from "@workspace/api-client-react";
-import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check } from "lucide-react";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { customFetch } from "@workspace/api-client-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  KeyboardSensor,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface CardPanelProps {
   workspaceId: string;
   mapId: string;
   cardId: string | null;
   onClose: () => void;
+}
+
+interface SubtaskItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  order: number;
+}
+
+function generateLocalId() {
+  return `local-${Math.random().toString(36).slice(2)}`;
+}
+
+function SortableSubtask({
+  subtask,
+  onChange,
+  onToggle,
+  onBlur,
+  onKeyDown,
+  inputRef,
+}: {
+  subtask: SubtaskItem;
+  onChange: (id: string, text: string) => void;
+  onToggle: (id: string) => void;
+  onBlur: (id: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, id: string) => void;
+  inputRef?: (el: HTMLInputElement | null) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: subtask.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-1.5 group rounded-lg px-1 py-0.5 ${subtask.completed ? "opacity-50" : ""}`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0 touch-none"
+        tabIndex={-1}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </button>
+      <button
+        onClick={() => onToggle(subtask.id)}
+        className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-all ${
+          subtask.completed
+            ? "bg-primary border-primary text-primary-foreground"
+            : "border-border bg-background hover:border-primary/60"
+        }`}
+      >
+        {subtask.completed && <Check className="w-2.5 h-2.5" />}
+      </button>
+      <input
+        ref={inputRef}
+        value={subtask.text}
+        onChange={e => onChange(subtask.id, e.target.value)}
+        onBlur={() => onBlur(subtask.id)}
+        onKeyDown={e => onKeyDown(e, subtask.id)}
+        className={`flex-1 bg-transparent text-sm outline-none border-none focus:outline-none placeholder:text-muted-foreground/40 ${
+          subtask.completed ? "line-through text-muted-foreground" : ""
+        }`}
+        placeholder="Subtarefa..."
+      />
+    </div>
+  );
 }
 
 export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProps) {
@@ -45,6 +136,17 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const [taskDueDate, setTaskDueDate] = useState<string>("");
   const [showDeleteCard, setShowDeleteCard] = useState(false);
 
+  const [localSubtasks, setLocalSubtasks] = useState<SubtaskItem[]>([]);
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const taskId = card?.task?.id;
+
   useEffect(() => {
     if (card) {
       setCardTitle(card.title);
@@ -64,6 +166,39 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
       }
     }
   }, [card]);
+
+  const { data: subtasksData } = useQuery<SubtaskItem[]>({
+    queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}/subtasks`],
+    queryFn: () => customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/subtasks`),
+    enabled: isOpen && !!taskId,
+  });
+
+  useEffect(() => {
+    if (subtasksData) {
+      setLocalSubtasks(subtasksData);
+    }
+  }, [subtasksData]);
+
+  useEffect(() => {
+    if (pendingFocusId && inputRefs.current[pendingFocusId]) {
+      inputRefs.current[pendingFocusId]?.focus();
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, localSubtasks]);
+
+  const saveSubtasksMutation = useMutation({
+    mutationFn: (items: SubtaskItem[]) =>
+      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/subtasks`, {
+        method: "PUT",
+        body: JSON.stringify({ subtasks: items.map((s, idx) => ({ id: s.id.startsWith("local-") ? undefined : s.id, text: s.text, completed: s.completed, order: idx })) }),
+      }),
+    onSuccess: (data: SubtaskItem[]) => {
+      setLocalSubtasks(prev => {
+        const newLocal = prev.filter(s => s.id.startsWith("local-") && s.text.trim() === "");
+        return [...data, ...newLocal];
+      });
+    },
+  });
 
   const createTaskMut = useCreateTask();
 
@@ -150,13 +285,76 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
     );
   };
 
-  const getStatusDot = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-blue-500';
-      case 'in_progress': return 'bg-amber-500';
-      case 'completed': return 'bg-emerald-500';
-      case 'blocked': return 'bg-purple-500';
-      default: return 'bg-slate-400';
+  const addSubtask = (afterId?: string) => {
+    const newId = generateLocalId();
+    setLocalSubtasks(prev => {
+      if (afterId) {
+        const idx = prev.findIndex(s => s.id === afterId);
+        const insertAt = idx >= 0 ? idx + 1 : prev.length;
+        const next = [...prev];
+        next.splice(insertAt, 0, { id: newId, text: "", completed: false, order: insertAt });
+        return next;
+      }
+      return [...prev, { id: newId, text: "", completed: false, order: prev.length }];
+    });
+    setPendingFocusId(newId);
+  };
+
+  const handleSubtaskChange = (id: string, text: string) => {
+    setLocalSubtasks(prev => prev.map(s => s.id === id ? { ...s, text } : s));
+  };
+
+  const handleSubtaskToggle = (id: string) => {
+    const updated = localSubtasks.map(s => s.id === id ? { ...s, completed: !s.completed } : s);
+    setLocalSubtasks(updated);
+    if (taskId) {
+      saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
+    }
+  };
+
+  const handleSubtaskBlur = (id: string) => {
+    const subtask = localSubtasks.find(s => s.id === id);
+    if (subtask && subtask.text.trim() === "") {
+      const updated = localSubtasks.filter(s => s.id !== id);
+      setLocalSubtasks(updated);
+      if (taskId) {
+        saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
+      }
+    } else if (taskId) {
+      const nonEmpty = localSubtasks.filter(s => s.text.trim() !== "");
+      saveSubtasksMutation.mutate(nonEmpty);
+    }
+  };
+
+  const handleSubtaskKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, id: string) => {
+    if (e.key === "Backspace") {
+      const subtask = localSubtasks.find(s => s.id === id);
+      if (subtask && subtask.text === "") {
+        e.preventDefault();
+        const updated = localSubtasks.filter(s => s.id !== id);
+        setLocalSubtasks(updated);
+        if (taskId) {
+          saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
+        }
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      addSubtask(id);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setLocalSubtasks(prev => {
+        const oldIndex = prev.findIndex(s => s.id === active.id);
+        const newIndex = prev.findIndex(s => s.id === over.id);
+        const reordered = arrayMove(prev, oldIndex, newIndex);
+        if (taskId) {
+          saveSubtasksMutation.mutate(reordered.filter(s => s.text.trim() !== ""));
+        }
+        return reordered;
+      });
     }
   };
 
@@ -191,9 +389,9 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending"><span className="lowercase">⏳ Pendente</span></SelectItem>
-                            <SelectItem value="in_progress"><span className="lowercase">🔄 Em andamento</span></SelectItem>
-                            <SelectItem value="blocked"><span className="lowercase">🚫 Interrompida</span></SelectItem>
+                            <SelectItem value="pending"><span className="lowercase">Pendente</span></SelectItem>
+                            <SelectItem value="in_progress"><span className="lowercase">Em andamento</span></SelectItem>
+                            <SelectItem value="blocked"><span className="lowercase">Interrompida</span></SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -213,7 +411,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                               : "bg-background text-muted-foreground border-border hover:border-emerald-400 hover:text-emerald-600"
                           }`}
                         >
-                          {taskStatus === "completed" ? "✓ Concluída" : "Concluir"}
+                          {taskStatus === "completed" ? "Concluída" : "Concluir"}
                         </button>
                       )}
                       <Button
@@ -300,15 +498,53 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                         </div>
                       </div>
 
+                      {/* Subtasks */}
+                      <div>
+                        <div className="flex items-center mb-1.5">
+                          <button
+                            onClick={() => addSubtask()}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+                            title="Adicionar subtarefa"
+                          >
+                            <ListChecks className="w-3.5 h-3.5" />
+                            <span className="lowercase">subtarefas +</span>
+                          </button>
+                        </div>
+                        {localSubtasks.length > 0 && (
+                          <div className="bg-muted/30 rounded-xl px-2 py-1.5 space-y-0.5">
+                            <DndContext
+                              sensors={sensors}
+                              collisionDetection={closestCenter}
+                              onDragEnd={handleDragEnd}
+                            >
+                              <SortableContext
+                                items={localSubtasks.map(s => s.id)}
+                                strategy={verticalListSortingStrategy}
+                              >
+                                {localSubtasks.map(subtask => (
+                                  <SortableSubtask
+                                    key={subtask.id}
+                                    subtask={subtask}
+                                    onChange={handleSubtaskChange}
+                                    onToggle={handleSubtaskToggle}
+                                    onBlur={handleSubtaskBlur}
+                                    onKeyDown={handleSubtaskKeyDown}
+                                    inputRef={(el) => { inputRefs.current[subtask.id] = el; }}
+                                  />
+                                ))}
+                              </SortableContext>
+                            </DndContext>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Description */}
                       <div>
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Descrição</label>
-                        <Textarea
+                        <DescriptionEditor
                           value={cardDesc}
-                          onChange={e => setCardDesc(e.target.value)}
+                          onChange={setCardDesc}
                           onBlur={saveCard}
-                          className="bg-background rounded-xl resize-none min-h-[160px]"
-                          placeholder="Descrição opcional..."
                         />
                       </div>
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
 import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, CommentItem } from "@/hooks/useComments";
 import { Button } from "@/components/ui/button";
 import { Loader2, Bold, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
@@ -32,7 +31,6 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Placeholder.configure({ placeholder: "Escreva um comentário..." }),
     ],
     editorProps: {
       attributes: {
@@ -240,7 +238,7 @@ function CommentsList({ comments, isLoading, currentUserId, isAdmin, onSubmit, o
           ))}
         </div>
       ) : (
-        <p className="text-xs text-center text-muted-foreground py-2 lowercase">Nenhum comentário ainda. Seja o primeiro!</p>
+        <p className="text-xs text-center text-muted-foreground py-2 lowercase">Nenhum comentário ainda.</p>
       )}
     </div>
   );

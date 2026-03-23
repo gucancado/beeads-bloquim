@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaceMembers, users } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaceMembers, users, subtasks } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
@@ -157,17 +157,19 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     return;
   }
 
-  const assignee = task.assignedTo
-    ? await db.select({ name: users.name }).from(users).where(eq(users.id, task.assignedTo)).limit(1)
-    : [];
+  const [assignee, members, taskSubtasks] = await Promise.all([
+    task.assignedTo
+      ? db.select({ name: users.name }).from(users).where(eq(users.id, task.assignedTo)).limit(1)
+      : Promise.resolve([]),
+    db
+      .select({ userId: workspaceMembers.userId, name: users.name, role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(eq(workspaceMembers.workspaceId, workspaceId)),
+    db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt)),
+  ]);
 
-  const members = await db
-    .select({ userId: workspaceMembers.userId, name: users.name, role: workspaceMembers.role })
-    .from(workspaceMembers)
-    .innerJoin(users, eq(workspaceMembers.userId, users.id))
-    .where(eq(workspaceMembers.workspaceId, workspaceId));
-
-  res.json({ ...task, assigneeName: assignee[0]?.name ?? null, members });
+  res.json({ ...task, assigneeName: assignee[0]?.name ?? null, members, subtasks: taskSubtasks });
 });
 
 router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -230,6 +232,146 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
 router.delete("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
   await db.delete(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId)));
+  res.json({ success: true });
+});
+
+const subtaskItemSchema = z.object({
+  id: z.string().uuid().optional(),
+  text: z.string(),
+  completed: z.boolean().optional().default(false),
+  order: z.number().int().optional().default(0),
+});
+
+const bulkSubtasksSchema = z.object({
+  subtasks: z.array(subtaskItemSchema),
+});
+
+const createSubtaskSchema = z.object({
+  text: z.string().min(1),
+  completed: z.boolean().optional().default(false),
+  order: z.number().int().optional(),
+});
+
+const updateSubtaskSchema = createSubtaskSchema.partial();
+
+router.get("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const items = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
+  res.json(items);
+});
+
+router.put("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const parsed = bulkSubtasksSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const incoming = parsed.data.subtasks.filter(s => s.text.trim() !== "");
+
+  await db.delete(subtasks).where(eq(subtasks.taskId, taskId));
+
+  if (incoming.length > 0) {
+    await db.insert(subtasks).values(
+      incoming.map((s, idx) => ({
+        id: s.id,
+        taskId,
+        text: s.text.trim(),
+        completed: s.completed ?? false,
+        order: s.order ?? idx,
+      }))
+    );
+  }
+
+  const result = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
+  res.json(result);
+});
+
+const ensureTaskInWorkspace = async (workspaceId: string, taskId: string) => {
+  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  return !!task;
+};
+
+router.post("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  if (!(await ensureTaskInWorkspace(workspaceId, taskId))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const parsed = createSubtaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const existing = await db.select({ order: subtasks.order }).from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order));
+  const nextOrder = parsed.data.order ?? (existing.length > 0 ? (existing[existing.length - 1].order + 1) : 0);
+
+  const [created] = await db.insert(subtasks).values({
+    taskId,
+    text: parsed.data.text,
+    completed: parsed.data.completed ?? false,
+    order: nextOrder,
+  }).returning();
+
+  res.status(201).json(created);
+});
+
+router.patch("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId, subtaskId } = req.params;
+
+  if (!(await ensureTaskInWorkspace(workspaceId, taskId))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const parsed = updateSubtaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db.select().from(subtasks).where(and(eq(subtasks.id, subtaskId), eq(subtasks.taskId, taskId))).limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Subtask not found" });
+    return;
+  }
+
+  const updateData: Record<string, any> = { updatedAt: new Date() };
+  if (parsed.data.text !== undefined) updateData.text = parsed.data.text;
+  if (parsed.data.completed !== undefined) updateData.completed = parsed.data.completed;
+  if (parsed.data.order !== undefined) updateData.order = parsed.data.order;
+
+  const [updated] = await db.update(subtasks).set(updateData).where(eq(subtasks.id, subtaskId)).returning();
+  res.json(updated);
+});
+
+router.delete("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId, subtaskId } = req.params;
+
+  if (!(await ensureTaskInWorkspace(workspaceId, taskId))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  await db.delete(subtasks).where(and(eq(subtasks.id, subtaskId), eq(subtasks.taskId, taskId)));
   res.json({ success: true });
 });
 

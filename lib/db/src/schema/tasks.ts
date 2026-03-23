@@ -5,6 +5,7 @@ import {
   uuid,
   pgEnum,
   boolean,
+  integer,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -64,3 +65,24 @@ export const updateTaskSchema = insertTaskSchema.partial().omit({
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type UpdateTask = z.infer<typeof updateTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+
+export const subtasks = pgTable("subtasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  completed: boolean("completed").notNull().default(false),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSubtaskSchema = createInsertSchema(subtasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSubtask = z.infer<typeof insertSubtaskSchema>;
+export type Subtask = typeof subtasks.$inferSelect;
