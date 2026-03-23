@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -198,10 +198,10 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
   return (
     <>
-      <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0 overflow-y-auto">
+      <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+        <DialogContent className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl">
           {isEditing && isLoading ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center p-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
@@ -328,7 +328,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     onBlur={() => isEditing && saveMutation.mutate({ description: description || null })}
-                    className="bg-background rounded-xl resize-none min-h-[72px]"
+                    className="bg-background rounded-xl resize-none min-h-[160px]"
                     placeholder="Descrição opcional..."
                   />
                 </div>
@@ -355,8 +355,8 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
               )}
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
         <AlertDialogContent className="rounded-2xl">

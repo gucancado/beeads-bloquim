@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useGetCard, useUpdateCard, useCreateTask, useUpdateTaskDetails, useUpdateTaskStatus, useListWorkspaceMembers, useDeleteCard, useGetMe } from "@workspace/api-client-react";
 import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import { CommentsSection } from "@/components/maps/CommentsSection";
@@ -165,12 +165,10 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
   return (
     <>
-      <Sheet open={isOpen} onOpenChange={(val) => !val && onClose()}>
-        <SheetContent
-          className="w-[420px] sm:w-[500px] overflow-y-auto p-0 flex flex-col shadow-2xl"
-        >
+      <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
+        <DialogContent className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl">
           {isCardLoading || !card ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center p-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
@@ -309,7 +307,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                           value={cardDesc}
                           onChange={e => setCardDesc(e.target.value)}
                           onBlur={saveCard}
-                          className="bg-background rounded-xl resize-none min-h-[72px]"
+                          className="bg-background rounded-xl resize-none min-h-[160px]"
                           placeholder="Descrição opcional..."
                         />
                       </div>
@@ -331,8 +329,8 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
               </div>
             </>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Card Confirmation */}
       <AlertDialog open={showDeleteCard} onOpenChange={setShowDeleteCard}>
