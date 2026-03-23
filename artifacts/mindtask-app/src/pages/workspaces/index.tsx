@@ -161,12 +161,13 @@ export default function WorkspacesPage() {
             <div className="flex items-center gap-3">
               {isAdmin && (
                 <Button
-                  variant="outline"
-                  className="rounded-xl h-12 px-5 gap-2"
+                  variant="ghost"
+                  className="rounded-xl h-12 w-12 p-0"
                   onClick={() => setShowHidden((v) => !v)}
+                  aria-label={showHidden ? "Ocultar ocultos" : "Ver ocultos"}
+                  title={showHidden ? "Ocultar ocultos" : "Ver ocultos"}
                 >
                   {showHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  <span className="lowercase">{showHidden ? "Ocultar ocultos" : "Ver ocultos"}</span>
                 </Button>
               )}
 
