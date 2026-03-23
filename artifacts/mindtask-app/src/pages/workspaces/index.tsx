@@ -172,9 +172,8 @@ export default function WorkspacesPage() {
 
               <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogTrigger asChild>
-                  <Button className="rounded-xl px-6 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all text-base lowercase">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Novo Espaço
+                  <Button title="novo espaço" className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
+                    <Plus className="w-5 h-5" />
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md rounded-2xl">
