@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
@@ -264,22 +265,26 @@ export default function MyTasksPage() {
                           <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5">
-                        {task.assigneeAvatarUrl ? (
-                          <img
-                            src={task.assigneeAvatarUrl}
-                            alt={task.assigneeName ?? ""}
-                            className="w-4 h-4 rounded-full object-cover shrink-0"
-                          />
-                        ) : (
-                          <User className="w-3.5 h-3.5 shrink-0" />
-                        )}
-                        {task.assigneeName ? (
-                          <span>{task.assigneeName}</span>
-                        ) : (
-                          <span className="lowercase">Sem responsável</span>
-                        )}
-                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center">
+                              {task.assigneeAvatarUrl ? (
+                                <img
+                                  src={task.assigneeAvatarUrl}
+                                  alt={task.assigneeName ?? ""}
+                                  className="w-8 h-8 rounded-full object-cover shrink-0"
+                                />
+                              ) : (
+                                <User className="w-6 h-6 shrink-0" />
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {task.assigneeName ?? "Sem responsável"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
 
