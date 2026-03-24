@@ -1,9 +1,14 @@
-import { memo } from 'react';
+import { memo, useRef, useLayoutEffect, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
 import { Pencil, Calendar, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+function stripHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent?.trim() || '';
+}
 
 interface MindMapNodeProps {
   id: string;
@@ -14,6 +19,7 @@ interface MindMapNodeProps {
     taskDueDate?: string | null;
     taskAssigneeName?: string | null;
     taskAssigneeAvatarUrl?: string | null;
+    taskDescription?: string | null;
     onOpen?: (id: string) => void;
     onAddChild?: (id: string) => void;
   };
@@ -41,6 +47,20 @@ const STRIP_HANDLE_CLS = [
 function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
+  const descRef = useRef<HTMLParagraphElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const [maxLines, setMaxLines] = useState(3);
+  const plainDescription = data.taskDescription ? stripHtml(data.taskDescription) : '';
+
+  useLayoutEffect(() => {
+    setMaxLines(3);
+  }, [plainDescription]);
+
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setIsTruncated(el.scrollHeight > el.clientHeight + 1);
+  }, [plainDescription, maxLines]);
 
   const dueDateStr = data.taskDueDate
     ? format(new Date(data.taskDueDate), 'dd/MM/yy')
@@ -117,6 +137,41 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             <Pencil className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        {plainDescription && (
+          <div className="mt-2 relative nodrag">
+            <p
+              ref={descRef}
+              className="text-[11px] text-muted-foreground leading-relaxed break-words overflow-hidden"
+              style={{
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: maxLines,
+              }}
+            >
+              {plainDescription}
+            </p>
+            {isTruncated && (
+              <>
+                <div
+                  className="absolute left-0 w-full h-6 pointer-events-none"
+                  style={{
+                    bottom: '20px',
+                    background: 'linear-gradient(to bottom, transparent, hsl(var(--card)))',
+                  }}
+                />
+                <div className="flex justify-center mt-0.5">
+                  <button
+                    className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors nodrag"
+                    onClick={(e) => { e.stopPropagation(); setMaxLines(prev => prev + 10); }}
+                  >
+                    ver mais
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {(hasAssignee || hasDueDate) && (
           <div className="mt-3 flex items-center justify-between gap-2">
