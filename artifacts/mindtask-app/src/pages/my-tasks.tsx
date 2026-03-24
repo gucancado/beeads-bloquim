@@ -129,6 +129,10 @@ export default function MyTasksPage() {
     setOpenCard(null);
   };
 
+  const handleDeleteCardFromPanel = () => {
+    setOpenCard(null);
+  };
+
   const handleCloseSheet = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
@@ -336,6 +340,7 @@ export default function MyTasksPage() {
           mapId={openCard.mapId}
           cardId={openCard.cardId}
           onClose={handleClosePanel}
+          onDeleteCard={handleDeleteCardFromPanel}
         />
       )}
 

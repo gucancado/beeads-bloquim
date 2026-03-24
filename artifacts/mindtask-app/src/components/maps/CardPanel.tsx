@@ -35,6 +35,7 @@ interface CardPanelProps {
   mapId: string;
   cardId: string | null;
   onClose: () => void;
+  onDeleteCard?: (cardId: string) => void;
 }
 
 interface SubtaskItem {
@@ -110,7 +111,7 @@ function SortableSubtask({
   );
 }
 
-export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProps) {
+export function CardPanel({ workspaceId, mapId, cardId, onClose, onDeleteCard }: CardPanelProps) {
   const isOpen = !!cardId;
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -263,13 +264,20 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   const deleteCardMut = useDeleteCard();
   const handleDeleteCard = () => {
     if (!cardId) return;
+    const deletedCardId = cardId;
     deleteCardMut.mutate(
       { workspaceId, mapId, cardId },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
           toast({ title: "Card removido do plano." });
           onClose();
+          onDeleteCard?.(deletedCardId);
+        },
+        onError: () => {
+          toast({ title: "Erro ao deletar card.", variant: "destructive" });
         }
       }
     );
@@ -363,8 +371,8 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
-        <DialogContent hideClose className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl" onInteractOutside={(e) => { e.preventDefault(); saveCard(); if (card?.task) saveTaskDetails(); onClose(); }}>
+      <Dialog open={isOpen} onOpenChange={(val) => { if (!val && !showDeleteCard && !deleteCardMut.isPending) onClose(); }}>
+        <DialogContent hideClose className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl" onInteractOutside={(e) => { e.preventDefault(); if (showDeleteCard || deleteCardMut.isPending) return; saveCard(); if (card?.task) saveTaskDetails(); onClose(); }}>
           {isCardLoading || !card ? (
             <div className="flex-1 flex items-center justify-center p-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />

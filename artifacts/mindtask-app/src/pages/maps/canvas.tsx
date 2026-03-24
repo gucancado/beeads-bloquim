@@ -279,6 +279,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     setSelectedCardId(null);
   }, []);
 
+  const handleDeleteCard = useCallback((cardId: string) => {
+    setNodes(prev => prev.filter(n => n.id !== cardId));
+    setEdges(prev => prev.filter(e => e.source !== cardId && e.target !== cardId));
+  }, [setNodes, setEdges]);
+
   if (isLoading || !mapData) {
     return (
       <AppLayout>
@@ -344,6 +349,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         mapId={mapId}
         cardId={selectedCardId}
         onClose={() => setSelectedCardId(null)}
+        onDeleteCard={handleDeleteCard}
       />
     </AppLayout>
   );

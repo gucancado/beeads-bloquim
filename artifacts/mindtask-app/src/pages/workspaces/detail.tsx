@@ -274,6 +274,10 @@ export default function WorkspaceDetailPage() {
     setOpenCard(null);
   };
 
+  const handleDeleteCardFromPanel = () => {
+    setOpenCard(null);
+  };
+
   const handleCloseTaskSheet = () => {
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
@@ -736,6 +740,7 @@ export default function WorkspaceDetailPage() {
           mapId={openCard.mapId}
           cardId={openCard.cardId}
           onClose={handleClosePanel}
+          onDeleteCard={handleDeleteCardFromPanel}
         />
       )}
 
