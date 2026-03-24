@@ -6,11 +6,16 @@ import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
 import { CardPanel } from "@/components/maps/CardPanel";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, customFetch } from "@workspace/api-client-react";
+import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, customFetch, CreateConnectionRequest } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+
+interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
+  sourceHandle?: string;
+  targetHandle?: string;
+}
 
 const nodeTypes = { mindmap: MindMapNode };
 const edgeTypes = { deletable: DeletableEdge };
@@ -58,7 +63,62 @@ function buildEdgeFromConn(
     ...EDGE_BASE,
     animated,
     style: edgeStyle(animated),
+    data: {},
   };
+}
+
+/**
+ * Sample N points along a cubic bezier curve.
+ */
+function sampleBezier(
+  p0x: number, p0y: number,
+  p1x: number, p1y: number,
+  p2x: number, p2y: number,
+  p3x: number, p3y: number,
+  samples: number,
+): Array<[number, number]> {
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const mt = 1 - t;
+    const x = mt * mt * mt * p0x + 3 * mt * mt * t * p1x + 3 * mt * t * t * p2x + t * t * t * p3x;
+    const y = mt * mt * mt * p0y + 3 * mt * mt * t * p1y + 3 * mt * t * t * p2y + t * t * t * p3y;
+    pts.push([x, y]);
+  }
+  return pts;
+}
+
+/**
+ * Check if a bezier edge (defined by source/target positions) intersects the bounding box of a node.
+ * Uses ReactFlow's default bezier control point offset heuristic.
+ */
+function edgeIntersectsNodeBBox(
+  sourceX: number, sourceY: number,
+  targetX: number, targetY: number,
+  nodeCenterX: number, nodeCenterY: number,
+  nodeWidth: number, nodeHeight: number,
+): boolean {
+  // Default bezier: source handle points right, target handle points left
+  const offset = Math.abs(targetX - sourceX) * 0.5;
+  const cp1x = sourceX + offset;
+  const cp1y = sourceY;
+  const cp2x = targetX - offset;
+  const cp2y = targetY;
+
+  const halfW = nodeWidth / 2;
+  const halfH = nodeHeight / 2;
+  const minX = nodeCenterX - halfW;
+  const maxX = nodeCenterX + halfW;
+  const minY = nodeCenterY - halfH;
+  const maxY = nodeCenterY + halfH;
+
+  const pts = sampleBezier(sourceX, sourceY, cp1x, cp1y, cp2x, cp2y, targetX, targetY, 40);
+  for (const [px, py] of pts) {
+    if (px >= minX && px <= maxX && py >= minY && py <= maxY) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
@@ -68,10 +128,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
+  const edgesRef = useRef<Edge[]>([]);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
 
   useEffect(() => {
     if (!workspaceId || !mapId) return;
@@ -128,8 +191,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const serverIds = new Set(mapData.connections.map(c => c.id));
         const filtered = prev.filter(e => serverIds.has(e.id) || e.id.startsWith('temp-'));
         const existingIds = new Set(filtered.map(e => e.id));
+        const tempPairs = new Set(
+          filtered
+            .filter(e => e.id.startsWith('temp-'))
+            .map(e => `${e.source}__${e.target}`),
+        );
         const newEdges: Edge[] = mapData.connections
-          .filter(c => !existingIds.has(c.id))
+          .filter(c => !existingIds.has(c.id) && !tempPairs.has(`${c.sourceCardId}__${c.targetCardId}`))
           .map(c => buildEdgeFromConn(c, mapData.cards));
         const updatedFiltered = filtered.map(e => {
           if (e.id.startsWith('temp-')) return e;
@@ -155,7 +223,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       {
         onSuccess: (newCard) => {
           createConnMut.mutate(
-            { workspaceId, mapId, data: { sourceCardId: parentCardId, targetCardId: newCard.id, sourceHandle: 'source-right', targetHandle: 'target-left' } as any },
+            { workspaceId, mapId, data: { sourceCardId: parentCardId, targetCardId: newCard.id, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles },
             { onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }) }
           );
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
@@ -165,14 +233,174 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     );
   }, [workspaceId, mapId, createCardMut, createConnMut, queryClient]);
 
+  const onNodeDrag = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      const currentEdges = edgesRef.current;
+      const currentNodes = nodesRef.current;
+
+      const nodeWidth = node.width ?? 200;
+      const nodeHeight = node.height ?? 80;
+      const nodeCenterX = node.position.x + nodeWidth / 2;
+      const nodeCenterY = node.position.y + nodeHeight / 2;
+
+      let found: string | null = null;
+
+      for (const edge of currentEdges) {
+        // Skip edges connected to the dragged node itself
+        if (edge.source === node.id || edge.target === node.id) continue;
+        // Skip temp edges
+        if (edge.id.startsWith('temp-')) continue;
+
+        const sourceNode = currentNodes.find(n => n.id === edge.source);
+        const targetNode = currentNodes.find(n => n.id === edge.target);
+        if (!sourceNode || !targetNode) continue;
+
+        const srcW = sourceNode.width ?? 200;
+        const srcH = sourceNode.height ?? 80;
+        const tgtW = targetNode.width ?? 200;
+        const tgtH = targetNode.height ?? 80;
+
+        // Source handle: right side of source node
+        const sourceX = sourceNode.position.x + srcW;
+        const sourceY = sourceNode.position.y + srcH / 2;
+        // Target handle: left side of target node
+        const targetX = targetNode.position.x;
+        const targetY = targetNode.position.y + tgtH / 2;
+
+        if (edgeIntersectsNodeBBox(sourceX, sourceY, targetX, targetY, nodeCenterX, nodeCenterY, nodeWidth, nodeHeight)) {
+          found = edge.id;
+          break;
+        }
+      }
+
+      if (found !== highlightedEdgeId) {
+        setHighlightedEdgeId(found);
+        setEdges(eds => eds.map(e => ({
+          ...e,
+          data: { ...e.data, highlighted: e.id === found },
+        })));
+      }
+    },
+    [highlightedEdgeId, setEdges],
+  );
+
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      // Always save position
       updateCardMut.mutate({
         workspaceId, mapId, cardId: node.id,
         data: { positionX: node.position.x, positionY: node.position.y },
       });
+
+      const currentHighlightedEdgeId = highlightedEdgeId;
+
+      // Clear highlight regardless
+      setHighlightedEdgeId(null);
+      setEdges(eds => eds.map(e => ({
+        ...e,
+        data: { ...e.data, highlighted: false },
+      })));
+
+      if (!currentHighlightedEdgeId) return;
+
+      const currentEdges = edgesRef.current;
+      const targetEdge = currentEdges.find(e => e.id === currentHighlightedEdgeId);
+      if (!targetEdge) return;
+
+      const sourceId = targetEdge.source; // B
+      const targetId = targetEdge.target; // C
+      const insertedId = node.id;          // A
+
+      // Remove original edge optimistically
+      setEdges(eds => eds.filter(e => e.id !== currentHighlightedEdgeId));
+
+      const cards = mapData?.cards ?? [];
+
+      const baAlreadyExists = currentEdges.some(
+        e => e.source === sourceId && e.target === insertedId,
+      );
+      const acAlreadyExists = currentEdges.some(
+        e => e.source === insertedId && e.target === targetId,
+      );
+
+      const newEdgesToAdd: Edge[] = [];
+
+      const tempIdBA = `temp-${Date.now()}-BA`;
+      const tempIdAC = `temp-${Date.now()}-AC`;
+
+      if (!baAlreadyExists) {
+        const animatedBA = isEdgeAnimated(sourceId, insertedId, cards);
+        newEdgesToAdd.push({
+          id: tempIdBA,
+          source: sourceId,
+          target: insertedId,
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left',
+          ...EDGE_BASE,
+          animated: animatedBA,
+          style: edgeStyle(animatedBA),
+          data: {},
+        });
+      }
+
+      if (!acAlreadyExists) {
+        const animatedAC = isEdgeAnimated(insertedId, targetId, cards);
+        newEdgesToAdd.push({
+          id: tempIdAC,
+          source: insertedId,
+          target: targetId,
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left',
+          ...EDGE_BASE,
+          animated: animatedAC,
+          style: edgeStyle(animatedAC),
+          data: {},
+        });
+      }
+
+      if (newEdgesToAdd.length > 0) {
+        setEdges(eds => [...eds, ...newEdgesToAdd]);
+      }
+
+      if (!currentHighlightedEdgeId.startsWith('temp-')) {
+        deleteConnMut.mutate({ workspaceId, mapId, connectionId: currentHighlightedEdgeId });
+      }
+
+      if (!baAlreadyExists) {
+        createConnMut.mutate(
+          { workspaceId, mapId, data: { sourceCardId: sourceId, targetCardId: insertedId, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles },
+          {
+            onSuccess: (conn) => {
+              setEdges(eds => eds.map(e => e.id === tempIdBA ? { ...e, id: conn.id } : e));
+              queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            },
+            onError: () => {
+              setEdges(eds => eds.filter(e => e.id !== tempIdBA));
+            },
+          }
+        );
+      }
+
+      if (!acAlreadyExists) {
+        createConnMut.mutate(
+          { workspaceId, mapId, data: { sourceCardId: insertedId, targetCardId: targetId, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles },
+          {
+            onSuccess: (conn) => {
+              setEdges(eds => eds.map(e => e.id === tempIdAC ? { ...e, id: conn.id } : e));
+              queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            },
+            onError: () => {
+              setEdges(eds => eds.filter(e => e.id !== tempIdAC));
+            },
+          }
+        );
+      }
+
+      if (!baAlreadyExists || !acAlreadyExists) {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+      }
     },
-    [workspaceId, mapId, updateCardMut],
+    [workspaceId, mapId, updateCardMut, highlightedEdgeId, deleteConnMut, createConnMut, queryClient, mapData],
   );
 
   const onConnect = useCallback(
@@ -223,13 +451,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         ...EDGE_BASE,
         animated,
         style: edgeStyle(animated),
+        data: {},
       };
       setEdges((eds) => addEdge(newEdge, eds));
 
       createConnMut.mutate(
         {
           workspaceId, mapId,
-          data: { sourceCardId: sourceNodeId, targetCardId: targetNodeId, sourceHandle: 'source-right', targetHandle: 'target-left' } as any,
+          data: { sourceCardId: sourceNodeId, targetCardId: targetNodeId, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles,
         },
         {
           onSuccess: (conn) => {
@@ -328,6 +557,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChangeWithDelete}
             onConnect={onConnect}
+            onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}

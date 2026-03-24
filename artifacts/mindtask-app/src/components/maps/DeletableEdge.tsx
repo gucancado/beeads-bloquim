@@ -13,6 +13,7 @@ function DeletableEdge({
   selected,
   markerEnd,
   style,
+  data,
 }: EdgeProps) {
   const { deleteElements } = useReactFlow();
 
@@ -33,6 +34,11 @@ function DeletableEdge({
     [id, deleteElements],
   );
 
+  const highlighted = data?.highlighted === true;
+  const effectiveStyle = highlighted
+    ? { ...style, stroke: '#f97316', strokeWidth: 4 }
+    : style;
+
   return (
     <>
       {/* Wide transparent hit area for easier clicking */}
@@ -49,7 +55,7 @@ function DeletableEdge({
         d={edgePath}
         fill="none"
         markerEnd={markerEnd}
-        style={style}
+        style={effectiveStyle}
         strokeLinecap="round"
         className="react-flow__edge-path"
       />
