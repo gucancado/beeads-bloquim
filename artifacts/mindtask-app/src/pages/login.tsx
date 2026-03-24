@@ -97,7 +97,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            não tem uma conta?{" "}
+            não tem conta?{" "}
             <Link href="/register">
               <span className="text-primary font-semibold hover:underline cursor-pointer">cria uma, uai</span>
             </Link>
