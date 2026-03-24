@@ -118,7 +118,16 @@ router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), a
 });
 
 router.delete("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
-  await db.delete(cards).where(eq(cards.id, req.params.cardId));
+  const { cardId } = req.params;
+
+  await db.transaction(async (tx) => {
+    const [card] = await tx.select().from(cards).where(eq(cards.id, cardId)).limit(1);
+    if (card?.taskId) {
+      await tx.delete(tasks).where(eq(tasks.id, card.taskId));
+    }
+    await tx.delete(cards).where(eq(cards.id, cardId));
+  });
+
   res.json({ success: true, message: "Card deleted" });
 });
 

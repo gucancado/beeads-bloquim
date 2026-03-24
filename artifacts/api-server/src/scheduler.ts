@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { tasks, cards } from "@workspace/db/schema";
-import { eq, and, lt, gte, ne, isNotNull } from "drizzle-orm";
+import { eq, and, lt, ne, isNotNull, notExists, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getTodayLocal } from "./lib/overdue";
 
@@ -66,7 +66,30 @@ export async function syncOverdueFlags() {
   }
 }
 
+export async function cleanupOrphanTasks() {
+  const orphans = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        isNotNull(tasks.mapId),
+        notExists(
+          db.select({ taskId: cards.taskId }).from(cards).where(eq(cards.taskId, tasks.id))
+        )
+      )
+    );
+
+  if (orphans.length === 0) return;
+
+  const ids = orphans.map((o) => o.id);
+  await db.delete(tasks).where(inArray(tasks.id, ids));
+
+  console.log(`[startup] cleaned up ${orphans.length} orphan task(s) with no corresponding card`);
+}
+
 export function startScheduler() {
+  // Clean up orphan tasks once on startup
+  cleanupOrphanTasks().catch(console.error);
   // Run immediately on startup
   syncOverdueFlags().catch(console.error);
   // Then every 5 minutes
