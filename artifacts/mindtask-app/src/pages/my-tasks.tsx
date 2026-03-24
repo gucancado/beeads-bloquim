@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
-import { CheckSquare, Loader2, Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User } from "lucide-react";
-import { Link } from "wouter";
-import { format } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { CheckSquare, Loader2 } from "lucide-react";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
+import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 
 interface OpenCard {
@@ -23,16 +20,6 @@ interface StandaloneTask {
   mapId: string | null;
   cardId: string | null;
   title: string;
-}
-
-function translatePriority(p: string) {
-  switch (p) {
-    case 'critical': return 'crítica';
-    case 'high': return 'alta';
-    case 'medium': return 'média';
-    case 'low': return 'baixa';
-    default: return p;
-  }
 }
 
 const STATUS_OPTIONS = [
@@ -67,7 +54,7 @@ export default function MyTasksPage() {
     setSelectedAssignees(["me"]);
   };
 
-  const { data: members } = useQuery<{ userId: string; name: string }[]>({
+  const { data: members } = useQuery<{ userId: string; name: string; workspaceId: string }[]>({
     queryKey: ["/api/my-tasks/members"],
     queryFn: () => customFetch("/api/my-tasks/members"),
   });
@@ -92,36 +79,6 @@ export default function MyTasksPage() {
       return customFetch(`/api/my-tasks/counts?${p.toString()}`);
     },
   });
-
-  const getPriorityColor = (p: string) => {
-    switch (p) {
-      case 'critical': return 'text-red-500 bg-red-500/10 border-red-200 dark:border-red-900/50';
-      case 'high': return 'text-orange-500 bg-orange-500/10 border-orange-200 dark:border-orange-900/50';
-      case 'medium': return 'text-blue-500 bg-blue-500/10 border-blue-200 dark:border-blue-900/50';
-      case 'low': return 'text-slate-500 bg-slate-500/10 border-slate-200 dark:border-slate-800';
-      default: return '';
-    }
-  };
-
-  const getStatusLabel = (s: string) => {
-    switch (s) {
-      case 'pending': return 'pendente';
-      case 'in_progress': return 'em andamento';
-      case 'completed': return 'concluída';
-      case 'blocked': return 'interrompida';
-      default: return s.replace('_', ' ');
-    }
-  };
-
-  const getStatusColor = (s: string) => {
-    switch (s) {
-      case 'completed': return 'bg-emerald-500 text-white border-transparent';
-      case 'in_progress': return 'bg-amber-500 text-white border-transparent';
-      case 'pending': return 'bg-blue-500 text-white border-transparent';
-      case 'blocked': return 'bg-purple-500 text-white border-transparent';
-      default: return '';
-    }
-  };
 
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
@@ -148,6 +105,14 @@ export default function MyTasksPage() {
   };
 
   const hasActiveFilters = selectedStatuses.length > 0 || !( selectedAssignees.length === 1 && selectedAssignees[0] === "me");
+
+  const membersByWorkspace = (members ?? []).reduce<Record<string, TaskListItemMember[]>>((acc, m) => {
+    if (!acc[m.workspaceId]) acc[m.workspaceId] = [];
+    if (!acc[m.workspaceId].some(x => x.userId === m.userId)) {
+      acc[m.workspaceId].push({ userId: m.userId, name: m.name });
+    }
+    return acc;
+  }, {});
 
   return (
     <AppLayout>
@@ -193,7 +158,7 @@ export default function MyTasksPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">quem:</span>
               <AssigneeFilterPills
-                members={members?.filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => ({ userId: m.userId, name: m.name })) ?? []}
+                members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name }])).values())}
                 selected={selectedAssignees}
                 onToggle={toggleAssignee}
                 onClear={() => setSelectedAssignees([])}
@@ -227,85 +192,6 @@ export default function MyTasksPage() {
               return !(task as any).overdue;
             });
 
-            const renderTask = (task: any) => {
-              const isOverdue = !!(task as any).overdue && task.status !== 'completed' && task.status !== 'blocked';
-              return (
-                <div
-                  key={task.id}
-                  className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
-                  style={{
-                    backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
-                  }}
-                  onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
-                  onClick={() => openTaskItem(task)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-bold text-foreground mb-1">{(task as any).cardTitle || task.title}</h3>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                      <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
-                        {getStatusLabel(task.status)}
-                      </Badge>
-                      <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
-                        <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
-                      </Badge>
-                      <div className="flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate max-w-[140px]">{(task as any).workspaceName}</span>
-                      </div>
-                      {task.mapName && (
-                        <div className="flex items-center gap-1.5">
-                          <MapIcon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate max-w-[140px]">{task.mapName}</span>
-                        </div>
-                      )}
-                      {task.dueDate && (
-                        <div className="flex items-center gap-1.5">
-                          <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
-                          <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center">
-                            {task.assigneeAvatarUrl ? (
-                              <img
-                                src={task.assigneeAvatarUrl}
-                                alt={task.assigneeName ?? ""}
-                                className="w-8 h-8 rounded-full object-cover shrink-0"
-                              />
-                            ) : (
-                              <User className="w-6 h-6 shrink-0" />
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {task.assigneeName ?? "Sem responsável"}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    {task.mapId && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                              <MapIcon className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
-                            </Link>
-                          </TooltipTrigger>
-                          <TooltipContent>ver plano</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                </div>
-              );
-            };
-
             return (
               <div className="flex flex-col gap-6">
                 {todayTasks.length > 0 && (
@@ -313,7 +199,18 @@ export default function MyTasksPage() {
                     <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Pra hoje</p>
                     <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                       <div className="divide-y divide-border/50">
-                        {todayTasks.map(renderTask)}
+                        {todayTasks.map(task => (
+                          <TaskListItem
+                            key={task.id}
+                            task={task}
+                            members={membersByWorkspace[task.workspaceId] ?? []}
+                            invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
+                            onOpenDetail={openTaskItem}
+                            showWorkspaceName
+                            showMapLink
+                            showMapName
+                          />
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -323,7 +220,18 @@ export default function MyTasksPage() {
                     <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Próximas</p>
                     <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                       <div className="divide-y divide-border/50">
-                        {upcomingTasks.map(renderTask)}
+                        {upcomingTasks.map(task => (
+                          <TaskListItem
+                            key={task.id}
+                            task={task}
+                            members={membersByWorkspace[task.workspaceId] ?? []}
+                            invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
+                            onOpenDetail={openTaskItem}
+                            showWorkspaceName
+                            showMapLink
+                            showMapName
+                          />
+                        ))}
                       </div>
                     </div>
                   </div>

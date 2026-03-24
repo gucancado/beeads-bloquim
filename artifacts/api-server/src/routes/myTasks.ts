@@ -21,7 +21,7 @@ router.get("/members", requireAuth, async (req: AuthRequest, res) => {
   const workspaceIds = memberships.map(m => m.workspaceId);
 
   const members = await db
-    .selectDistinct({ userId: users.id, name: users.name })
+    .select({ userId: users.id, name: users.name, workspaceId: workspaceMembers.workspaceId })
     .from(workspaceMembers)
     .innerJoin(users, eq(users.id, workspaceMembers.userId))
     .where(inArray(workspaceMembers.workspaceId, workspaceIds))

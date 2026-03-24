@@ -3,10 +3,9 @@ import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember, useListWorkspaceMembers, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden } from "@/hooks/useHidden";
-import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare, Flag, Calendar as CalendarIcon, Pencil } from "lucide-react";
+import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +16,7 @@ import { format } from "date-fns";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
+import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 
 function MapCard({ map, workspaceId, isAdmin }: {
   map: { id: string; name: string; hidden: boolean; updatedAt: string };
@@ -225,46 +225,6 @@ export default function WorkspaceDetailPage() {
     setSelectedStatuses(prev =>
       prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
     );
-  };
-
-  const getPriorityColor = (p: string) => {
-    switch (p) {
-      case 'critical': return 'text-red-500 bg-red-500/10 border-red-200 dark:border-red-900/50';
-      case 'high': return 'text-orange-500 bg-orange-500/10 border-orange-200 dark:border-orange-900/50';
-      case 'medium': return 'text-blue-500 bg-blue-500/10 border-blue-200 dark:border-blue-900/50';
-      case 'low': return 'text-slate-500 bg-slate-500/10 border-slate-200 dark:border-slate-800';
-      default: return '';
-    }
-  };
-
-  const translatePriority = (p: string) => {
-    switch (p) {
-      case 'critical': return 'crítica';
-      case 'high': return 'alta';
-      case 'medium': return 'média';
-      case 'low': return 'baixa';
-      default: return p;
-    }
-  };
-
-  const getStatusLabel = (s: string) => {
-    switch (s) {
-      case 'pending': return 'pendente';
-      case 'in_progress': return 'em andamento';
-      case 'completed': return 'concluída';
-      case 'blocked': return 'interrompida';
-      default: return s.replace('_', ' ');
-    }
-  };
-
-  const getStatusColor = (s: string) => {
-    switch (s) {
-      case 'completed': return 'bg-emerald-500 text-white border-transparent';
-      case 'in_progress': return 'bg-amber-500 text-white border-transparent';
-      case 'pending': return 'bg-blue-500 text-white border-transparent';
-      case 'blocked': return 'bg-purple-500 text-white border-transparent';
-      default: return '';
-    }
   };
 
   const handleClosePanel = () => {
@@ -516,85 +476,10 @@ export default function WorkspaceDetailPage() {
                       return !task.overdue;
                     });
 
-                    const renderTask = (task: any) => {
-                      const isOverdue = !!task.overdue && task.status !== 'completed' && task.status !== 'blocked';
-                      const isStandalone = !task.mapId;
-                      return (
-                        <div
-                          key={task.id}
-                          className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer"
-                          style={{
-                            backgroundColor: isOverdue ? 'rgba(254, 202, 202, 0.55)' : undefined,
-                          }}
-                          onMouseEnter={e => { if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(254, 202, 202, 0.75)'; else (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgb(248 250 252)'; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? 'rgba(254, 202, 202, 0.55)' : ''; }}
-                          onClick={() => openTaskItem(task)}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-xl font-bold text-foreground mb-1">{task.cardTitle || task.title}</h3>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                              <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${getStatusColor(task.status)}`}>
-                                {getStatusLabel(task.status)}
-                              </Badge>
-                              <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
-                                <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(task.priority)}
-                              </Badge>
-                              {isStandalone && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase">
-                                  Avulsa
-                                </span>
-                              )}
-                              {task.mapName && (
-                                <div className="flex items-center gap-1.5">
-                                  <Map className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="truncate max-w-[180px]">{task.mapName}</span>
-                                </div>
-                              )}
-                              {task.dueDate && (
-                                <div className="flex items-center gap-1.5">
-                                  <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
-                                  <span>{format(new Date(task.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-1.5">
-                                {task.assigneeAvatarUrl ? (
-                                  <img
-                                    src={task.assigneeAvatarUrl}
-                                    alt={task.assigneeName ?? ""}
-                                    className="w-4 h-4 rounded-full object-cover shrink-0"
-                                  />
-                                ) : (
-                                  <User className="w-3.5 h-3.5 shrink-0" />
-                                )}
-                                {task.assigneeName ? (
-                                  <span>{task.assigneeName}</span>
-                                ) : (
-                                  <span className="lowercase">Sem responsável</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-lg bg-background shadow-sm hover:border-primary hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                              onClick={(e) => { e.stopPropagation(); openTaskItem(task); }}
-                            >
-                              <Pencil className="w-3.5 h-3.5 mr-1.5" /> <span className="lowercase">Editar</span>
-                            </Button>
-                            {!isStandalone && (
-                              <Link href={`/workspaces/${task.workspaceId}/maps/${task.mapId}`}>
-                                <Button variant="ghost" size="sm" className="rounded-lg text-muted-foreground hover:text-primary transition-colors text-xs px-2 h-7 lowercase">
-                                  Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
-                                </Button>
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    };
+                    const detailMembers: TaskListItemMember[] = (workspaceMembers ?? []).map(m => ({
+                      userId: m.userId,
+                      name: m.user.name,
+                    }));
 
                     return (
                       <div className="flex flex-col gap-6">
@@ -603,7 +488,18 @@ export default function WorkspaceDetailPage() {
                             <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Pra hoje</p>
                             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                               <div className="divide-y divide-border/50">
-                                {todayTasks.map(renderTask)}
+                                {todayTasks.map(task => (
+                                  <TaskListItem
+                                    key={task.id}
+                                    task={task}
+                                    members={detailMembers}
+                                    invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
+                                    onOpenDetail={openTaskItem}
+                                    showEditButton
+                                    showMapLink
+                                    showMapName
+                                  />
+                                ))}
                               </div>
                             </div>
                           </div>
@@ -613,7 +509,18 @@ export default function WorkspaceDetailPage() {
                             <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Próximas</p>
                             <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                               <div className="divide-y divide-border/50">
-                                {upcomingTasks.map(renderTask)}
+                                {upcomingTasks.map(task => (
+                                  <TaskListItem
+                                    key={task.id}
+                                    task={task}
+                                    members={detailMembers}
+                                    invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
+                                    onOpenDetail={openTaskItem}
+                                    showEditButton
+                                    showMapLink
+                                    showMapName
+                                  />
+                                ))}
                               </div>
                             </div>
                           </div>

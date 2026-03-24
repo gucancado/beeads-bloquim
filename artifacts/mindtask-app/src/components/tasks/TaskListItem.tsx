@@ -1,0 +1,481 @@
+import { useState, useRef, useCallback, useEffect } from "react";
+import { format } from "date-fns";
+import { Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User, ArrowRight, Pencil } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Link } from "wouter";
+import { customFetch } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+
+export interface TaskListItemMember {
+  userId: string;
+  name: string;
+  avatarUrl?: string | null;
+}
+
+export interface TaskListItemData {
+  id: string;
+  workspaceId: string;
+  title: string;
+  cardTitle?: string | null;
+  status: string;
+  priority: string;
+  dueDate?: string | null;
+  overdue?: boolean;
+  assignedTo?: string | null;
+  assigneeName?: string | null;
+  assigneeAvatarUrl?: string | null;
+  mapId?: string | null;
+  mapName?: string | null;
+  cardId?: string | null;
+  workspaceName?: string | null;
+}
+
+interface Props {
+  task: TaskListItemData;
+  members?: TaskListItemMember[];
+  invalidateQueryKeys?: string[][];
+  onOpenDetail?: (task: TaskListItemData) => void;
+  showWorkspaceName?: boolean;
+  showMapLink?: boolean;
+  showEditButton?: boolean;
+  showMapName?: boolean;
+}
+
+const STATUS_OPTIONS = [
+  { value: "pending",     label: "pendente",      color: "bg-blue-500 text-white border-transparent" },
+  { value: "in_progress", label: "em andamento",  color: "bg-amber-500 text-white border-transparent" },
+  { value: "blocked",     label: "interrompida",  color: "bg-purple-500 text-white border-transparent" },
+  { value: "completed",   label: "concluída",     color: "bg-emerald-500 text-white border-transparent" },
+];
+
+function getStatusColor(s: string) {
+  return STATUS_OPTIONS.find(o => o.value === s)?.color ?? "";
+}
+
+function getStatusLabel(s: string) {
+  return STATUS_OPTIONS.find(o => o.value === s)?.label ?? s.replace("_", " ");
+}
+
+function getPriorityColor(p: string) {
+  switch (p) {
+    case "critical": return "text-red-500 bg-red-500/10 border-red-200 dark:border-red-900/50";
+    case "high":     return "text-orange-500 bg-orange-500/10 border-orange-200 dark:border-orange-900/50";
+    case "medium":   return "text-blue-500 bg-blue-500/10 border-blue-200 dark:border-blue-900/50";
+    case "low":      return "text-slate-500 bg-slate-500/10 border-slate-200 dark:border-slate-800";
+    default: return "";
+  }
+}
+
+function translatePriority(p: string) {
+  switch (p) {
+    case "critical": return "crítica";
+    case "high":     return "alta";
+    case "medium":   return "média";
+    case "low":      return "baixa";
+    default: return p;
+  }
+}
+
+export function TaskListItem({
+  task,
+  members = [],
+  invalidateQueryKeys = [],
+  onOpenDetail,
+  showWorkspaceName = false,
+  showMapLink = false,
+  showEditButton = false,
+  showMapName = false,
+}: Props) {
+  const queryClient = useQueryClient();
+
+  const [localTask, setLocalTask] = useState<TaskListItemData>(task);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState(task.cardTitle || task.title);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [savingField, setSavingField] = useState<string | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+  const assigneeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLocalTask(task);
+    if (!editingTitle) {
+      setTitleValue(task.cardTitle || task.title);
+    }
+  }, [task, editingTitle]);
+
+  const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked";
+  const isLinkedToCard = !!(task.cardId && task.mapId);
+
+  const invalidate = useCallback(() => {
+    invalidateQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
+  }, [invalidateQueryKeys, queryClient]);
+
+  const patchTask = useCallback(async (body: Record<string, any>) => {
+    try {
+      const updated = await customFetch(`/api/workspaces/${task.workspaceId}/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      setLocalTask(prev => ({ ...prev, ...updated }));
+      invalidate();
+    } catch (err) {
+      console.error("Inline edit failed:", err);
+    }
+  }, [task.workspaceId, task.id, invalidate]);
+
+  const patchStatus = useCallback(async (newStatus: string) => {
+    try {
+      const updated = await customFetch(`/api/workspaces/${task.workspaceId}/tasks/${task.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setLocalTask(prev => ({ ...prev, ...updated }));
+      invalidate();
+    } catch (err) {
+      console.error("Inline status update failed:", err);
+    }
+  }, [task.workspaceId, task.id, invalidate]);
+
+  const updateCardTitle = useCallback(async (newTitle: string) => {
+    try {
+      await customFetch(`/api/workspaces/${task.workspaceId}/maps/${task.mapId}/cards/${task.cardId}`, {
+        method: "PUT",
+        body: JSON.stringify({ title: newTitle }),
+      });
+      setLocalTask(prev => ({ ...prev, cardTitle: newTitle, title: newTitle }));
+      invalidate();
+    } catch (err) {
+      console.error("Inline card title edit failed:", err);
+    }
+  }, [task.workspaceId, task.mapId, task.cardId, invalidate]);
+
+  const handleTitleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTitleValue(localTask.cardTitle || localTask.title);
+    setEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.focus(), 0);
+  };
+
+  const handleTitleSave = () => {
+    setEditingTitle(false);
+    const trimmed = titleValue.trim();
+    if (!trimmed || trimmed === (localTask.cardTitle || localTask.title)) return;
+    setSavingField("title");
+    if (isLinkedToCard) {
+      updateCardTitle(trimmed).finally(() => setSavingField(null));
+    } else {
+      patchTask({ title: trimmed }).finally(() => setSavingField(null));
+    }
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleTitleSave();
+    if (e.key === "Escape") { setEditingTitle(false); setTitleValue(localTask.cardTitle || localTask.title); }
+  };
+
+  const handleStatusClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStatusOpen(v => !v);
+    setAssigneeOpen(false);
+  };
+
+  const handleStatusSelect = (val: string) => {
+    setStatusOpen(false);
+    setLocalTask(prev => ({ ...prev, status: val }));
+    setSavingField("status");
+    patchStatus(val).finally(() => setSavingField(null));
+  };
+
+  const handleAssigneeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (members.length === 0) return;
+    setAssigneeOpen(v => !v);
+    setStatusOpen(false);
+  };
+
+  const handleAssigneeSelect = (memberId: string | null) => {
+    const member = members.find(m => m.userId === memberId) ?? null;
+    setAssigneeOpen(false);
+    setLocalTask(prev => ({
+      ...prev,
+      assignedTo: memberId,
+      assigneeName: member?.name ?? null,
+      assigneeAvatarUrl: member?.avatarUrl ?? null,
+    }));
+    setSavingField("assignee");
+    patchTask({ assignedTo: memberId }).finally(() => setSavingField(null));
+  };
+
+  const handleDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    const val = e.target.value;
+    setSavingField("dueDate");
+    patchTask({ dueDate: val || null }).finally(() => setSavingField(null));
+  };
+
+  const handleRowClick = () => {
+    if (editingTitle || statusOpen || assigneeOpen) return;
+    onOpenDetail?.(localTask);
+  };
+
+  return (
+    <div
+      className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer relative"
+      style={{
+        backgroundColor: isOverdue ? "rgba(254, 202, 202, 0.55)" : undefined,
+      }}
+      onMouseEnter={e => {
+        if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = "rgba(254, 202, 202, 0.75)";
+        else (e.currentTarget as HTMLDivElement).style.backgroundColor = "rgb(248 250 252)";
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? "rgba(254, 202, 202, 0.55)" : "";
+      }}
+      onClick={handleRowClick}
+    >
+      <div className="flex-1 min-w-0">
+        {editingTitle ? (
+          <input
+            ref={titleInputRef}
+            value={titleValue}
+            onChange={e => setTitleValue(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={handleTitleKeyDown}
+            onClick={e => e.stopPropagation()}
+            className="text-xl font-bold text-foreground w-full bg-transparent border-b-2 border-primary outline-none mb-1 pr-2"
+          />
+        ) : (
+          <h3
+            className="text-xl font-bold text-foreground mb-1 cursor-text hover:underline decoration-dotted"
+            onClick={handleTitleClick}
+            title="Clique para editar o título"
+          >
+            {localTask.cardTitle || localTask.title}
+          </h3>
+        )}
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 text-sm text-muted-foreground">
+          {/* Status badge — inline editable */}
+          <div className="relative" ref={statusRef} onClick={e => e.stopPropagation()}>
+            <Badge
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity ${getStatusColor(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+              onClick={handleStatusClick}
+              title="Clique para alterar status"
+            >
+              {getStatusLabel(localTask.status)}
+            </Badge>
+            {statusOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]">
+                {STATUS_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
+                  >
+                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Priority badge — readonly per spec */}
+          <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(localTask.priority)}`}>
+            <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
+          </Badge>
+
+          {/* Workspace name (my-tasks page) */}
+          {showWorkspaceName && localTask.workspaceName && (
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
+            </div>
+          )}
+
+          {/* Map name */}
+          {showMapName && localTask.mapName && (
+            <div className="flex items-center gap-1.5">
+              <MapIcon className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate max-w-[180px]">{localTask.mapName}</span>
+            </div>
+          )}
+
+          {/* Due date — inline editable */}
+          <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+            <CalendarIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+            <div className="relative">
+              {localTask.dueDate ? (
+                <span
+                  className={`cursor-pointer hover:underline decoration-dotted ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                  title="Clique para alterar data"
+                >
+                  {format(new Date(localTask.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}
+                </span>
+              ) : (
+                <span className="text-muted-foreground/50 text-xs cursor-pointer hover:text-muted-foreground" title="Definir prazo">—</span>
+              )}
+              <input
+                type="date"
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+                onChange={handleDueDateChange}
+                title="Alterar prazo"
+              />
+            </div>
+          </div>
+
+          {/* Assignee — inline editable (detail.tsx uses inline display) */}
+          {!showWorkspaceName && (
+            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()} ref={assigneeRef}>
+              <div
+                className={`flex items-center gap-1.5 cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
+                onClick={handleAssigneeClick}
+                title={members.length > 0 ? "Clique para alterar responsável" : undefined}
+              >
+                {localTask.assigneeAvatarUrl ? (
+                  <img
+                    src={localTask.assigneeAvatarUrl}
+                    alt={localTask.assigneeName ?? ""}
+                    className="w-4 h-4 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <User className="w-3.5 h-3.5 shrink-0" />
+                )}
+                {localTask.assigneeName ? (
+                  <span>{localTask.assigneeName}</span>
+                ) : (
+                  <span className="lowercase">Sem responsável</span>
+                )}
+              </div>
+
+              {assigneeOpen && members.length > 0 && (
+                <div className="absolute left-6 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
+                  >
+                    <User className="w-3 h-3" /> Sem responsável
+                  </button>
+                  {members.map(m => (
+                    <button
+                      key={m.userId}
+                      onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                    >
+                      {m.avatarUrl ? (
+                        <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                      ) : (
+                        <User className="w-3 h-3" />
+                      )}
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Standalone badge (detail page) */}
+          {!task.mapId && !showWorkspaceName && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase">
+              Avulsa
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+        {showWorkspaceName ? (
+          /* my-tasks layout: avatar + optional map link */
+          <>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
+                    onClick={handleAssigneeClick}
+                    title={members.length > 0 ? "Clique para alterar responsável" : undefined}
+                  >
+                    {localTask.assigneeAvatarUrl ? (
+                      <img
+                        src={localTask.assigneeAvatarUrl}
+                        alt={localTask.assigneeName ?? ""}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <User className="w-6 h-6 shrink-0" />
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {localTask.assigneeName ?? "Sem responsável"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {assigneeOpen && members.length > 0 && (
+              <div className="absolute right-6 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
+                >
+                  <User className="w-3 h-3" /> Sem responsável
+                </button>
+                {members.map(m => (
+                  <button
+                    key={m.userId}
+                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                  >
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                    ) : (
+                      <User className="w-3 h-3" />
+                    )}
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {localTask.mapId && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}>
+                      <MapIcon className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>ver plano</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </>
+        ) : (
+          /* detail.tsx layout: edit button + map link */
+          <>
+            {showEditButton && (
+              <button
+                className="rounded-lg bg-background border border-border shadow-sm hover:border-primary hover:text-primary text-muted-foreground transition-colors opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1 text-xs font-medium"
+                onClick={(e) => { e.stopPropagation(); onOpenDetail?.(localTask); }}
+              >
+                <Pencil className="w-3.5 h-3.5" /> <span className="lowercase">Editar</span>
+              </button>
+            )}
+            {showMapLink && localTask.mapId && (
+              <Link href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}>
+                <button className="rounded-lg text-muted-foreground hover:text-primary text-xs px-2 h-7 lowercase flex items-center gap-1 hover:bg-muted transition-colors">
+                  Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
+                </button>
+              </Link>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
