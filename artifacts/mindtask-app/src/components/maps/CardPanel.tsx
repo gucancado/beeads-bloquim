@@ -157,7 +157,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose, onDeleteCard }:
         setTaskPriority(card.task.priority);
         setTaskStatus(card.task.status);
         setTaskAssignee(card.task.assignedTo || "unassigned");
-        setTaskDueDate(card.task.dueDate ? format(new Date(card.task.dueDate), "yyyy-MM-dd") : "");
+        setTaskDueDate(card.task.dueDate ? card.task.dueDate.slice(0, 10) : "");
       } else {
         setTaskTitle(card.title);
         setTaskPriority("medium");
@@ -244,7 +244,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose, onDeleteCard }:
           title: taskTitle,
           priority: priority as any,
           assignedTo: assignedTo === "unassigned" ? null : assignedTo,
-          dueDate: dueDate ? new Date(dueDate + "T00:00:00").toISOString() : null,
+          dueDate: dueDate ? dueDate + "T12:00:00.000Z" : null,
         }
       },
       { onSuccess: () => { invalidate(); } }

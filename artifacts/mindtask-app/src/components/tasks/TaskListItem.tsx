@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User, ArrowRight, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -93,11 +94,40 @@ export function TaskListItem({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(task.cardTitle || task.title);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const titleInputRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const assigneeRef = useRef<HTMLDivElement>(null);
+  const dueDateInputRef = useRef<HTMLInputElement>(null);
+
+  const closeAllDropdowns = useCallback(() => {
+    setStatusOpen(false);
+    setPriorityOpen(false);
+    setAssigneeOpen(false);
+  }, []);
+
+  const anyDropdownOpen = statusOpen || priorityOpen || assigneeOpen;
+
+  useEffect(() => {
+    if (!anyDropdownOpen) return;
+    const close = () => closeAllDropdowns();
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [anyDropdownOpen, closeAllDropdowns]);
+
+  const openDropdownAt = (e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const top = rect.bottom + 4;
+    const left = Math.min(rect.left, window.innerWidth - 180);
+    setDropdownPos({ top: Math.min(top, window.innerHeight - 200), left: Math.max(4, left) });
+  };
 
   useEffect(() => {
     setLocalTask(task);
@@ -111,7 +141,13 @@ export function TaskListItem({
 
   const invalidate = useCallback(() => {
     invalidateQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
-  }, [invalidateQueryKeys, queryClient]);
+    if (task.mapId) {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${task.workspaceId}/maps/${task.mapId}`] });
+      if (task.cardId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${task.workspaceId}/maps/${task.mapId}/cards/${task.cardId}`] });
+      }
+    }
+  }, [invalidateQueryKeys, queryClient, task.mapId, task.cardId, task.workspaceId]);
 
   const patchTask = useCallback(async (body: Record<string, any>) => {
     try {
@@ -178,8 +214,25 @@ export function TaskListItem({
 
   const handleStatusClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    openDropdownAt(e);
     setStatusOpen(v => !v);
     setAssigneeOpen(false);
+    setPriorityOpen(false);
+  };
+
+  const handlePriorityClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openDropdownAt(e);
+    setPriorityOpen(v => !v);
+    setStatusOpen(false);
+    setAssigneeOpen(false);
+  };
+
+  const handlePrioritySelect = (val: string) => {
+    setPriorityOpen(false);
+    setLocalTask(prev => ({ ...prev, priority: val }));
+    setSavingField("priority");
+    patchTask({ priority: val }).finally(() => setSavingField(null));
   };
 
   const handleStatusSelect = (val: string) => {
@@ -192,8 +245,10 @@ export function TaskListItem({
   const handleAssigneeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (members.length === 0) return;
+    openDropdownAt(e);
     setAssigneeOpen(v => !v);
     setStatusOpen(false);
+    setPriorityOpen(false);
   };
 
   const handleAssigneeSelect = (memberId: string | null) => {
@@ -217,7 +272,7 @@ export function TaskListItem({
   };
 
   const handleRowClick = () => {
-    if (editingTitle || statusOpen || assigneeOpen) return;
+    if (editingTitle || statusOpen || priorityOpen || assigneeOpen) return;
     onOpenDetail?.(localTask);
   };
 
@@ -259,7 +314,7 @@ export function TaskListItem({
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 text-sm text-muted-foreground">
           {/* Status badge — inline editable */}
-          <div className="relative" ref={statusRef} onClick={e => e.stopPropagation()}>
+          <div ref={statusRef} onClick={e => e.stopPropagation()}>
             <Badge
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity ${getStatusColor(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
               onClick={handleStatusClick}
@@ -267,65 +322,106 @@ export function TaskListItem({
             >
               {getStatusLabel(localTask.status)}
             </Badge>
-            {statusOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]">
-                {STATUS_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                  >
-                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+            {statusOpen && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+                <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                  {STATUS_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
+                    >
+                      <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </>,
+              document.body
             )}
           </div>
 
-          {/* Priority badge — readonly per spec */}
-          <Badge variant="outline" className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getPriorityColor(localTask.priority)}`}>
-            <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
-          </Badge>
+          {/* Priority badge — inline editable */}
+          <div onClick={e => e.stopPropagation()}>
+            <Badge
+              variant="outline"
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border cursor-pointer select-none transition-opacity ${getPriorityColor(localTask.priority)} ${savingField === "priority" ? "opacity-60" : ""}`}
+              onClick={handlePriorityClick}
+              title="Clique para alterar prioridade"
+            >
+              <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
+            </Badge>
+            {priorityOpen && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+                <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                  {[
+                    { value: "critical", label: "crítica" },
+                    { value: "high",     label: "alta" },
+                    { value: "medium",   label: "média" },
+                    { value: "low",      label: "baixa" },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={(e) => { e.stopPropagation(); handlePrioritySelect(opt.value); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.priority === opt.value ? "opacity-60" : ""}`}
+                    >
+                      <Flag className={`w-3 h-3 ${getPriorityColor(opt.value).split(" ")[0]}`} />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
 
           {/* Workspace name (my-tasks page) */}
           {showWorkspaceName && localTask.workspaceName && (
-            <div className="flex items-center gap-1.5">
+            <Link
+              href={`/workspaces/${localTask.workspaceId}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 hover:underline decoration-dotted"
+            >
               <Building2 className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
-            </div>
+            </Link>
           )}
 
           {/* Map name */}
           {showMapName && localTask.mapName && (
-            <div className="flex items-center gap-1.5">
+            <Link
+              href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 hover:underline decoration-dotted"
+            >
               <MapIcon className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate max-w-[180px]">{localTask.mapName}</span>
-            </div>
+            </Link>
           )}
 
           {/* Due date — inline editable */}
-          <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 relative cursor-pointer" onClick={e => { e.stopPropagation(); try { dueDateInputRef.current?.showPicker?.(); } catch {} }}>
             <CalendarIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-            <div className="relative">
-              {localTask.dueDate ? (
-                <span
-                  className={`cursor-pointer hover:underline decoration-dotted ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                  title="Clique para alterar data"
-                >
-                  {format(new Date(localTask.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}
-                </span>
-              ) : (
-                <span className="text-muted-foreground/50 text-xs cursor-pointer hover:text-muted-foreground" title="Definir prazo">—</span>
-              )}
-              <input
-                type="date"
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-                onChange={handleDueDateChange}
-                title="Alterar prazo"
-              />
-            </div>
+            {localTask.dueDate ? (
+              <span
+                className={`cursor-pointer hover:underline decoration-dotted ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                title="Clique para alterar data"
+              >
+                {format(new Date(localTask.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}
+              </span>
+            ) : (
+              <span className="text-muted-foreground/50 text-xs cursor-pointer hover:text-muted-foreground" title="Definir prazo">—</span>
+            )}
+            <input
+              ref={dueDateInputRef}
+              type="date"
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+              onChange={handleDueDateChange}
+              title="Alterar prazo"
+            />
           </div>
 
           {/* Assignee — inline editable (detail.tsx uses inline display) */}
@@ -352,29 +448,33 @@ export function TaskListItem({
                 )}
               </div>
 
-              {assigneeOpen && members.length > 0 && (
-                <div className="absolute left-6 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-                  >
-                    <User className="w-3 h-3" /> Sem responsável
-                  </button>
-                  {members.map(m => (
+              {assigneeOpen && members.length > 0 && createPortal(
+                <>
+                  <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+                  <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
                     <button
-                      key={m.userId}
-                      onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                      onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
                     >
-                      {m.avatarUrl ? (
-                        <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                      ) : (
-                        <User className="w-3 h-3" />
-                      )}
-                      {m.name}
+                      <User className="w-3 h-3" /> Sem responsável
                     </button>
-                  ))}
-                </div>
+                    {members.map(m => (
+                      <button
+                        key={m.userId}
+                        onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                      >
+                        {m.avatarUrl ? (
+                          <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                        ) : (
+                          <User className="w-3 h-3" />
+                        )}
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </>,
+                document.body
               )}
             </div>
           )}
@@ -417,43 +517,35 @@ export function TaskListItem({
               </Tooltip>
             </TooltipProvider>
 
-            {assigneeOpen && members.length > 0 && (
-              <div className="absolute right-6 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-                >
-                  <User className="w-3 h-3" /> Sem responsável
-                </button>
-                {members.map(m => (
+            {assigneeOpen && members.length > 0 && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+                <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
                   <button
-                    key={m.userId}
-                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
                   >
-                    {m.avatarUrl ? (
-                      <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                    ) : (
-                      <User className="w-3 h-3" />
-                    )}
-                    {m.name}
+                    <User className="w-3 h-3" /> Sem responsável
                   </button>
-                ))}
-              </div>
+                  {members.map(m => (
+                    <button
+                      key={m.userId}
+                      onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                    >
+                      {m.avatarUrl ? (
+                        <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                      ) : (
+                        <User className="w-3 h-3" />
+                      )}
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </>,
+              document.body
             )}
 
-            {localTask.mapId && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}>
-                      <MapIcon className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent>ver plano</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
           </>
         ) : (
           /* detail.tsx layout: edit button + map link */

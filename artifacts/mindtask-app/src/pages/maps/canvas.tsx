@@ -6,7 +6,7 @@ import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
 import { CardPanel } from "@/components/maps/CardPanel";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, customFetch, CreateConnectionRequest } from "@workspace/api-client-react";
+import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -522,10 +522,21 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     setSelectedCardId(null);
   }, []);
 
+  const deleteCardMut = useDeleteCard();
   const handleDeleteCard = useCallback((cardId: string) => {
     setNodes(prev => prev.filter(n => n.id !== cardId));
     setEdges(prev => prev.filter(e => e.source !== cardId && e.target !== cardId));
-  }, [setNodes, setEdges]);
+    deleteCardMut.mutate(
+      { workspaceId, mapId, cardId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
+        },
+      }
+    );
+  }, [setNodes, setEdges, deleteCardMut, workspaceId, mapId, queryClient]);
 
   if (isLoading || !mapData) {
     return (
@@ -579,6 +590,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             connectionMode={ConnectionMode.Loose}
             fitView
             fitViewOptions={{ padding: 0.2 }}
+            onNodesDelete={(deletedNodes) => {
+              deletedNodes.forEach(n => handleDeleteCard(n.id));
+            }}
             deleteKeyCode="Delete"
             className="w-full h-full"
           >

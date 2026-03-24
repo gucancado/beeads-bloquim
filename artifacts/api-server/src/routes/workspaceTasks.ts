@@ -7,6 +7,24 @@ import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 
+function parseDateNoon(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const dateOnly = value.slice(0, 10);
+  return new Date(dateOnly + "T12:00:00.000Z");
+}
+
+function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "no_task" {
+  if (overdue && status !== "completed" && status !== "blocked") return "overdue";
+  return status as any;
+}
+
+async function syncCardVisual(taskId: string, status: string, overdue: boolean) {
+  const visual = toVisualStatus(status, overdue);
+  await db.update(cards)
+    .set({ statusVisual: visual, updatedAt: new Date() })
+    .where(eq(cards.taskId, taskId));
+}
+
 const router: IRouter = Router({ mergeParams: true });
 
 router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -122,7 +140,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
 
   const { title, description, assignedTo, dueDate, priority } = parsed.data;
 
-  const dueDateValue = dueDate ? new Date(dueDate) : null;
+  const dueDateValue = parseDateNoon(dueDate);
   const overdueValue = computeOverdue(dueDateValue, "pending");
 
   const [task] = await db
@@ -195,7 +213,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
   if ("assignedTo" in parsed.data) updateData.assignedTo = parsed.data.assignedTo ?? null;
-  if ("dueDate" in parsed.data) updateData.dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate as string) : null;
+  if ("dueDate" in parsed.data) updateData.dueDate = parseDateNoon(parsed.data.dueDate as string);
   if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
 
   const effectiveDueDate = "dueDate" in updateData ? updateData.dueDate : existing.dueDate;
@@ -203,6 +221,8 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   updateData.overdue = computeOverdue(effectiveDueDate, effectiveStatus);
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+
+  await syncCardVisual(taskId, updated.status, !!updated.overdue);
 
   const assignee = updated.assignedTo
     ? await db.select({ name: users.name }).from(users).where(eq(users.id, updated.assignedTo)).limit(1)
@@ -237,6 +257,9 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
   updateData.overdue = computeOverdue(existing.dueDate, status);
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+
+  await syncCardVisual(taskId, updated.status, !!updated.overdue);
+
   res.json(updated);
 });
 

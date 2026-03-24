@@ -1,4 +1,5 @@
-import { memo, useRef, useLayoutEffect, useState, useEffect } from 'react';
+import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
 import { Maximize2, Calendar, User, Plus } from 'lucide-react';
@@ -38,10 +39,10 @@ interface MindMapNodeProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'pending', label: 'pendente' },
-  { value: 'in_progress', label: 'em andamento' },
-  { value: 'completed', label: 'concluída' },
-  { value: 'blocked', label: 'interrompida' },
+  { value: 'pending', label: 'pendente', dot: 'bg-blue-500' },
+  { value: 'in_progress', label: 'em andamento', dot: 'bg-amber-500' },
+  { value: 'blocked', label: 'interrompida', dot: 'bg-purple-500' },
+  { value: 'completed', label: 'concluída', dot: 'bg-emerald-500' },
 ];
 
 function statusLabel(s: string) {
@@ -85,12 +86,12 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   }, [plainDescription, maxLines]);
 
   const dueDateStr = data.taskDueDate
-    ? format(new Date(data.taskDueDate), 'dd/MM/yy')
+    ? format(new Date(data.taskDueDate.slice(0, 10) + 'T00:00:00'), 'dd/MM/yy')
     : null;
 
   const isOverdue =
     data.taskDueDate &&
-    new Date(data.taskDueDate) < new Date() &&
+    new Date(data.taskDueDate.slice(0, 10) + 'T23:59:59') < new Date() &&
     data.statusVisual !== 'completed';
 
   const hasAssignee = !!data.taskAssigneeName;
@@ -98,6 +99,15 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   const queryClient = useQueryClient();
   const mapQueryKey = [`/api/workspaces/${workspaceId}/maps/${mapId}`];
+
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: mapQueryKey });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${id}`] });
+    if (data.taskId) {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${data.taskId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
+    }
+  }, [queryClient, mapQueryKey, workspaceId, mapId, id, data.taskId]);
 
   const updateCardMut = useUpdateCard();
   const updateTaskStatusMut = useUpdateTaskStatus();
@@ -110,10 +120,22 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const [titleValue, setTitleValue] = useState(data.title);
   const [editingAssignee, setEditingAssignee] = useState(false);
   const [editingStatus, setEditingStatus] = useState(false);
+  const [statusDropdownPos, setStatusDropdownPos] = useState({ top: 0, left: 0 });
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateValue, setDueDateValue] = useState(
     data.taskDueDate ? data.taskDueDate.split('T')[0] : '',
   );
+
+  useEffect(() => {
+    if (!editingStatus) return;
+    const close = () => setEditingStatus(false);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [editingStatus]);
 
   useEffect(() => {
     setTitleValue(data.title);
@@ -130,7 +152,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     data.onInlineUpdate?.(id, { title: trimmed });
     updateCardMut.mutate(
       { workspaceId, mapId, cardId: id, data: { title: trimmed } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: mapQueryKey }) },
+      { onSuccess: invalidateAll },
     );
   };
 
@@ -141,7 +163,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     if (data.taskId) {
       updateTaskStatusMut.mutate(
         { workspaceId, taskId: data.taskId, data: { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'blocked' } },
-        { onSuccess: () => queryClient.invalidateQueries({ queryKey: mapQueryKey }) },
+        { onSuccess: invalidateAll },
       );
     }
   };
@@ -158,8 +180,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     });
     if (data.taskId) {
       updateTaskDetailsMut.mutate(
-        { workspaceId, taskId: data.taskId, data: { assignedTo: userId } },
-        { onSuccess: () => queryClient.invalidateQueries({ queryKey: mapQueryKey }) },
+        { workspaceId, mapId, cardId: id, data: { assignedTo: userId } },
+        { onSuccess: invalidateAll },
       );
     }
   };
@@ -171,20 +193,20 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         data.onInlineUpdate?.(id, { taskDueDate: null });
         if (data.taskId) {
           updateTaskDetailsMut.mutate(
-            { workspaceId, taskId: data.taskId, data: { dueDate: null } },
-            { onSuccess: () => queryClient.invalidateQueries({ queryKey: mapQueryKey }) },
+            { workspaceId, mapId, cardId: id, data: { dueDate: null as any } },
+            { onSuccess: invalidateAll },
           );
         }
       }
       return;
     }
-    const isoDate = new Date(dueDateValue).toISOString();
-    if (isoDate === data.taskDueDate) return;
+    const isoDate = dueDateValue + "T12:00:00.000Z";
+    if (data.taskDueDate && data.taskDueDate.slice(0, 10) === dueDateValue) return;
     data.onInlineUpdate?.(id, { taskDueDate: isoDate });
     if (data.taskId) {
       updateTaskDetailsMut.mutate(
-        { workspaceId, taskId: data.taskId, data: { dueDate: new Date(dueDateValue) } },
-        { onSuccess: () => queryClient.invalidateQueries({ queryKey: mapQueryKey }) },
+        { workspaceId, mapId, cardId: id, data: { dueDate: isoDate } },
+        { onSuccess: invalidateAll },
       );
     }
   };
@@ -404,30 +426,41 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
         {/* Status badge */}
         <div className="mt-3 pt-3 border-t flex items-center gap-2 nodrag">
-          {hasTask && editingStatus ? (
-            <select
-              autoFocus
-              className="text-[10px] font-semibold tracking-wider bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer lowercase"
-              defaultValue={data.statusVisual}
-              onBlur={() => setEditingStatus(false)}
-              onChange={e => handleStatusChange(e.target.value)}
-              onClick={e => e.stopPropagation()}
-            >
-              {STATUS_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          ) : (
-            <div
-              className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
-              title={hasTask ? 'Clique para alterar status' : undefined}
-              onClick={(e) => { if (hasTask) { e.stopPropagation(); setEditingStatus(true); } }}
-            >
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-              <span className="text-[10px] font-semibold tracking-wider text-muted-foreground lowercase">
-                {statusLabel(data.statusVisual)}
-              </span>
-            </div>
+          <div
+            className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
+            title={hasTask ? 'Clique para alterar status' : undefined}
+            onClick={(e) => {
+              if (!hasTask) return;
+              e.stopPropagation();
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
+              const left = Math.max(4, Math.min(rect.left, window.innerWidth - 180));
+              setStatusDropdownPos({ top, left });
+              setEditingStatus(v => !v);
+            }}
+          >
+            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+            <span className="text-[10px] font-semibold tracking-wider text-muted-foreground lowercase">
+              {statusLabel(data.statusVisual)}
+            </span>
+          </div>
+          {editingStatus && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setEditingStatus(false); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: statusDropdownPos.top, left: statusDropdownPos.left }}>
+                {STATUS_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handleStatusChange(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${data.statusVisual === opt.value ? 'opacity-60' : ''}`}
+                  >
+                    <span className={`inline-block w-2 h-2 rounded-full ${opt.dot}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
           )}
         </div>
       </div>

@@ -151,7 +151,7 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     return;
   }
 
-  const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined;
+  const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate.slice(0, 10) + "T12:00:00.000Z") : undefined;
   const overdue = computeOverdue(dueDate ?? null, "pending");
   const visual = toVisualStatus("pending", overdue);
 
@@ -352,7 +352,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
   let resolvedDueDate: Date | null = currentTask?.dueDate ?? null;
 
   if (parsed.data.dueDate !== undefined) {
-    resolvedDueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
+    resolvedDueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate.slice(0, 10) + "T12:00:00.000Z") : null;
     updateData.dueDate = resolvedDueDate;
   }
 
