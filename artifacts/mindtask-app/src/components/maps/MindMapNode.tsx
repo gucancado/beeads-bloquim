@@ -294,12 +294,22 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 <div className="flex justify-center mt-0.5">
                   <button
                     className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors nodrag"
-                    onClick={(e) => { e.stopPropagation(); setMaxLines(prev => prev + 10); }}
+                    onClick={(e) => { e.stopPropagation(); setMaxLines(9999); }}
                   >
                     ver mais
                   </button>
                 </div>
               </>
+            )}
+            {!isTruncated && maxLines > 3 && (
+              <div className="flex justify-center mt-0.5">
+                <button
+                  className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors nodrag"
+                  onClick={(e) => { e.stopPropagation(); setMaxLines(3); }}
+                >
+                  ver menos
+                </button>
+              </div>
             )}
           </div>
         )}
