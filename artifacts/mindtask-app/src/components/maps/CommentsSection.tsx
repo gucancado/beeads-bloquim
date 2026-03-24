@@ -138,8 +138,12 @@ function CommentCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
-            {comment.authorName.charAt(0).toUpperCase()}
+          <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0 overflow-hidden">
+            {comment.authorAvatar ? (
+              <img src={comment.authorAvatar} alt={comment.authorName} className="w-full h-full object-cover rounded-full" />
+            ) : (
+              comment.authorName.charAt(0).toUpperCase()
+            )}
           </div>
           <div className="min-w-0">
             <span className="text-xs font-semibold text-foreground truncate">{comment.authorName}</span>

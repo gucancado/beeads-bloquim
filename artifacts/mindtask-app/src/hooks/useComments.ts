@@ -5,6 +5,7 @@ export interface CommentItem {
   taskId: string;
   authorId: string;
   authorName: string;
+  authorAvatar?: string | null;
   content: string;
   hidden: boolean;
   createdAt: string;

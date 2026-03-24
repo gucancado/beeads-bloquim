@@ -364,7 +364,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
-        <DialogContent className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl">
+        <DialogContent hideClose className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl" onInteractOutside={(e) => { e.preventDefault(); saveCard(); if (card?.task) saveTaskDetails(); onClose(); }}>
           {isCardLoading || !card ? (
             <div className="flex-1 flex items-center justify-center p-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -436,26 +436,6 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                   </div>
                 </div>
 
-                {/* Assignee */}
-                {isTaskReady && (
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
-                      <User className="w-3 h-3" /> Responsável
-                    </label>
-                    <Select value={taskAssignee} onValueChange={handleAssigneeChange}>
-                      <SelectTrigger className="bg-background rounded-xl h-10">
-                        <SelectValue placeholder="Sem responsável" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned"><span className="lowercase">Sem responsável</span></SelectItem>
-                        {members?.map(m => (
-                          <SelectItem key={m.userId} value={m.userId}>{m.user.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
                 <div className="border-t pt-4">
                   {!isTaskReady ? (
                     <div className="flex items-center justify-center py-4 gap-3 text-muted-foreground">
@@ -464,7 +444,26 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose }: CardPanelProp
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                      {/* Assignee + Priority + Due Date on same line */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* Assignee */}
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
+                            <User className="w-3 h-3" /> Responsável
+                          </label>
+                          <Select value={taskAssignee} onValueChange={handleAssigneeChange}>
+                            <SelectTrigger className="bg-background rounded-xl h-10">
+                              <SelectValue placeholder="Sem responsável" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassigned"><span className="lowercase">Sem responsável</span></SelectItem>
+                              {members?.map(m => (
+                                <SelectItem key={m.userId} value={m.userId}>{m.user.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         {/* Priority */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
