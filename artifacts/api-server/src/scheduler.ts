@@ -2,11 +2,11 @@ import { db } from "@workspace/db";
 import { tasks, cards } from "@workspace/db/schema";
 import { eq, and, lt, gte, ne, isNotNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { getTodayLocal } from "./lib/overdue";
 
 export async function syncOverdueFlags() {
   const now = new Date();
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayLocal();
 
   // Mark as overdue: due_date strictly before today (date-only), not completed, not yet flagged
   const toOverdue = await db
@@ -33,7 +33,7 @@ export async function syncOverdueFlags() {
     const [full] = await db.select({ dueDate: tasks.dueDate }).from(tasks).where(eq(tasks.id, t.id)).limit(1);
     if (full?.dueDate) {
       const due = new Date(full.dueDate);
-      due.setHours(0, 0, 0, 0);
+      due.setUTCHours(0, 0, 0, 0);
       if (due < today) continue; // still overdue
     }
     await db.update(tasks).set({ overdue: false, updatedAt: now }).where(eq(tasks.id, t.id));

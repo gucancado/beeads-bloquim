@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
+import { computeOverdue } from "../lib/overdue";
 
 const router: IRouter = Router({ mergeParams: true });
 
@@ -41,16 +42,6 @@ const updateTaskDetailsSchema = z.object({
   dueDate: z.string().datetime().nullable().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
-
-function computeOverdue(dueDate: Date | null | undefined, status: string): boolean {
-  if (status === "completed") return false;
-  if (!dueDate) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  return due < today;
-}
 
 function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "no_task" {
   if (overdue && status !== "completed" && status !== "blocked") return "overdue";

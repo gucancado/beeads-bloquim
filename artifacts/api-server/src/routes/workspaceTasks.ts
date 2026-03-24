@@ -5,6 +5,7 @@ import { eq, and, isNull, or, inArray, asc, sql, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
+import { computeOverdue } from "../lib/overdue";
 
 const router: IRouter = Router({ mergeParams: true });
 
@@ -121,6 +122,9 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
 
   const { title, description, assignedTo, dueDate, priority } = parsed.data;
 
+  const dueDateValue = dueDate ? new Date(dueDate) : null;
+  const overdueValue = computeOverdue(dueDateValue, "pending");
+
   const [task] = await db
     .insert(tasks)
     .values({
@@ -128,9 +132,10 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       title,
       description: description ?? null,
       assignedTo: assignedTo ?? null,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      dueDate: dueDateValue,
       priority: priority ?? "medium",
       status: "pending",
+      overdue: overdueValue,
     })
     .returning();
 
@@ -193,6 +198,10 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   if ("dueDate" in parsed.data) updateData.dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate as string) : null;
   if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
 
+  const effectiveDueDate = "dueDate" in updateData ? updateData.dueDate : existing.dueDate;
+  const effectiveStatus = existing.status;
+  updateData.overdue = computeOverdue(effectiveDueDate, effectiveStatus);
+
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
 
   const assignee = updated.assignedTo
@@ -224,6 +233,8 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
     updatedAt: new Date(),
     completedAt: status === "completed" ? new Date() : null,
   };
+
+  updateData.overdue = computeOverdue(existing.dueDate, status);
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
   res.json(updated);
