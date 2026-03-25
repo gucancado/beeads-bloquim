@@ -11,6 +11,7 @@ import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   sourceHandle?: string;
@@ -123,7 +124,11 @@ function edgeIntersectsNodeBBox(
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
-  const { data: mapData, isLoading } = useGetMap(workspaceId, mapId);
+  const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
+    query: { refetchInterval: 3000 },
+  });
+  const editingCardIdRef = useRef<string | null>(null);
+  const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -156,12 +161,17 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     taskAssigneeAvatarUrl: string | null;
     taskDueDate: string | null;
   }>) => {
+    pendingUpdatesRef.current.set(cardId, Date.now());
     setNodes(prev => prev.map(n =>
       n.id === cardId
         ? { ...n, data: { ...n.data, ...patch } }
         : n,
     ));
   }, [setNodes]);
+
+  const handleEditingChange = useCallback((cardId: string, isEditing: boolean) => {
+    editingCardIdRef.current = isEditing ? cardId : null;
+  }, []);
 
   useEffect(() => {
     if (!mapData) return;
@@ -171,7 +181,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         id: c.id,
         type: 'mindmap',
         position: { x: c.positionX, y: c.positionY },
-        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate },
+        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
       }));
       setNodes(initialNodes);
 
@@ -189,13 +199,23 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             id: c.id,
             type: 'mindmap',
             position: { x: c.positionX, y: c.positionY },
-            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate },
+            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
           }));
+        const currentlyEditingId = editingCardIdRef.current;
+        const now = Date.now();
+        const PENDING_GUARD_MS = 5000;
+        pendingUpdatesRef.current.forEach((ts, id) => {
+          if (now - ts > PENDING_GUARD_MS) pendingUpdatesRef.current.delete(id);
+        });
         return [
           ...filtered.map(n => {
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
-            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate } };
+            const hasPendingUpdate = pendingUpdatesRef.current.has(n.id);
+            if (n.id === currentlyEditingId || hasPendingUpdate) {
+              return { ...n, data: { ...n.data, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
+            }
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
           }),
           ...newNodes,
         ];
@@ -238,7 +258,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         onSuccess: (newCard) => {
           createConnMut.mutate(
             { workspaceId, mapId, data: { sourceCardId: parentCardId, targetCardId: newCard.id, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles },
-            { onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }) }
+            {
+              onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }),
+              onError: () => {
+                toast({ title: "Erro ao criar conexão", description: "Não foi possível criar a conexão. Tente novamente.", variant: "destructive" });
+              },
+            }
           );
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           setSelectedCardId(newCard.id);
@@ -483,6 +508,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           },
           onError: () => {
             setEdges((eds) => eds.filter(e => e.id !== tempId));
+            toast({ title: "Erro ao criar conexão", description: "A conexão já existe ou ocorreu um erro de rede.", variant: "destructive" });
           },
         },
       );

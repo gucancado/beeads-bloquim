@@ -34,6 +34,7 @@ interface MindMapNodeProps {
       taskAssigneeAvatarUrl: string | null;
       taskDueDate: string | null;
     }>) => void;
+    onEditingChange?: (cardId: string, isEditing: boolean) => void;
   };
   selected: boolean;
 }
@@ -147,6 +148,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   const handleTitleBlur = () => {
     setEditingTitle(false);
+    data.onEditingChange?.(id, false);
     const trimmed = titleValue.trim();
     if (!trimmed || trimmed === data.title) return;
     data.onInlineUpdate?.(id, { title: trimmed });
@@ -162,7 +164,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     data.onInlineUpdate?.(id, { statusVisual: newStatus });
     if (data.taskId) {
       updateTaskStatusMut.mutate(
-        { workspaceId, taskId: data.taskId, data: { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'blocked' } },
+        { workspaceId, mapId, cardId: id, data: { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'blocked' } },
         { onSuccess: invalidateAll },
       );
     }
@@ -266,14 +268,14 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               value={titleValue}
               onChange={e => setTitleValue(e.target.value)}
               onBlur={handleTitleBlur}
-              onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setTitleValue(data.title); setEditingTitle(false); } }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setTitleValue(data.title); setEditingTitle(false); data.onEditingChange?.(id, false); } }}
               onClick={e => e.stopPropagation()}
             />
           ) : (
             <h3
               className="font-display font-bold text-foreground text-base leading-tight break-words pr-2 cursor-text hover:bg-muted/30 rounded px-0.5 transition-colors"
               title="Clique para editar o título"
-              onClick={(e) => { e.stopPropagation(); setEditingTitle(true); }}
+              onClick={(e) => { e.stopPropagation(); setEditingTitle(true); data.onEditingChange?.(id, true); }}
             >
               {data.title}
             </h3>

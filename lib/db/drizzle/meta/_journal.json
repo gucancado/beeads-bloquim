@@ -8,6 +8,13 @@
       "when": 1774307205432,
       "tag": "0000_hard_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774307999999,
+      "tag": "0001_add_card_connections_unique",
+      "breakpoints": true
     }
   ]
 }

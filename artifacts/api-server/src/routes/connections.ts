@@ -22,12 +22,20 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
     return;
   }
 
-  const [connection] = await db
-    .insert(cardConnections)
-    .values({ mapId: req.params.mapId, ...parsed.data })
-    .returning();
+  try {
+    const [connection] = await db
+      .insert(cardConnections)
+      .values({ mapId: req.params.mapId, ...parsed.data })
+      .returning();
 
-  res.status(201).json(connection);
+    res.status(201).json(connection);
+  } catch (err: unknown) {
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === "23505") {
+      res.status(409).json({ error: "Conexão já existe entre esses nós." });
+      return;
+    }
+    throw err;
+  }
 });
 
 router.delete("/:connectionId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {

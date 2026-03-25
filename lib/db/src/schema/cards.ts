@@ -5,6 +5,7 @@ import {
   uuid,
   doublePrecision,
   pgEnum,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -51,7 +52,9 @@ export const cardConnections = pgTable("card_connections", {
   sourceHandle: text("source_handle"),
   targetHandle: text("target_handle"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  uniqueConnection: unique("card_connections_source_target_unique").on(table.sourceCardId, table.targetCardId),
+}));
 
 export const insertCardSchema = createInsertSchema(cards).omit({
   id: true,
