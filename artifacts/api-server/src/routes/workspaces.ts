@@ -35,18 +35,29 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .from(workspaces)
     .where(inArray(workspaces.id, workspaceIds));
 
-  const taskCounts = await db
-    .select({
-      workspaceId: tasks.workspaceId,
-      status: tasks.status,
-      overdue: tasks.overdue,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(tasks)
-    .where(
-      inArray(tasks.workspaceId, workspaceIds)
-    )
-    .groupBy(tasks.workspaceId, tasks.status, tasks.overdue);
+  const [taskCounts, allMembers] = await Promise.all([
+    db
+      .select({
+        workspaceId: tasks.workspaceId,
+        status: tasks.status,
+        overdue: tasks.overdue,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(tasks)
+      .where(inArray(tasks.workspaceId, workspaceIds))
+      .groupBy(tasks.workspaceId, tasks.status, tasks.overdue),
+    db
+      .select({
+        workspaceId: workspaceMembers.workspaceId,
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(inArray(workspaceMembers.workspaceId, workspaceIds)),
+  ]);
 
   const countsByWorkspace: Record<string, { overdue: number; blocked: number; in_progress: number; pending: number; total: number; completed: number }> = {};
   for (const row of taskCounts) {
@@ -69,6 +80,29 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     }
   }
 
+  const membersByWorkspace: Record<string, Array<{ id: string; userId: string; name: string; avatarUrl: string | null; role: string }>> = {};
+  for (const m of allMembers) {
+    if (!membersByWorkspace[m.workspaceId]) {
+      membersByWorkspace[m.workspaceId] = [];
+    }
+    membersByWorkspace[m.workspaceId].push({
+      id: m.userId,
+      userId: m.userId,
+      name: m.name,
+      avatarUrl: m.avatarUrl,
+      role: m.role,
+    });
+  }
+
+  for (const wsId of Object.keys(membersByWorkspace)) {
+    membersByWorkspace[wsId].sort((a, b) => {
+      const roleOrder: Record<string, number> = { admin: 0, editor: 1, executor: 2 };
+      const roleDiff = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+      if (roleDiff !== 0) return roleDiff;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
   const result = workspaceList
     .filter((w) => {
       if (!w.hidden) return true;
@@ -79,7 +113,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .map((w) => {
       const membership = memberships.find((m) => m.workspaceId === w.id)!;
       const counts = countsByWorkspace[w.id] ?? { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
-      return { ...w, role: membership.role, taskCounts: counts };
+      const members = membersByWorkspace[w.id] ?? [];
+      return { ...w, role: membership.role, taskCounts: counts, members };
     });
 
   res.json(result);

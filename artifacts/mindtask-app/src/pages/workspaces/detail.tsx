@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember, useListWorkspaceMembers, customFetch } from "@workspace/api-client-react";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { CardPanel } from "@/components/maps/CardPanel";
@@ -18,6 +18,25 @@ import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0].toUpperCase())
+    .join("");
+}
+
+function translateRoleLabel(role: string) {
+  switch (role) {
+    case 'admin': return 'Administrador';
+    case 'editor': return 'Editor';
+    case 'executor': return 'Executor';
+    default: return role;
+  }
+}
 
 function MapCard({ map, workspaceId, isAdmin }: {
   map: { id: string; name: string; hidden: boolean; updatedAt: string };
@@ -95,6 +114,9 @@ export default function WorkspaceDetailPage() {
   const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
   const { data: workspaceMembers } = useListWorkspaceMembers(workspaceId);
@@ -122,6 +144,7 @@ export default function WorkspaceDetailPage() {
     },
   });
 
+  const isAdmin = workspace?.role === "admin";
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -165,6 +188,50 @@ export default function WorkspaceDetailPage() {
     }
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async (newName: string) => {
+      const token = localStorage.getItem("mindtask_token");
+      const res = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (!res.ok) throw new Error("Failed to rename workspace");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+    },
+    onError: () => {
+      toast({ title: "Falha ao renomear espaço", variant: "destructive" });
+    },
+  });
+
+  const startEditingTitle = useCallback(() => {
+    if (!isAdmin) return;
+    setEditTitleValue(workspace?.name ?? "");
+    setIsEditingTitle(true);
+  }, [isAdmin, workspace?.name]);
+
+  const saveTitle = useCallback(() => {
+    if (!isEditingTitle) return;
+    const trimmed = editTitleValue.trim();
+    setIsEditingTitle(false);
+    if (!trimmed || trimmed === workspace?.name) return;
+    renameMutation.mutate(trimmed);
+  }, [isEditingTitle, editTitleValue, workspace?.name, renameMutation]);
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
   const toggleAssignee = (id: string) => {
     setSelectedAssignees(prev =>
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
@@ -187,8 +254,6 @@ export default function WorkspaceDetailPage() {
     if (!memberEmail.trim()) return;
     addMemberMutation.mutate({ workspaceId, data: { email: memberEmail, role: memberRole } });
   };
-
-  const isAdmin = workspace?.role === "admin";
 
   const translateRole = (role: string) => {
     switch (role) {
@@ -280,11 +345,59 @@ export default function WorkspaceDetailPage() {
 
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8">
               <div>
-                <h1 className="text-4xl font-display font-bold text-foreground">{workspace.name}</h1>
-                <p className="text-muted-foreground mt-2 text-lg flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  {workspace.members.length} · Você é <span className="font-medium">{translateRole(workspace.role)}</span>
-                </p>
+                {isEditingTitle ? (
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editTitleValue}
+                    onChange={(e) => setEditTitleValue(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        saveTitle();
+                      }
+                      if (e.key === "Escape") {
+                        setIsEditingTitle(false);
+                      }
+                    }}
+                    className="text-4xl font-display font-bold text-foreground bg-transparent border-b-2 border-primary outline-none w-full"
+                  />
+                ) : (
+                  <h1
+                    className={`text-4xl font-display font-bold text-foreground ${isAdmin ? "cursor-pointer hover:text-primary/80 transition-colors" : ""}`}
+                    onClick={startEditingTitle}
+                    title={isAdmin ? "Clique para editar" : undefined}
+                  >
+                    {workspace.name}
+                  </h1>
+                )}
+                {workspace.members && workspace.members.length > 0 && (
+                  <TooltipProvider delayDuration={200}>
+                    <div className="flex items-center mt-3">
+                      <div className="flex -space-x-2">
+                        {workspace.members.map((member: any) => (
+                          <Tooltip key={member.userId ?? member.user?.id}>
+                            <TooltipTrigger asChild>
+                              <Avatar className="w-8 h-8 border-2 border-card ring-0 cursor-default">
+                                {(member.user?.avatarUrl ?? member.avatarUrl) ? (
+                                  <AvatarImage src={member.user?.avatarUrl ?? member.avatarUrl} alt={member.user?.name ?? member.name} />
+                                ) : null}
+                                <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                                  {getInitials(member.user?.name ?? member.name ?? "")}
+                                </AvatarFallback>
+                              </Avatar>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              <p className="font-medium">{member.user?.name ?? member.name}</p>
+                              <p className="text-primary-foreground/70 text-[11px]">{translateRoleLabel(member.role)}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </div>
+                  </TooltipProvider>
+                )}
               </div>
               <div className="flex gap-3">
                 <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>

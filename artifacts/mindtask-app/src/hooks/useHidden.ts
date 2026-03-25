@@ -69,6 +69,13 @@ export function useListWorkspacesWithHidden(showHidden: boolean) {
           total: number;
           completed: number;
         };
+        members: Array<{
+          id: string;
+          userId: string;
+          name: string;
+          avatarUrl: string | null;
+          role: string;
+        }>;
       }>>;
     },
   });

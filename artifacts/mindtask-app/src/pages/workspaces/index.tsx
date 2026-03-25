@@ -2,13 +2,15 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useCreateWorkspace } from "@workspace/api-client-react";
-import { FolderGit2, Plus, Loader2, ArrowRight, EyeOff, Eye } from "lucide-react";
+import { FolderGit2, Plus, Loader2, EyeOff, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useListWorkspacesWithHidden, useToggleWorkspaceHidden } from "@/hooks/useHidden";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 function translateRole(role: string) {
   switch (role) {
@@ -39,8 +41,27 @@ const STATUS_BADGES: Array<{
   { key: "pending", label: "pendentes", className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" },
 ];
 
+type WorkspaceMemberPreview = {
+  id: string;
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  role: string;
+};
+
+const MAX_VISIBLE_AVATARS = 5;
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0].toUpperCase())
+    .join("");
+}
+
 function WorkspaceCard({ ws, showHidden }: {
-  ws: { id: string; name: string; hidden: boolean; role: string; taskCounts?: TaskCounts };
+  ws: { id: string; name: string; hidden: boolean; role: string; taskCounts?: TaskCounts; members?: WorkspaceMemberPreview[] };
   showHidden: boolean;
 }) {
   const toggleHidden = useToggleWorkspaceHidden(ws.id);
@@ -90,11 +111,38 @@ function WorkspaceCard({ ws, showHidden }: {
               )}
             </div>
           ) : null}
-          <div className="mt-auto pt-6 flex items-center justify-between text-sm text-muted-foreground">
-            <span className="lowercase">{translateRole(ws.role)}</span>
-            <span className="flex items-center text-primary font-medium opacity-0 group-hover/card:opacity-100 transition-opacity -translate-x-2 group-hover/card:translate-x-0 duration-300 lowercase">
-              Acessar <ArrowRight className="w-4 h-4 ml-1" />
-            </span>
+          <div className="mt-auto pt-6">
+            {ws.members && ws.members.length > 0 && (
+              <TooltipProvider delayDuration={200}>
+                <div className="flex items-center mb-4">
+                  <div className="flex -space-x-2">
+                    {ws.members.slice(0, MAX_VISIBLE_AVATARS).map((member) => (
+                      <Tooltip key={member.id}>
+                        <TooltipTrigger asChild>
+                          <Avatar className="w-7 h-7 border-2 border-card ring-0 cursor-default">
+                            {member.avatarUrl ? (
+                              <AvatarImage src={member.avatarUrl} alt={member.name} />
+                            ) : null}
+                            <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                              {getInitials(member.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p className="font-medium">{member.name}</p>
+                          <p className="text-primary-foreground/70 text-[11px]">{translateRole(member.role)}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                  {ws.members.length > MAX_VISIBLE_AVATARS && (
+                    <span className="ml-2 text-[11px] font-medium text-muted-foreground">
+                      +{ws.members.length - MAX_VISIBLE_AVATARS}
+                    </span>
+                  )}
+                </div>
+              </TooltipProvider>
+            )}
           </div>
         </div>
       </Link>
