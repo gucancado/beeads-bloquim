@@ -17,6 +17,7 @@ import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 function MapCard({ map, workspaceId, isAdmin }: {
   map: { id: string; name: string; hidden: boolean; updatedAt: string };
@@ -596,9 +597,12 @@ export default function WorkspaceDetailPage() {
                     {workspace.members.map(member => (
                       <div key={member.id} className="bg-card rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col gap-4">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg shrink-0">
-                            {member.user.name.charAt(0).toUpperCase()}
-                          </div>
+                          <Avatar className="w-12 h-12 shrink-0">
+                            {member.user.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user.name} className="object-cover" />}
+                            <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
+                              {member.user.name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                           <div className="min-w-0">
                             <p className="font-semibold text-foreground truncate">{member.user.name}</p>
                             <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>

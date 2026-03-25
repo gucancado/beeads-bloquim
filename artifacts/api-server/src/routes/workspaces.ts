@@ -127,6 +127,7 @@ router.get("/:workspaceId", requireAuth, requireWorkspaceRole(["admin", "editor"
         id: users.id,
         name: users.name,
         email: users.email,
+        avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
       },
     })
@@ -193,6 +194,7 @@ router.get("/:workspaceId/members", requireAuth, requireWorkspaceRole(["admin", 
         id: users.id,
         name: users.name,
         email: users.email,
+        avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
       },
     })
