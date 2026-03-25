@@ -132,6 +132,8 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
   const { data: me } = useGetMe({ query: { enabled: open } });
   const currentUserId = me?.id ?? "";
 
+  const isStandalone = !workspaceId;
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState("unassigned");
@@ -146,27 +148,31 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
   const isEditing = !!taskId;
 
+  const taskBasePath = isStandalone
+    ? `/api/my-tasks`
+    : `/api/workspaces/${workspaceId}/tasks`;
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const { data: task, isLoading } = useQuery<WorkspaceTask>({
-    queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`],
-    queryFn: () => customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}`),
+    queryKey: isStandalone ? [`/api/my-tasks/${taskId}`] : [`/api/workspaces/${workspaceId}/tasks/${taskId}`],
+    queryFn: () => customFetch(isStandalone ? `/api/my-tasks/${taskId}` : `/api/workspaces/${workspaceId}/tasks/${taskId}`),
     enabled: isEditing && open,
   });
 
   const { data: membersData } = useQuery<Member[]>({
     queryKey: [`/api/workspaces/${workspaceId}/members`],
     queryFn: () => customFetch(`/api/workspaces/${workspaceId}/members`),
-    enabled: open,
+    enabled: open && !isStandalone,
   });
 
   const { data: subtasksData } = useQuery<SubtaskItem[]>({
     queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}/subtasks`],
     queryFn: () => customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/subtasks`),
-    enabled: isEditing && open && !!taskId,
+    enabled: isEditing && open && !!taskId && !isStandalone,
   });
 
   useEffect(() => {
@@ -203,7 +209,9 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
-    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
+    if (!isStandalone) {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
+    }
   };
 
   const saveSubtasksMutation = useMutation({
@@ -222,26 +230,28 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, any>) =>
-      customFetch(`/api/workspaces/${workspaceId}/tasks`, {
+      customFetch(taskBasePath, {
         method: "POST",
         body: JSON.stringify(body),
       }),
     onSuccess: async (newTask: { id: string }) => {
-      const nonEmptySubtasks = localSubtasks.filter(s => s.text.trim() !== "");
-      if (nonEmptySubtasks.length > 0) {
-        try {
-          await customFetch(`/api/workspaces/${workspaceId}/tasks/${newTask.id}/subtasks`, {
-            method: "PUT",
-            body: JSON.stringify({
-              subtasks: nonEmptySubtasks.map((s, idx) => ({
-                text: s.text,
-                completed: s.completed,
-                order: idx,
-              })),
-            }),
-          });
-        } catch (err) {
-          console.error("Erro ao salvar subtarefas:", err);
+      if (!isStandalone) {
+        const nonEmptySubtasks = localSubtasks.filter(s => s.text.trim() !== "");
+        if (nonEmptySubtasks.length > 0) {
+          try {
+            await customFetch(`/api/workspaces/${workspaceId}/tasks/${newTask.id}/subtasks`, {
+              method: "PUT",
+              body: JSON.stringify({
+                subtasks: nonEmptySubtasks.map((s, idx) => ({
+                  text: s.text,
+                  completed: s.completed,
+                  order: idx,
+                })),
+              }),
+            });
+          } catch (err) {
+            console.error("Erro ao salvar subtarefas:", err);
+          }
         }
       }
       toast({ title: "Tarefa criada!" });
@@ -256,33 +266,40 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
 
   const saveMutation = useMutation({
     mutationFn: (body: Record<string, any>) =>
-      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}`, {
+      customFetch(isStandalone ? `/api/my-tasks/${taskId}` : `/api/workspaces/${workspaceId}/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`] });
+      if (isStandalone) {
+        queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${taskId}`] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`] });
+      }
     },
     onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
   });
 
   const statusMutation = useMutation({
     mutationFn: (newStatus: string) =>
-      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/status`, {
+      customFetch(isStandalone ? `/api/my-tasks/${taskId}/status` : `/api/workspaces/${workspaceId}/tasks/${taskId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: newStatus }),
       }),
     onSuccess: () => {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`] });
+      if (isStandalone) {
+        queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${taskId}`] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`] });
+      }
     },
     onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
   });
 
   const handleSave = () => {
     if (isEditing) {
-      const nonEmptySubtasks = localSubtasks.filter(s => s.text.trim() !== "");
       saveMutation.mutate({
         title,
         description: description || null,
@@ -290,7 +307,10 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
         priority,
         dueDate: dueDate || null,
       });
-      saveSubtasksMutation.mutate(nonEmptySubtasks);
+      if (!isStandalone) {
+        const nonEmptySubtasks = localSubtasks.filter(s => s.text.trim() !== "");
+        saveSubtasksMutation.mutate(nonEmptySubtasks);
+      }
     } else {
       createMutation.mutate({
         title,
@@ -322,7 +342,8 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
     if (!taskId) return;
     setIsDeleting(true);
     try {
-      await customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}`, { method: "DELETE" });
+      const deletePath = isStandalone ? `/api/my-tasks/${taskId}` : `/api/workspaces/${workspaceId}/tasks/${taskId}`;
+      await customFetch(deletePath, { method: "DELETE" });
       toast({ title: "Tarefa excluída" });
       invalidate();
       onClose();
@@ -473,8 +494,17 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
               </div>
 
               <div className="border-t pt-4 space-y-4">
-                {/* Assignee + Priority + Due Date on same line */}
                 <div className="grid grid-cols-3 gap-3">
+                  {isStandalone ? (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
+                      <User className="w-3 h-3" /> Responsável
+                    </label>
+                    <div className="bg-muted/50 rounded-xl h-10 flex items-center px-3 text-sm text-muted-foreground">
+                      {me?.name ?? "Você"}
+                    </div>
+                  </div>
+                  ) : (
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                       <User className="w-3 h-3" /> Responsável
@@ -497,6 +527,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                       </SelectContent>
                     </Select>
                   </div>
+                  )}
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                       <Flag className="w-3 h-3" /> Prioridade
@@ -533,7 +564,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                   </div>
                 </div>
 
-                {/* Subtasks section */}
+                {!isStandalone && (
                 <div>
                   <div className="flex items-center mb-1.5">
                     <button
@@ -572,6 +603,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Description */}
                 <div>
@@ -595,7 +627,7 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                 )}
               </div>
 
-              {isEditing && taskId && (
+              {isEditing && taskId && !isStandalone && (
                 <CommentsSection
                   workspaceId={workspaceId}
                   taskId={taskId}

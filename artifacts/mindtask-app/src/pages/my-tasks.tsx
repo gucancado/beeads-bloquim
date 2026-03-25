@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
-import { CheckSquare, Loader2 } from "lucide-react";
+import { CheckSquare, Loader2, Plus } from "lucide-react";
 import { CardPanel } from "@/components/maps/CardPanel";
 import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
 
 interface OpenCard {
   workspaceId: string;
@@ -59,6 +60,12 @@ export default function MyTasksPage() {
     queryFn: () => customFetch("/api/my-tasks/members"),
   });
 
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
+
+  const handleNewTaskClick = () => {
+    setCreateSheetOpen(true);
+  };
+
   const tasksQueryKey = ["/api/my-tasks", selectedStatuses, selectedAssignees];
   const { data: tasks, isLoading } = useQuery<any[]>({
     queryKey: tasksQueryKey,
@@ -96,11 +103,17 @@ export default function MyTasksPage() {
     setStandaloneTask(null);
   };
 
+  const handleCloseCreateSheet = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+    queryClient.invalidateQueries({ queryKey: countsQueryKey });
+    setCreateSheetOpen(false);
+  };
+
   const openTaskItem = (task: any) => {
     if (task.cardId && task.mapId) {
       setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: task.cardId });
     } else {
-      setStandaloneTask({ workspaceId: task.workspaceId, id: task.id, mapId: task.mapId, cardId: task.cardId, title: task.title });
+      setStandaloneTask({ workspaceId: task.workspaceId ?? "", id: task.id, mapId: task.mapId, cardId: task.cardId, title: task.title });
     }
   };
 
@@ -119,12 +132,17 @@ export default function MyTasksPage() {
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
         <div className="max-w-6xl mx-auto p-8 lg:p-12">
           <div className="flex flex-col gap-6 mb-12">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-4xl font-display font-bold text-foreground lowercase">Suas tarefas</h1>
-                </div>
+                <h1 className="text-4xl font-display font-bold text-foreground lowercase">Suas tarefas</h1>
               </div>
+              <Button
+                title="nova tarefa"
+                className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
+                onClick={handleNewTaskClick}
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -257,6 +275,13 @@ export default function MyTasksPage() {
         taskId={standaloneTask?.id ?? null}
         open={!!standaloneTask}
         onClose={handleCloseSheet}
+      />
+
+      <WorkspaceTaskSheet
+        workspaceId=""
+        taskId={null}
+        open={createSheetOpen}
+        onClose={handleCloseCreateSheet}
       />
     </AppLayout>
   );

@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { computeOverdue } from "../lib/overdue";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
@@ -54,18 +56,18 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
     .from(workspaceMembers)
     .where(eq(workspaceMembers.userId, userId));
 
-  if (memberships.length === 0) {
-    return res.json({ pending: 0, in_progress: 0, completed: 0, blocked: 0 });
-  }
-
   const memberWorkspaceIds = memberships.map(m => m.workspaceId);
+
+  const ownershipFilter = memberWorkspaceIds.length > 0
+    ? or(inArray(tasks.workspaceId, memberWorkspaceIds), and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId)))
+    : and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId));
 
   const rows = await db
     .select({ status: tasks.status, cnt: count() })
     .from(tasks)
     .where(
       and(
-        inArray(tasks.workspaceId, memberWorkspaceIds),
+        ownershipFilter,
         buildAssigneeFilter(),
       )
     )
@@ -121,11 +123,14 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .from(workspaceMembers)
     .where(eq(workspaceMembers.userId, userId));
 
-  if (memberships.length === 0) {
-    return res.json([]);
-  }
-
   const memberWorkspaceIds = memberships.map(m => m.workspaceId);
+
+  const ownershipFilter = memberWorkspaceIds.length > 0
+    ? or(
+        inArray(tasks.workspaceId, memberWorkspaceIds),
+        and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId))
+      )
+    : and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId));
 
   const taskList = await db
     .select({
@@ -152,11 +157,11 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .from(tasks)
     .leftJoin(cards, eq(cards.taskId, tasks.id))
     .leftJoin(maps, eq(maps.id, tasks.mapId))
-    .innerJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
+    .leftJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
     .where(
       and(
-        inArray(tasks.workspaceId, memberWorkspaceIds),
+        ownershipFilter,
         workspaceId ? eq(tasks.workspaceId, workspaceId) : undefined,
         buildStatusFilter(),
         buildAssigneeFilter(),
@@ -169,6 +174,151 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     );
 
   return res.json(taskList);
+});
+
+function parseDateNoon(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const dateOnly = value.slice(0, 10);
+  return new Date(dateOnly + "T12:00:00.000Z");
+}
+
+const createStandaloneTaskSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
+});
+
+router.post("/", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const parsed = createStandaloneTaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+  }
+
+  const { title, description, dueDate, priority } = parsed.data;
+  const dueDateValue = parseDateNoon(dueDate);
+  const overdueValue = computeOverdue(dueDateValue, "pending");
+
+  const [newTask] = await db.insert(tasks).values({
+    workspaceId: null,
+    mapId: null,
+    title,
+    description: description ?? null,
+    assignedTo: userId,
+    dueDate: dueDateValue,
+    priority,
+    status: "pending",
+    overdue: overdueValue,
+  }).returning();
+
+  return res.status(201).json(newTask);
+});
+
+const updateStandaloneTaskSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+});
+
+router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [existing] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!existing) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (existing.workspaceId !== null) {
+    return res.status(403).json({ message: "Use a rota do workspace para editar esta tarefa" });
+  }
+  if (existing.assignedTo !== userId) {
+    return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  const parsed = updateStandaloneTaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+  }
+
+  const updateData: Record<string, any> = { ...parsed.data, updatedAt: new Date() };
+  if (parsed.data.dueDate !== undefined) {
+    updateData.dueDate = parseDateNoon(parsed.data.dueDate);
+    updateData.overdue = computeOverdue(updateData.dueDate, existing.status ?? "pending");
+  }
+
+  const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+  return res.json(updated);
+});
+
+const statusSchema = z.object({
+  status: z.enum(["pending", "in_progress", "blocked", "completed"]),
+});
+
+router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+  const parsed = statusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Status inválido", errors: parsed.error.flatten() });
+  }
+  const { status: newStatus } = parsed.data;
+
+  const [existing] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!existing) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (existing.workspaceId !== null) {
+    return res.status(403).json({ message: "Use a rota do workspace" });
+  }
+  if (existing.assignedTo !== userId) {
+    return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  const updateData: Record<string, any> = {
+    previousStatus: existing.status,
+    status: newStatus,
+    updatedAt: new Date(),
+    overdue: computeOverdue(existing.dueDate, newStatus),
+  };
+  if (newStatus === "completed") updateData.completedAt = new Date();
+
+  const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+  return res.json(updated);
+});
+
+router.delete("/:taskId", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [existing] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!existing) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (existing.workspaceId !== null) {
+    return res.status(403).json({ message: "Use a rota do workspace" });
+  }
+  if (existing.assignedTo !== userId) {
+    return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  await db.delete(tasks).where(eq(tasks.id, taskId));
+  return res.json({ ok: true });
+});
+
+router.get("/:taskId", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (task.workspaceId !== null) {
+    return res.status(403).json({ message: "Use a rota do workspace" });
+  }
+  if (task.assignedTo !== userId) {
+    return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  return res.json(task);
 });
 
 export default router;

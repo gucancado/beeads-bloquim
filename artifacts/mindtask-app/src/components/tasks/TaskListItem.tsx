@@ -139,9 +139,11 @@ export function TaskListItem({
   const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked";
   const isLinkedToCard = !!(task.cardId && task.mapId);
 
+  const isStandaloneTask = !task.workspaceId;
+
   const invalidate = useCallback(() => {
     invalidateQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
-    if (task.mapId) {
+    if (task.mapId && task.workspaceId) {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${task.workspaceId}/maps/${task.mapId}`] });
       if (task.cardId) {
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${task.workspaceId}/maps/${task.mapId}/cards/${task.cardId}`] });
@@ -151,7 +153,10 @@ export function TaskListItem({
 
   const patchTask = useCallback(async (body: Record<string, any>) => {
     try {
-      const updated = await customFetch(`/api/workspaces/${task.workspaceId}/tasks/${task.id}`, {
+      const url = isStandaloneTask
+        ? `/api/my-tasks/${task.id}`
+        : `/api/workspaces/${task.workspaceId}/tasks/${task.id}`;
+      const updated = await customFetch(url, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -160,11 +165,14 @@ export function TaskListItem({
     } catch (err) {
       console.error("Inline edit failed:", err);
     }
-  }, [task.workspaceId, task.id, invalidate]);
+  }, [task.workspaceId, task.id, invalidate, isStandaloneTask]);
 
   const patchStatus = useCallback(async (newStatus: string) => {
     try {
-      const updated = await customFetch(`/api/workspaces/${task.workspaceId}/tasks/${task.id}/status`, {
+      const url = isStandaloneTask
+        ? `/api/my-tasks/${task.id}/status`
+        : `/api/workspaces/${task.workspaceId}/tasks/${task.id}/status`;
+      const updated = await customFetch(url, {
         method: "PATCH",
         body: JSON.stringify({ status: newStatus }),
       });
@@ -173,7 +181,7 @@ export function TaskListItem({
     } catch (err) {
       console.error("Inline status update failed:", err);
     }
-  }, [task.workspaceId, task.id, invalidate]);
+  }, [task.workspaceId, task.id, invalidate, isStandaloneTask]);
 
   const updateCardTitle = useCallback(async (newTitle: string) => {
     try {

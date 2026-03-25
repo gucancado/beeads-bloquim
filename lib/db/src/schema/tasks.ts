@@ -33,7 +33,6 @@ export const tasks = pgTable("tasks", {
   mapId: uuid("map_id")
     .references(() => maps.id, { onDelete: "cascade" }),
   workspaceId: uuid("workspace_id")
-    .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
