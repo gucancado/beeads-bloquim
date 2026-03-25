@@ -539,10 +539,9 @@ export default function WorkspaceDetailPage() {
                           <span className="w-px h-4 bg-border mx-1" />
                           <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">Responsável:</span>
                           <AssigneeFilterPills
-                            members={workspaceMembers.map(m => ({ userId: m.userId, name: m.user.name }))}
+                            members={workspaceMembers.map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
                             selected={selectedAssignees}
                             onToggle={toggleAssignee}
-                            onClear={() => setSelectedAssignees([])}
                           />
                         </>
                       )}

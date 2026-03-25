@@ -1,14 +1,28 @@
+import { UserX } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0].toUpperCase())
+    .join("");
+}
+
 interface Member {
   userId: string;
   name: string;
+  avatarUrl?: string | null;
 }
 
 interface AssigneeFilterPillsProps {
   members: Member[];
   selected: string[];
   onToggle: (id: string) => void;
-  onClear?: () => void;
   meLabel?: string;
+  meAvatarUrl?: string | null;
   showMe?: boolean;
 }
 
@@ -16,60 +30,63 @@ export function AssigneeFilterPills({
   members,
   selected,
   onToggle,
-  onClear,
   meLabel = "Eu",
+  meAvatarUrl,
   showMe = false,
 }: AssigneeFilterPillsProps) {
-  const pills: { id: string; label: string; activeClass: string }[] = [];
+  const anySelected = selected.length > 0;
+
+  const items: { id: string; label: string; avatarUrl?: string | null; isIcon?: boolean }[] = [];
 
   if (showMe) {
-    pills.push({
-      id: "me",
-      label: meLabel,
-      activeClass: "bg-violet-500 text-white border-violet-500 hover:bg-violet-600",
-    });
+    items.push({ id: "me", label: meLabel, avatarUrl: meAvatarUrl });
   }
 
   members.forEach(m => {
-    pills.push({
-      id: m.userId,
-      label: m.name,
-      activeClass: "bg-indigo-500 text-white border-indigo-500 hover:bg-indigo-600",
-    });
+    items.push({ id: m.userId, label: m.name, avatarUrl: m.avatarUrl });
   });
 
-  pills.push({
-    id: "unassigned",
-    label: "Sem responsável",
-    activeClass: "bg-slate-500 text-white border-slate-500 hover:bg-slate-600",
-  });
+  items.push({ id: "unassigned", label: "Sem responsável", isIcon: true });
 
   return (
-    <>
-      {pills.map(pill => {
-        const isActive = selected.includes(pill.id);
-        return (
-          <button
-            key={pill.id}
-            onClick={() => onToggle(pill.id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
-              isActive
-                ? pill.activeClass
-                : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
-            }`}
-          >
-            {pill.label}
-          </button>
-        );
-      })}
-      {onClear && selected.length > 0 && (
-        <button
-          onClick={onClear}
-          className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer"
-        >
-          Limpar
-        </button>
-      )}
-    </>
+    <TooltipProvider delayDuration={200}>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {items.map(item => {
+          const isActive = selected.includes(item.id);
+          return (
+            <Tooltip key={item.id}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onToggle(item.id)}
+                  className={`transition-all duration-200 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    anySelected && !isActive ? "grayscale opacity-60 scale-100" : "scale-100"
+                  } ${isActive ? "scale-110 ring-2 ring-primary ring-offset-2" : ""}`}
+                >
+                  <Avatar className="w-9 h-9 border-2 border-card cursor-pointer">
+                    {item.isIcon ? (
+                      <AvatarFallback className="bg-slate-100 dark:bg-slate-800">
+                        <UserX className="w-4 h-4 text-muted-foreground" />
+                      </AvatarFallback>
+                    ) : (
+                      <>
+                        {item.avatarUrl ? (
+                          <AvatarImage src={item.avatarUrl} alt={item.label} className="object-cover" />
+                        ) : null}
+                        <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
+                          {getInitials(item.label)}
+                        </AvatarFallback>
+                      </>
+                    )}
+                  </Avatar>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="font-medium">{item.label}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 }

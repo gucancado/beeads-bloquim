@@ -55,7 +55,7 @@ export default function MyTasksPage() {
     setSelectedAssignees(["me"]);
   };
 
-  const { data: members } = useQuery<{ userId: string; name: string; workspaceId: string }[]>({
+  const { data: members } = useQuery<{ userId: string; name: string; workspaceId: string; avatarUrl?: string | null }[]>({
     queryKey: ["/api/my-tasks/members"],
     queryFn: () => customFetch("/api/my-tasks/members"),
   });
@@ -174,14 +174,13 @@ export default function MyTasksPage() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">quem:</span>
               <AssigneeFilterPills
-                members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name }])).values())}
+                members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }])).values())}
                 selected={selectedAssignees}
                 onToggle={toggleAssignee}
-                onClear={() => setSelectedAssignees([])}
                 showMe
                 meLabel="Eu"
+                meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
               />
             </div>
           </div>
