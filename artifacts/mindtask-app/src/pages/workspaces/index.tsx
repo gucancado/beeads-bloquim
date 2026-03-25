@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useCreateWorkspace } from "@workspace/api-client-react";
+import { useCreateWorkspace, useGetMe } from "@workspace/api-client-react";
 import { FolderGit2, Plus, Loader2, EyeOff, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,10 +172,40 @@ export default function WorkspacesPage() {
   const { data: workspaces, isLoading } = useListWorkspacesWithHidden(showHidden);
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: me } = useGetMe();
 
   const isAdmin = workspaces?.some((ws) => ws.role === "admin") ?? false;
+
+  const coMembers = useMemo(() => {
+    if (!workspaces || !me?.id) return [];
+    const memberMap = new Map<string, { userId: string; name: string; avatarUrl: string | null }>();
+    for (const ws of workspaces) {
+      if (ws.hidden) continue;
+      for (const m of ws.members ?? []) {
+        if (m.userId !== me.id && !memberMap.has(m.userId)) {
+          memberMap.set(m.userId, { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl });
+        }
+      }
+    }
+    return Array.from(memberMap.values());
+  }, [workspaces, me?.id]);
+
+  const filteredWorkspaces = useMemo(() => {
+    if (!workspaces) return [];
+    if (selectedUserIds.length === 0) return workspaces;
+    return workspaces.filter((ws) =>
+      (ws.members ?? []).some((m) => selectedUserIds.includes(m.userId))
+    );
+  }, [workspaces, selectedUserIds]);
+
+  const toggleUser = (userId: string) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
 
   const createMutation = useCreateWorkspace({
     mutation: {
@@ -201,7 +231,7 @@ export default function WorkspacesPage() {
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
         <div className="max-w-6xl mx-auto p-8 lg:p-12">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-12">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-4xl font-display font-bold text-foreground lowercase">Espaços de Trabalho</h1>
             </div>
@@ -254,6 +284,41 @@ export default function WorkspacesPage() {
             </div>
           </div>
 
+          {coMembers.length > 0 && (
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center gap-2 mb-6 flex-wrap">
+                {coMembers.map((member) => {
+                  const isSelected = selectedUserIds.includes(member.userId);
+                  const anySelected = selectedUserIds.length > 0;
+                  return (
+                    <Tooltip key={member.userId}>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => toggleUser(member.userId)}
+                          className={`transition-all duration-200 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                            anySelected && !isSelected ? "grayscale opacity-60 scale-100" : "scale-100"
+                          } ${isSelected ? "scale-110 ring-2 ring-primary ring-offset-2" : ""}`}
+                        >
+                          <Avatar className="w-9 h-9 border-2 border-card cursor-pointer">
+                            {member.avatarUrl ? (
+                              <AvatarImage src={member.avatarUrl} alt={member.name} />
+                            ) : null}
+                            <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
+                              {getInitials(member.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="font-medium">{member.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
+          )}
+
           {showHidden && (
             <div className="mb-6 flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-sm text-amber-700 dark:text-amber-400">
               <EyeOff className="w-4 h-4 shrink-0" />
@@ -265,20 +330,22 @@ export default function WorkspacesPage() {
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-10 h-10 animate-spin text-primary" />
             </div>
-          ) : workspaces?.length === 0 ? (
+          ) : filteredWorkspaces.length === 0 ? (
             <div className="text-center py-24 bg-card rounded-3xl border border-border shadow-sm">
               <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
                 <FolderGit2 className="w-10 h-10" />
               </div>
               <h3 className="text-2xl font-bold font-display text-foreground lowercase">
-                {showHidden ? "Nenhum espaço oculto" : "Nenhum espaço ainda"}
+                {selectedUserIds.length > 0 ? "Nenhum espaço com esses membros" : showHidden ? "Nenhum espaço oculto" : "Nenhum espaço ainda"}
               </h3>
               <p className="text-muted-foreground mt-2 mb-8 max-w-md mx-auto lowercase">
-                {showHidden
+                {selectedUserIds.length > 0
+                  ? "Nenhum espaço de trabalho compartilhado com os membros selecionados."
+                  : showHidden
                   ? "Você não possui espaços ocultos no momento."
                   : "Crie um espaço para começar a organizar seus planos e tarefas."}
               </p>
-              {!showHidden && (
+              {!showHidden && selectedUserIds.length === 0 && (
                 <Button onClick={() => setIsOpen(true)} className="rounded-xl px-8 h-12 lowercase">
                   Criar primeiro espaço
                 </Button>
@@ -286,7 +353,7 @@ export default function WorkspacesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {workspaces?.map((ws) => (
+              {filteredWorkspaces.map((ws) => (
                 <WorkspaceCard key={ws.id} ws={ws} showHidden={showHidden} />
               ))}
             </div>
