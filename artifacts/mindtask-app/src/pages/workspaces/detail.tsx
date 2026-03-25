@@ -595,20 +595,18 @@ export default function WorkspaceDetailPage() {
                 <TabsContent value="members" className="mt-0 outline-none">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {workspace.members.map(member => (
-                      <div key={member.id} className="bg-card rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col gap-4">
-                        <div className="flex items-center gap-4">
-                          <Avatar className="w-12 h-12 shrink-0">
-                            {member.user.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user.name} className="object-cover" />}
-                            <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
-                              {member.user.name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-foreground truncate">{member.user.name}</p>
-                            <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>
-                          </div>
+                      <div key={member.id} className="bg-card rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col items-center gap-3 text-center">
+                        <Avatar className="w-20 h-20 ring-2 ring-border shadow-sm">
+                          {member.user.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user.name} className="object-cover" />}
+                          <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
+                            {member.user.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="w-full min-w-0">
+                          <p className="font-semibold text-foreground truncate">{member.user.name}</p>
+                          <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>
                         </div>
-                        <div className="flex items-center justify-between mt-auto">
+                        <div className="flex items-center justify-between w-full mt-auto pt-1">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider lowercase ${getRoleBadgeClass(member.role)}`}>
                             {getRoleIcon(member.role)}
                             {translateRole(member.role)}
@@ -631,8 +629,8 @@ export default function WorkspaceDetailPage() {
                         onClick={() => setIsMemberDialogOpen(true)}
                         className="bg-card rounded-2xl p-6 border-2 border-dashed border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 cursor-pointer hover:-translate-y-1 flex flex-col items-center justify-center gap-3 min-h-[140px] text-muted-foreground hover:text-primary group"
                       >
-                        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                          <UserPlus className="w-6 h-6" />
+                        <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                          <UserPlus className="w-8 h-8" />
                         </div>
                         <span className="text-sm font-semibold lowercase">Adicionar Membro</span>
                       </button>
