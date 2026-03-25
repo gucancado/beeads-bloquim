@@ -179,8 +179,9 @@ export default function WorkspacesPage() {
 
   const isAdmin = workspaces?.some((ws) => ws.role === "admin") ?? false;
 
-  const coMembers = useMemo(() => {
+  const filterMembers = useMemo(() => {
     if (!workspaces || !me?.id) return [];
+    const meEntry = { userId: me.id, name: me.name, avatarUrl: (me as { avatarUrl?: string | null }).avatarUrl ?? null };
     const memberMap = new Map<string, { userId: string; name: string; avatarUrl: string | null }>();
     for (const ws of workspaces) {
       if (ws.hidden) continue;
@@ -190,16 +191,22 @@ export default function WorkspacesPage() {
         }
       }
     }
-    return Array.from(memberMap.values());
-  }, [workspaces, me?.id]);
+    return [meEntry, ...Array.from(memberMap.values())];
+  }, [workspaces, me?.id, me?.name]);
 
   const filteredWorkspaces = useMemo(() => {
     if (!workspaces) return [];
     if (selectedUserIds.length === 0) return workspaces;
-    return workspaces.filter((ws) =>
-      (ws.members ?? []).some((m) => selectedUserIds.includes(m.userId))
-    );
-  }, [workspaces, selectedUserIds]);
+    return workspaces.filter((ws) => {
+      const members = ws.members ?? [];
+      return selectedUserIds.some((uid) => {
+        if (uid === me?.id) {
+          return members.length === 1 && members[0].userId === me.id;
+        }
+        return members.some((m) => m.userId === uid);
+      });
+    });
+  }, [workspaces, selectedUserIds, me?.id]);
 
   const toggleUser = (userId: string) => {
     setSelectedUserIds((prev) =>
@@ -284,10 +291,10 @@ export default function WorkspacesPage() {
             </div>
           </div>
 
-          {coMembers.length > 0 && (
+          {filterMembers.length > 0 && (
             <TooltipProvider delayDuration={200}>
               <div className="flex items-center gap-2 mb-6 flex-wrap">
-                {coMembers.map((member) => {
+                {filterMembers.map((member) => {
                   const isSelected = selectedUserIds.includes(member.userId);
                   const anySelected = selectedUserIds.length > 0;
                   return (
