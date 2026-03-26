@@ -193,15 +193,18 @@ export class ObjectStorageService {
     userId,
     objectFile,
     requestedPermission,
+    allowPublicFallback,
   }: {
     userId?: string;
     objectFile: File;
     requestedPermission?: ObjectPermission;
+    allowPublicFallback?: boolean;
   }): Promise<boolean> {
     return canAccessObject({
       userId,
       objectFile,
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
+      allowPublicFallback,
     });
   }
 }

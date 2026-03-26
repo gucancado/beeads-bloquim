@@ -98,13 +98,18 @@ export async function canAccessObject({
   userId,
   objectFile,
   requestedPermission,
+  allowPublicFallback = false,
 }: {
   userId?: string;
   objectFile: File;
   requestedPermission: ObjectPermission;
+  allowPublicFallback?: boolean;
 }): Promise<boolean> {
   const aclPolicy = await getObjectAclPolicy(objectFile);
   if (!aclPolicy) {
+    if (allowPublicFallback && requestedPermission === ObjectPermission.READ) {
+      return true;
+    }
     return false;
   }
 

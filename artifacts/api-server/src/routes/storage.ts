@@ -86,6 +86,9 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * ACL-based access control:
  * - Public objects (visibility: "public") are served to anyone.
  * - Private objects require authentication and the requester must be the owner.
+ * - Objects in the uploads/ path (user avatar namespace) with no ACL metadata
+ *   are treated as publicly readable for backward compatibility with avatars
+ *   uploaded before the ACL policy was enforced.
  */
 router.get("/storage/objects/*path", optionalAuth, async (req: Request, res: Response) => {
   try {
@@ -96,10 +99,12 @@ router.get("/storage/objects/*path", optionalAuth, async (req: Request, res: Res
 
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
+    const isAvatarPath = wildcardPath.startsWith("uploads/");
     const canAccess = await objectStorageService.canAccessObjectEntity({
       userId,
       objectFile,
       requestedPermission: ObjectPermission.READ,
+      allowPublicFallback: isAvatarPath,
     });
 
     if (!canAccess) {
