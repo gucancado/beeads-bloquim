@@ -18,7 +18,7 @@ export interface CardResponse {
   taskId?: string | null;
   createdAt: Date;
   updatedAt: Date;
-  taskDueDate?: string | null;
+  taskDueDate?: Date | null;
   taskAssigneeName?: string | null;
   taskAssigneeId?: string | null;
   taskOverdue?: boolean;

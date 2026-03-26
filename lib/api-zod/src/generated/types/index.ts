@@ -27,7 +27,6 @@ export * from "./loginRequest";
 export * from "./mapDetailResponse";
 export * from "./mapResponse";
 export * from "./registerRequest";
-export * from "./subtaskResponse";
 export * from "./successResponse";
 export * from "./taskPriority";
 export * from "./taskResponse";

@@ -1058,6 +1058,126 @@ export const useAddWorkspaceMember = <
 /**
  * @summary Update member role
  */
+export const getPatchWorkspaceMemberRoleUrl = (
+  workspaceId: string,
+  memberId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/members/${memberId}`;
+};
+
+export const patchWorkspaceMemberRole = async (
+  workspaceId: string,
+  memberId: string,
+  updateMemberRoleRequest: UpdateMemberRoleRequest,
+  options?: RequestInit,
+): Promise<WorkspaceMemberResponse> => {
+  return customFetch<WorkspaceMemberResponse>(
+    getPatchWorkspaceMemberRoleUrl(workspaceId, memberId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateMemberRoleRequest),
+    },
+  );
+};
+
+export const getPatchWorkspaceMemberRoleMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof patchWorkspaceMemberRole>>,
+    TError,
+    {
+      workspaceId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberRoleRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof patchWorkspaceMemberRole>>,
+  TError,
+  {
+    workspaceId: string;
+    memberId: string;
+    data: BodyType<UpdateMemberRoleRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["patchWorkspaceMemberRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof patchWorkspaceMemberRole>>,
+    {
+      workspaceId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberRoleRequest>;
+    }
+  > = (props) => {
+    const { workspaceId, memberId, data } = props ?? {};
+
+    return patchWorkspaceMemberRole(
+      workspaceId,
+      memberId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PatchWorkspaceMemberRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof patchWorkspaceMemberRole>>
+>;
+export type PatchWorkspaceMemberRoleMutationBody =
+  BodyType<UpdateMemberRoleRequest>;
+export type PatchWorkspaceMemberRoleMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update member role
+ */
+export const usePatchWorkspaceMemberRole = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof patchWorkspaceMemberRole>>,
+    TError,
+    {
+      workspaceId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberRoleRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof patchWorkspaceMemberRole>>,
+  TError,
+  {
+    workspaceId: string;
+    memberId: string;
+    data: BodyType<UpdateMemberRoleRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getPatchWorkspaceMemberRoleMutationOptions(options));
+};
+
+/**
+ * @summary Update member role (legacy)
+ */
 export const getUpdateWorkspaceMemberUrl = (
   workspaceId: string,
   memberId: string,
@@ -1140,7 +1260,7 @@ export type UpdateWorkspaceMemberMutationBody =
 export type UpdateWorkspaceMemberMutationError = ErrorType<unknown>;
 
 /**
- * @summary Update member role
+ * @summary Update member role (legacy)
  */
 export const useUpdateWorkspaceMember = <
   TError = ErrorType<unknown>,

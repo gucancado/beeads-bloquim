@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useGetWorkspace, useCreateMap, useGetDashboard, useAddWorkspaceMember, useRemoveWorkspaceMember, useListWorkspaceMembers, customFetch } from "@workspace/api-client-react";
+import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden } from "@/hooks/useHidden";
 import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,7 @@ export default function WorkspaceDetailPage() {
   const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState<"admin" | "editor" | "executor">("editor");
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, "admin" | "editor" | "executor">>({});
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress", "pending"]);
@@ -147,6 +148,27 @@ export default function WorkspaceDetailPage() {
   const isAdmin = workspace?.role === "admin";
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: me } = useGetMe();
+  const currentUserId = me?.id ?? "";
+
+  const { data: memberSuggestions } = useQuery<{ userId: string; name: string; email: string; avatarUrl: string | null }[]>({
+    queryKey: [`/api/workspaces/${workspaceId}/members/suggestions`],
+    queryFn: () => customFetch(`/api/workspaces/${workspaceId}/members/suggestions`),
+    enabled: isMemberDialogOpen && isAdmin,
+  });
+
+  const updateMemberRoleMutation = usePatchWorkspaceMemberRole({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/members`] });
+        toast({ title: "Papel atualizado com sucesso!" });
+      },
+      onError: () => {
+        toast({ title: "Falha ao atualizar papel", variant: "destructive" });
+      },
+    },
+  });
 
   const createMapMutation = useCreateMap({
     mutation: {
@@ -159,24 +181,7 @@ export default function WorkspaceDetailPage() {
     }
   });
 
-  const addMemberMutation = useAddWorkspaceMember({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
-        setIsMemberDialogOpen(false);
-        setMemberEmail("");
-        setMemberRole("editor");
-        toast({ title: "Membro adicionado com sucesso!" });
-      },
-      onError: (err: any) => {
-        toast({
-          title: "Falha ao adicionar membro",
-          description: err?.data?.message || "Verifique se o e-mail está correto e o usuário está cadastrado.",
-          variant: "destructive"
-        });
-      }
-    }
-  });
+  const [isInviting, setIsInviting] = useState(false);
 
   const removeMemberMutation = useRemoveWorkspaceMember({
     mutation: {
@@ -249,10 +254,73 @@ export default function WorkspaceDetailPage() {
     createMapMutation.mutate({ workspaceId, data: { name: mapName } });
   };
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!memberEmail.trim()) return;
-    addMemberMutation.mutate({ workspaceId, data: { email: memberEmail, role: memberRole } });
+    const hasEmail = memberEmail.trim().length > 0;
+    const selectedUserIds = Object.keys(selectedSuggestions);
+    if (!hasEmail && selectedUserIds.length === 0) return;
+
+    setIsInviting(true);
+    const promises: Promise<any>[] = [];
+
+    if (hasEmail) {
+      promises.push(
+        customFetch(`/api/workspaces/${workspaceId}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: memberEmail, role: memberRole }),
+        })
+      );
+    }
+
+    for (const uid of selectedUserIds) {
+      const suggestion = memberSuggestions?.find((s) => s.userId === uid);
+      if (suggestion) {
+        promises.push(
+          customFetch(`/api/workspaces/${workspaceId}/members`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: suggestion.email, role: selectedSuggestions[uid] }),
+          })
+        );
+      }
+    }
+
+    try {
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter((r) => r.status === "rejected");
+      const succeeded = results.filter((r) => r.status === "fulfilled");
+
+      if (succeeded.length > 0) {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/members`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/members/suggestions`] });
+        toast({
+          title: succeeded.length === 1
+            ? "Membro adicionado com sucesso!"
+            : `${succeeded.length} membros adicionados com sucesso!`,
+        });
+      }
+
+      if (failed.length > 0) {
+        toast({
+          title: `Falha ao adicionar ${failed.length} membro${failed.length > 1 ? "s" : ""}`,
+          description: "Verifique se os e-mails estão corretos e os usuários estão cadastrados.",
+          variant: "destructive",
+        });
+      }
+
+      if (failed.length === 0) {
+        setIsMemberDialogOpen(false);
+        setMemberEmail("");
+        setMemberRole("editor");
+        setSelectedSuggestions({});
+      }
+    } catch {
+      toast({ title: "Falha ao adicionar membros", variant: "destructive" });
+    } finally {
+      setIsInviting(false);
+    }
   };
 
   const translateRole = (role: string) => {
@@ -706,36 +774,81 @@ export default function WorkspaceDetailPage() {
 
                 <TabsContent value="members" className="mt-0 outline-none">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {workspace.members.map(member => (
-                      <div key={member.id} className="bg-card rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col items-center gap-3 text-center">
-                        <Avatar className="w-20 h-20 ring-2 ring-border shadow-sm">
-                          {member.user.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user.name} className="object-cover" />}
-                          <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
-                            {member.user.name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="w-full min-w-0">
-                          <p className="font-semibold text-foreground truncate">{member.user.name}</p>
-                          <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>
+                    {workspace.members.map(member => {
+                      const isSelf = !!currentUserId && member.userId === currentUserId;
+                      const canChangeRole = isAdmin && !!currentUserId && !isSelf;
+                      return (
+                        <div key={member.id} className="bg-card rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col items-center gap-3 text-center">
+                          <Avatar className="w-20 h-20 ring-2 ring-border shadow-sm">
+                            {member.user.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={member.user.name} className="object-cover" />}
+                            <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
+                              {member.user.name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="w-full min-w-0">
+                            <p className="font-semibold text-foreground truncate">{member.user.name}</p>
+                            <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>
+                          </div>
+                          <div className="flex items-center justify-between w-full mt-auto pt-1">
+                            {canChangeRole ? (
+                              <Select
+                                value={member.role}
+                                onValueChange={(newRole) => {
+                                  updateMemberRoleMutation.mutate({
+                                    workspaceId,
+                                    memberId: member.id,
+                                    data: { role: newRole as "admin" | "editor" | "executor" },
+                                  });
+                                }}
+                                disabled={updateMemberRoleMutation.isPending}
+                              >
+                                <SelectTrigger className="h-8 w-auto gap-1.5 px-2.5 rounded-full text-xs font-semibold border focus:ring-0 focus:ring-offset-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {getRoleIcon(member.role)}
+                                    <SelectValue />
+                                  </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="admin">
+                                    <div className="flex items-center gap-2">
+                                      <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                                      <span>Admin</span>
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="editor">
+                                    <div className="flex items-center gap-2">
+                                      <Shield className="w-3.5 h-3.5 text-blue-500" />
+                                      <span>Editor</span>
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="executor">
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-3.5 h-3.5 text-slate-500" />
+                                      <span>Executor</span>
+                                    </div>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider lowercase ${getRoleBadgeClass(member.role)}`}>
+                                {getRoleIcon(member.role)}
+                                {translateRole(member.role)}
+                              </span>
+                            )}
+                            {isAdmin && !isSelf && member.role !== 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                onClick={() => setRemovingMemberId(member.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between w-full mt-auto pt-1">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider lowercase ${getRoleBadgeClass(member.role)}`}>
-                            {getRoleIcon(member.role)}
-                            {translateRole(member.role)}
-                          </span>
-                          {isAdmin && member.role !== 'admin' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                              onClick={() => setRemovingMemberId(member.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {isAdmin && (
                       <button
                         onClick={() => setIsMemberDialogOpen(true)}
@@ -773,66 +886,121 @@ export default function WorkspaceDetailPage() {
       />
 
       {/* Add Member Dialog */}
-      <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+      <Dialog open={isMemberDialogOpen} onOpenChange={(open) => {
+        setIsMemberDialogOpen(open);
+        if (!open) {
+          setMemberEmail("");
+          setMemberRole("editor");
+          setSelectedSuggestions({});
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-2xl font-display lowercase">Convidar Membro</DialogTitle>
-            <DialogDescription className="lowercase">Adicione um usuário cadastrado pelo e-mail e defina seu papel no workspace.</DialogDescription>
+            <DialogDescription className="lowercase">Adicione membros pelo e-mail ou selecione da lista abaixo.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAddMember} className="space-y-5 mt-2">
+          <form onSubmit={handleAddMember} className="flex flex-col gap-5 mt-2 min-h-0 flex-1">
             <div className="space-y-2">
               <label className="text-sm font-medium lowercase">E-mail do Usuário</label>
-              <Input
-                type="email"
-                placeholder="usuario@exemplo.com"
-                value={memberEmail}
-                onChange={(e) => setMemberEmail(e.target.value)}
-                className="h-12 rounded-xl"
-                autoFocus
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="usuario@exemplo.com"
+                  value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
+                  className="h-10 rounded-xl flex-1"
+                  autoFocus
+                />
+                <Select value={memberRole} onValueChange={(v) => setMemberRole(v as any)}>
+                  <SelectTrigger className="h-10 w-[130px] rounded-xl text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="editor">Editor</SelectItem>
+                    <SelectItem value="executor">Executor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium lowercase">Papel no Workspace</label>
-              <Select value={memberRole} onValueChange={(v) => setMemberRole(v as any)}>
-                <SelectTrigger className="h-12 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">
-                    <div className="flex items-center gap-2">
-                      <ShieldAlert className="w-4 h-4 text-red-500" />
-                      <div>
-                        <p className="font-medium">Admin</p>
-                        <p className="text-xs text-muted-foreground">Gerencia membros, planos e tarefas</p>
+
+            {memberSuggestions && memberSuggestions.length > 0 && (
+              <div className="space-y-2 min-h-0 flex flex-col">
+                <label className="text-sm font-medium lowercase text-muted-foreground">Usuários dos seus espaços</label>
+                <div className="overflow-y-auto max-h-[240px] border border-border rounded-xl divide-y divide-border/50">
+                  {memberSuggestions.map((s) => {
+                    const isSelected = s.userId in selectedSuggestions;
+                    return (
+                      <div
+                        key={s.userId}
+                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                          isSelected ? "bg-primary/5" : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => {
+                          setSelectedSuggestions((prev) => {
+                            if (isSelected) {
+                              const next = { ...prev };
+                              delete next[s.userId];
+                              return next;
+                            }
+                            return { ...prev, [s.userId]: "editor" };
+                          });
+                        }}
+                      >
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border"
+                        }`}>
+                          {isSelected && (
+                            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          )}
+                        </div>
+                        <Avatar className="w-8 h-8 ring-1 ring-border shrink-0">
+                          {s.avatarUrl && <AvatarImage src={s.avatarUrl} alt={s.name} />}
+                          <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                            {getInitials(s.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{s.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.email}</p>
+                        </div>
+                        {isSelected && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Select
+                              value={selectedSuggestions[s.userId]}
+                              onValueChange={(v) => {
+                                setSelectedSuggestions((prev) => ({
+                                  ...prev,
+                                  [s.userId]: v as "admin" | "editor" | "executor",
+                                }));
+                              }}
+                            >
+                              <SelectTrigger className="h-7 w-[100px] rounded-lg text-[11px] border-border/60">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="editor">Editor</SelectItem>
+                                <SelectItem value="executor">Executor</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="editor">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-blue-500" />
-                      <div>
-                        <p className="font-medium">Editor</p>
-                        <p className="text-xs text-muted-foreground">Cria e edita planos e tarefas</p>
-                      </div>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="executor">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-slate-500" />
-                      <div>
-                        <p className="font-medium">Executor</p>
-                        <p className="text-xs text-muted-foreground">Atualiza status das próprias tarefas</p>
-                      </div>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsMemberDialogOpen(false)} className="rounded-xl lowercase">Cancelar</Button>
-              <Button type="submit" disabled={addMemberMutation.isPending || !memberEmail.trim()} className="rounded-xl lowercase">
-                {addMemberMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><UserPlus className="w-4 h-4 mr-2" />Convidar</>}
+              <Button
+                type="submit"
+                disabled={isInviting || (!memberEmail.trim() && Object.keys(selectedSuggestions).length === 0)}
+                className="rounded-xl lowercase"
+              >
+                {isInviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><UserPlus className="w-4 h-4 mr-2" />Convidar</>}
               </Button>
             </DialogFooter>
           </form>

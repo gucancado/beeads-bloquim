@@ -271,10 +271,52 @@ paths:
                 $ref: "#/components/schemas/WorkspaceMemberResponse"
 
   /workspaces/{workspaceId}/members/{memberId}:
+    patch:
+      operationId: patchWorkspaceMemberRole
+      tags: [workspaces]
+      summary: Update member role
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRoleRequest"
+      responses:
+        "200":
+          description: Member role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMemberResponse"
+        "403":
+          description: Forbidden (e.g. admin cannot change own role)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Member not found in workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       operationId: updateWorkspaceMember
       tags: [workspaces]
-      summary: Update member role
+      summary: Update member role (legacy)
       parameters:
         - name: workspaceId
           in: path

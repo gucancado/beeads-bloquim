@@ -1,4 +1,4 @@
-import { Router, IRouter } from "express";
+import { Router, IRouter, Response } from "express";
 import { db } from "@workspace/db";
 import { workspaces, workspaceMembers, users, maps, cards, tasks } from "@workspace/db/schema";
 import { eq, and, inArray, sql, ne } from "drizzle-orm";
@@ -240,6 +240,45 @@ router.get("/:workspaceId/members", requireAuth, requireWorkspaceRole(["admin", 
   res.json(members);
 });
 
+router.get("/:workspaceId/members/suggestions", requireAuth, requireWorkspaceRole(["admin"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const userId = req.user!.userId;
+
+  const myWorkspaces = await db
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.userId, userId));
+
+  const myWorkspaceIds = myWorkspaces.map((w) => w.workspaceId);
+  if (myWorkspaceIds.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const currentMembers = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, workspaceId));
+
+  const currentMemberIds = new Set(currentMembers.map((m) => m.userId));
+
+  const candidates = await db
+    .select({
+      userId: workspaceMembers.userId,
+      name: users.name,
+      email: users.email,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(workspaceMembers)
+    .innerJoin(users, eq(workspaceMembers.userId, users.id))
+    .where(inArray(workspaceMembers.workspaceId, myWorkspaceIds))
+    .groupBy(workspaceMembers.userId, users.name, users.email, users.avatarUrl);
+
+  const suggestions = candidates.filter((c) => !currentMemberIds.has(c.userId));
+
+  res.json(suggestions);
+});
+
 router.post("/:workspaceId/members", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
   const parsed = addMemberSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -264,17 +303,34 @@ router.post("/:workspaceId/members", requireAuth, requireWorkspaceRole(["admin"]
   });
 });
 
-router.put("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
+async function handleUpdateMemberRole(req: AuthRequest, res: Response) {
+  const { workspaceId, memberId } = req.params;
   const parsed = updateRoleSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Validation error" });
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const [targetMember] = await db
+    .select()
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.id, memberId), eq(workspaceMembers.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!targetMember) {
+    res.status(404).json({ error: "Not found", message: "Member not found in this workspace" });
+    return;
+  }
+
+  if (targetMember.userId === req.user!.userId) {
+    res.status(403).json({ error: "Forbidden", message: "Admins cannot change their own role" });
     return;
   }
 
   const [updated] = await db
     .update(workspaceMembers)
     .set({ role: parsed.data.role })
-    .where(eq(workspaceMembers.id, req.params.memberId))
+    .where(and(eq(workspaceMembers.id, memberId), eq(workspaceMembers.workspaceId, workspaceId)))
     .returning();
 
   const [user] = await db.select().from(users).where(eq(users.id, updated.userId)).limit(1);
@@ -283,10 +339,15 @@ router.put("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(
     ...updated,
     user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
   });
-});
+}
+
+router.patch("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(["admin"]), handleUpdateMemberRole);
+
+router.put("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(["admin"]), handleUpdateMemberRole);
 
 router.delete("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
-  await db.delete(workspaceMembers).where(eq(workspaceMembers.id, req.params.memberId));
+  const { workspaceId, memberId } = req.params;
+  await db.delete(workspaceMembers).where(and(eq(workspaceMembers.id, memberId), eq(workspaceMembers.workspaceId, workspaceId)));
   res.json({ success: true, message: "Member removed" });
 });
 

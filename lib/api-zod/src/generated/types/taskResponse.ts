@@ -8,7 +8,6 @@
 import type { TaskPriority } from "./taskPriority";
 import type { TaskStatus } from "./taskStatus";
 import type { UserResponse } from "./userResponse";
-import type { SubtaskResponse } from "./subtaskResponse";
 
 export interface TaskResponse {
   id: string;
@@ -24,5 +23,4 @@ export interface TaskResponse {
   completedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  subtasks?: SubtaskResponse[];
 }

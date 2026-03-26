@@ -210,6 +210,33 @@ export const AddWorkspaceMemberBody = zod.object({
 /**
  * @summary Update member role
  */
+export const PatchWorkspaceMemberRoleParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  memberId: zod.coerce.string().uuid(),
+});
+
+export const PatchWorkspaceMemberRoleBody = zod.object({
+  role: zod.enum(["admin", "editor", "executor"]),
+});
+
+export const PatchWorkspaceMemberRoleResponse = zod.object({
+  id: zod.string().uuid(),
+  workspaceId: zod.string().uuid(),
+  userId: zod.string().uuid(),
+  role: zod.enum(["admin", "editor", "executor"]),
+  user: zod.object({
+    id: zod.string().uuid(),
+    name: zod.string(),
+    email: zod.string(),
+    createdAt: zod.date(),
+    avatarUrl: zod.string().nullish(),
+  }),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Update member role (legacy)
+ */
 export const UpdateWorkspaceMemberParams = zod.object({
   workspaceId: zod.coerce.string().uuid(),
   memberId: zod.coerce.string().uuid(),
@@ -308,6 +335,11 @@ export const GetMapResponse = zod.object({
       taskId: zod.string().uuid().nullish(),
       createdAt: zod.date(),
       updatedAt: zod.date(),
+      taskDueDate: zod.date().nullish(),
+      taskAssigneeName: zod.string().nullish(),
+      taskAssigneeId: zod.string().uuid().nullish(),
+      taskOverdue: zod.boolean().optional(),
+      taskAssigneeAvatarUrl: zod.string().nullish(),
     }),
   ),
   connections: zod.array(
@@ -462,6 +494,11 @@ export const UpdateCardResponse = zod.object({
   taskId: zod.string().uuid().nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
+  taskDueDate: zod.date().nullish(),
+  taskAssigneeName: zod.string().nullish(),
+  taskAssigneeId: zod.string().uuid().nullish(),
+  taskOverdue: zod.boolean().optional(),
+  taskAssigneeAvatarUrl: zod.string().nullish(),
 });
 
 /**
