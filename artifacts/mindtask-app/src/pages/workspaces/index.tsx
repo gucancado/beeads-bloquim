@@ -2,13 +2,14 @@ import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useCreateWorkspace, useGetMe } from "@workspace/api-client-react";
-import { FolderGit2, Plus, Loader2, EyeOff, Eye } from "lucide-react";
+import { FolderGit2, Plus, Loader2, EyeOff, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useListWorkspacesWithHidden, useToggleWorkspaceHidden } from "@/hooks/useHidden";
+import { useListWorkspacesWithHidden, useToggleWorkspaceHidden, useDeleteWorkspace } from "@/hooks/useHidden";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
@@ -65,12 +66,32 @@ function WorkspaceCard({ ws, showHidden }: {
   showHidden: boolean;
 }) {
   const toggleHidden = useToggleWorkspaceHidden(ws.id);
+  const deleteWorkspace = useDeleteWorkspace(ws.id);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const { toast } = useToast();
   const isAdmin = ws.role === "admin";
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     toggleHidden.mutate(!ws.hidden);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteWorkspace.mutate(undefined, {
+      onSuccess: () => {
+        toast({ title: "Espaço excluído com sucesso!" });
+      },
+      onError: () => {
+        toast({ title: "Falha ao excluir espaço", variant: "destructive" });
+      },
+    });
   };
 
   const counts = ws.taskCounts ?? { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
@@ -148,21 +169,55 @@ function WorkspaceCard({ ws, showHidden }: {
       </Link>
 
       {isAdmin && (
-        <button
-          onClick={handleToggle}
-          disabled={toggleHidden.isPending}
-          title={ws.hidden ? "Tornar visível" : "Ocultar espaço"}
-          className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground z-10"
-        >
-          {toggleHidden.isPending ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : ws.hidden ? (
-            <Eye className="w-3.5 h-3.5" />
-          ) : (
-            <EyeOff className="w-3.5 h-3.5" />
-          )}
-        </button>
+        <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
+          <button
+            onClick={handleToggle}
+            disabled={toggleHidden.isPending}
+            title={ws.hidden ? "Tornar visível" : "Ocultar espaço"}
+            className="w-8 h-8 rounded-xl flex items-center justify-center bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground"
+          >
+            {toggleHidden.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : ws.hidden ? (
+              <Eye className="w-3.5 h-3.5" />
+            ) : (
+              <EyeOff className="w-3.5 h-3.5" />
+            )}
+          </button>
+          <button
+            onClick={handleDeleteClick}
+            disabled={deleteWorkspace.isPending}
+            title="Excluir espaço"
+            className="w-8 h-8 rounded-xl flex items-center justify-center bg-background border border-border shadow-sm hover:border-red-400 dark:hover:border-red-500 text-muted-foreground hover:text-red-500"
+          >
+            {deleteWorkspace.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
       )}
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="lowercase">Excluir espaço de trabalho?</AlertDialogTitle>
+            <AlertDialogDescription className="lowercase">
+              Esta ação é permanente e não pode ser desfeita. O espaço "{ws.name}" e todos os seus planos e tarefas serão excluídos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl lowercase">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl lowercase bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleConfirmDelete}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

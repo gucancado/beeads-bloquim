@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
-import { useListMapsWithHidden, useToggleMapHidden } from "@/hooks/useHidden";
+import { useListMapsWithHidden, useToggleMapHidden, useDeleteMap } from "@/hooks/useHidden";
 import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,11 +44,31 @@ function MapCard({ map, workspaceId, isAdmin }: {
   isAdmin: boolean;
 }) {
   const toggleHidden = useToggleMapHidden(workspaceId, map.id);
+  const deleteMap = useDeleteMap(workspaceId, map.id);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const { toast } = useToast();
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     toggleHidden.mutate(!map.hidden);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteMap.mutate(undefined, {
+      onSuccess: () => {
+        toast({ title: "Plano excluído com sucesso!" });
+      },
+      onError: () => {
+        toast({ title: "Falha ao excluir plano", variant: "destructive" });
+      },
+    });
   };
 
   return (
@@ -76,21 +96,55 @@ function MapCard({ map, workspaceId, isAdmin }: {
       </Link>
 
       {isAdmin && (
-        <button
-          onClick={handleToggle}
-          disabled={toggleHidden.isPending}
-          title={map.hidden ? "tornar visível" : "ocultar plano"}
-          className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground z-10"
-        >
-          {toggleHidden.isPending ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : map.hidden ? (
-            <Eye className="w-3.5 h-3.5" />
-          ) : (
-            <EyeOff className="w-3.5 h-3.5" />
-          )}
-        </button>
+        <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
+          <button
+            onClick={handleToggle}
+            disabled={toggleHidden.isPending}
+            title={map.hidden ? "tornar visível" : "ocultar plano"}
+            className="w-8 h-8 rounded-xl flex items-center justify-center bg-background border border-border shadow-sm hover:border-slate-400 dark:hover:border-slate-500 text-muted-foreground hover:text-foreground"
+          >
+            {toggleHidden.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : map.hidden ? (
+              <Eye className="w-3.5 h-3.5" />
+            ) : (
+              <EyeOff className="w-3.5 h-3.5" />
+            )}
+          </button>
+          <button
+            onClick={handleDeleteClick}
+            disabled={deleteMap.isPending}
+            title="Excluir plano"
+            className="w-8 h-8 rounded-xl flex items-center justify-center bg-background border border-border shadow-sm hover:border-red-400 dark:hover:border-red-500 text-muted-foreground hover:text-red-500"
+          >
+            {deleteMap.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
       )}
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="lowercase">Excluir plano?</AlertDialogTitle>
+            <AlertDialogDescription className="lowercase">
+              Esta ação é permanente e não pode ser desfeita. O plano "{map.name}" e todos os seus dados serão excluídos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl lowercase">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl lowercase bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleConfirmDelete}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

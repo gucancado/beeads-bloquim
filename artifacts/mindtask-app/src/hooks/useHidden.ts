@@ -47,6 +47,38 @@ export function useToggleMapHidden(workspaceId: string, mapId: string) {
   });
 }
 
+export function useDeleteWorkspace(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await customFetch(`/api/workspaces/${workspaceId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete workspace");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+    },
+  });
+}
+
+export function useDeleteMap(workspaceId: string, mapId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await customFetch(`/api/workspaces/${workspaceId}/maps/${mapId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete map");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps`] });
+    },
+  });
+}
+
 export function useListWorkspacesWithHidden(showHidden: boolean) {
   return useQuery({
     queryKey: ["/api/workspaces", { showHidden }],
