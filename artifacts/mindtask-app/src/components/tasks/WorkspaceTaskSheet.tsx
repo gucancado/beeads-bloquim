@@ -327,11 +327,13 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
   };
 
   const handleStatusChange = (newStatus: string) => {
+    if (!isEditing) return;
     setStatus(newStatus);
     statusMutation.mutate(newStatus);
   };
 
   const handleConcluir = () => {
+    if (!isEditing) return;
     if (status === "completed") {
       const revert = task?.previousStatus || "pending";
       setStatus(revert);
