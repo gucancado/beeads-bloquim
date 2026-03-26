@@ -228,6 +228,7 @@ export default function WorkspaceDetailPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
         setIsMapDialogOpen(false);
         setMapName("");
         toast({ title: "Plano criado com sucesso!" });
@@ -264,6 +265,7 @@ export default function WorkspaceDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
     },
     onError: () => {
       toast({ title: "Falha ao renomear espaço", variant: "destructive" });

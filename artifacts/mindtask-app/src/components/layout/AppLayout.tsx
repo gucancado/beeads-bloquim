@@ -1,20 +1,12 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useGetMe, useLogout, customFetch } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
-import { LogOut, CheckSquare, Compass, Folders, Loader2, Map, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useGetMe, useLogout } from "@workspace/api-client-react";
+import { LogOut, CheckSquare, Compass, Folders, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
-
-interface RecentMap {
-  mapId: string;
-  workspaceId: string;
-  mapName: string;
-  workspaceName: string;
-  lastAccessedAt: string;
-}
+import { SidebarWorkspaceList } from "@/components/layout/SidebarWorkspaceList";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -25,12 +17,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const { data: user, isLoading: isUserLoading } = useGetMe({
     query: { retry: false }
-  });
-
-  const { data: recentMaps, isLoading: isRecentMapsLoading } = useQuery<RecentMap[]>({
-    queryKey: ["/api/maps/recent"],
-    queryFn: () => customFetch("/api/maps/recent"),
-    enabled: !!user,
   });
 
   const logoutMutation = useLogout({
@@ -69,8 +55,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const isActive = (path: string) => location.startsWith(path);
-  const isMapActive = (workspaceId: string, mapId: string) =>
-    location === `/workspaces/${workspaceId}/maps/${mapId}`;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -101,15 +85,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <ScrollArea className="flex-1 py-4 px-2">
           <nav className="space-y-6">
             <div className={`space-y-1 ${collapsed ? 'mt-2' : ''}`}>
-              <Link href="/workspaces">
-                <span
-                  title="espaços de trabalho"
-                  className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/workspaces') && location === '/workspaces' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-                >
-                  <Folders className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span className="lowercase">Espaços de Trabalho</span>}
-                </span>
-              </Link>
               <Link href="/my-tasks">
                 <span
                   title="suas tarefas"
@@ -119,54 +94,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   {!collapsed && <span className="lowercase">Suas tarefas</span>}
                 </span>
               </Link>
+              <Link href="/workspaces">
+                <span
+                  title="espaços de trabalho"
+                  className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/workspaces') && location === '/workspaces' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
+                >
+                  <Folders className="w-5 h-5 shrink-0" />
+                  {!collapsed && <span className="lowercase">Espaços de Trabalho</span>}
+                </span>
+              </Link>
             </div>
 
-            {!collapsed && (
-              <div>
-                <div className="px-3 mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-sidebar-foreground/50 tracking-wider lowercase">Planos Recentes</p>
-                </div>
-
-                {isRecentMapsLoading ? (
-                  <div className="px-4 py-2 flex items-center gap-2 text-sidebar-foreground/40 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Carregando...</span>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {recentMaps?.map((m) => (
-                      <Link key={m.mapId} href={`/workspaces/${m.workspaceId}/maps/${m.mapId}`}>
-                        <span className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 cursor-pointer ${isMapActive(m.workspaceId, m.mapId) ? 'bg-sidebar-accent text-primary font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}>
-                          <Map className={`w-3.5 h-3.5 shrink-0 ${isMapActive(m.workspaceId, m.mapId) ? 'text-primary' : 'text-sidebar-foreground/30'}`} />
-                          <div className="flex flex-col min-w-0">
-                            <span className="truncate text-sm font-medium leading-tight">{m.mapName}</span>
-                            <span className="truncate text-xs text-sidebar-foreground/40 leading-tight mt-0.5">{m.workspaceName}</span>
-                          </div>
-                        </span>
-                      </Link>
-                    ))}
-                    {recentMaps?.length === 0 && (
-                      <p className="px-3 text-sm text-sidebar-foreground/40 italic lowercase">Nenhum plano acessado ainda</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {collapsed && (
-              <div className="space-y-1">
-                {recentMaps?.map((m) => (
-                  <Link key={m.mapId} href={`/workspaces/${m.workspaceId}/maps/${m.mapId}`}>
-                    <span
-                      title={`${m.mapName} · ${m.workspaceName}`}
-                      className={`flex justify-center py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${isMapActive(m.workspaceId, m.mapId) ? 'bg-sidebar-accent text-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-                    >
-                      <Map className={`w-3.5 h-3.5 ${isMapActive(m.workspaceId, m.mapId) ? 'text-primary' : 'text-sidebar-foreground/30'}`} />
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <SidebarWorkspaceList collapsed={collapsed} enabled={!!user} />
           </nav>
         </ScrollArea>
 

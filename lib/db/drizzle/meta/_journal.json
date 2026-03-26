@@ -29,6 +29,20 @@
       "when": 1774551000000,
       "tag": "0003_add_task_activities",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774620000000,
+      "tag": "0004_add_user_workspace_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774640000000,
+      "tag": "0005_add_workspace_expanded",
+      "breakpoints": true
     }
   ]
 }

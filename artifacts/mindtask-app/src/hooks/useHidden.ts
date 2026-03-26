@@ -26,6 +26,7 @@ export function useToggleWorkspaceHidden(workspaceId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
     },
   });
 }
@@ -43,6 +44,7 @@ export function useToggleMapHidden(workspaceId: string, mapId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
     },
   });
 }
@@ -59,6 +61,7 @@ export function useDeleteWorkspace(workspaceId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
     },
   });
 }
@@ -75,6 +78,7 @@ export function useDeleteMap(workspaceId: string, mapId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
     },
   });
 }

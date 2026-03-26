@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, boolean, integer, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { users } from "./users";
@@ -30,6 +30,23 @@ export const workspaceMembers = pgTable("workspace_members", {
   role: workspaceRoleEnum("role").notNull().default("executor"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const userWorkspaceOrder = pgTable(
+  "user_workspace_order",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull(),
+    expanded: boolean("expanded").notNull().default(true),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.workspaceId] })],
+);
+
+export type UserWorkspaceOrder = typeof userWorkspaceOrder.$inferSelect;
 
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({
   id: true,

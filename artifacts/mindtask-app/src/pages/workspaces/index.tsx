@@ -273,6 +273,7 @@ export default function WorkspacesPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
         setIsOpen(false);
         setName("");
         toast({ title: "Espaço criado com sucesso!" });
