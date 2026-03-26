@@ -12,6 +12,17 @@ export interface CommentItem {
   updatedAt: string;
 }
 
+export interface TaskActivityItem {
+  id: string;
+  taskId: string;
+  actorId: string | null;
+  actorName: string | null;
+  actorAvatarUrl: string | null;
+  type: "task_created" | "assignee_changed" | "status_changed";
+  metadata: Record<string, string | null>;
+  createdAt: string;
+}
+
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 function authHeaders(): HeadersInit {
@@ -112,5 +123,20 @@ export function useToggleTaskCommentHidden(workspaceId: string, taskId: string) 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`task-comments`, workspaceId, taskId] });
     },
+  });
+}
+
+export function useTaskActivities(workspaceId: string | null, taskId: string | null) {
+  const isWorkspace = !!workspaceId;
+  return useQuery<TaskActivityItem[]>({
+    queryKey: [`task-activities`, workspaceId ?? "standalone", taskId],
+    queryFn: () =>
+      apiFetch<TaskActivityItem[]>(
+        isWorkspace
+          ? `${BASE}/api/workspaces/${workspaceId}/tasks/${taskId}/activities`
+          : `${BASE}/api/my-tasks/${taskId}/activities`
+      ),
+    enabled: !!taskId,
+    staleTime: 0,
   });
 }

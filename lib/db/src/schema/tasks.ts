@@ -6,6 +6,7 @@ import {
   pgEnum,
   boolean,
   integer,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -85,3 +86,22 @@ export const insertSubtaskSchema = createInsertSchema(subtasks).omit({
 
 export type InsertSubtask = z.infer<typeof insertSubtaskSchema>;
 export type Subtask = typeof subtasks.$inferSelect;
+
+export const taskActivityTypeEnum = pgEnum("task_activity_type", [
+  "task_created",
+  "assignee_changed",
+  "status_changed",
+]);
+
+export const taskActivities = pgTable("task_activities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+  type: taskActivityTypeEnum("type").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, string | null>>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type TaskActivity = typeof taskActivities.$inferSelect;

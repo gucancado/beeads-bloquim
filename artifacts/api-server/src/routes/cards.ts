@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { cards, tasks, cardConnections } from "@workspace/db/schema";
+import { cards, tasks, cardConnections, taskActivities, users } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
@@ -155,6 +155,8 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
   const overdue = computeOverdue(dueDate ?? null, "pending");
   const visual = toVisualStatus("pending", overdue);
 
+  const userId = req.user!.userId;
+
   const [task] = await db
     .insert(tasks)
     .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "pending", overdue })
@@ -164,6 +166,14 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     .update(cards)
     .set({ taskId: task.id, statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
+
+  const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+  await db.insert(taskActivities).values({
+    taskId: task.id,
+    actorId: userId,
+    type: "task_created",
+    metadata: { actorName: actorUser?.name ?? null },
+  });
 
   res.status(201).json(task);
 });
@@ -237,6 +247,20 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
     .update(cards)
     .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
+
+  if (task.status !== status) {
+    const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    await db.insert(taskActivities).values({
+      taskId: card.taskId,
+      actorId: userId,
+      type: "status_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        oldStatus: task.status,
+        newStatus: status,
+      },
+    });
+  }
 
   // Cascade: when completed, activate downstream cards connected via right handle
   // A downstream card only advances to "in_progress" if:
@@ -331,8 +355,9 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
   res.json(updatedTask);
 });
 
-router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
+router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
   const { cardId } = req.params;
+  const userId = req.user!.userId;
 
   const [card] = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
   if (!card || !card.taskId) {
@@ -356,7 +381,6 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     updateData.dueDate = resolvedDueDate;
   }
 
-  // Recompute overdue whenever dueDate or any save happens
   const currentStatus = currentTask?.status ?? "in_progress";
   const overdue = computeOverdue(resolvedDueDate, currentStatus);
   updateData.overdue = overdue;
@@ -372,6 +396,30 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     .update(cards)
     .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
+
+  if (parsed.data.assignedTo !== undefined && currentTask && currentTask.assignedTo !== parsed.data.assignedTo) {
+    const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    let newAssigneeName: string | null = null;
+    if (parsed.data.assignedTo) {
+      const [newUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, parsed.data.assignedTo)).limit(1);
+      newAssigneeName = newUser?.name ?? null;
+    }
+    let oldAssigneeName: string | null = null;
+    if (currentTask.assignedTo) {
+      const [oldUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, currentTask.assignedTo)).limit(1);
+      oldAssigneeName = oldUser?.name ?? null;
+    }
+    await db.insert(taskActivities).values({
+      taskId: card.taskId,
+      actorId: userId,
+      type: "assignee_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        oldAssigneeName,
+        newAssigneeName,
+      },
+    });
+  }
 
   res.json(updatedTask);
 });

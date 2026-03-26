@@ -22,6 +22,13 @@
       "when": 1774450900000,
       "tag": "0002_make_workspace_id_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774551000000,
+      "tag": "0003_add_task_activities",
+      "breakpoints": true
     }
   ]
 }

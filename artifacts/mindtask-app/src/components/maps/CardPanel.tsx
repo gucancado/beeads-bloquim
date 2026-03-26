@@ -223,6 +223,9 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose, onDeleteCard }:
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
     queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}/cards/${cardId}`] });
+    if (taskId) {
+      queryClient.invalidateQueries({ queryKey: [`task-activities`, workspaceId, taskId] });
+    }
   };
 
   const saveCard = () => {
@@ -565,6 +568,7 @@ export function CardPanel({ workspaceId, mapId, cardId, onClose, onDeleteCard }:
                     workspaceId={workspaceId}
                     mapId={mapId}
                     cardId={cardId}
+                    linkedTaskId={taskId}
                     currentUserId={currentUserId}
                     isAdmin={isAdmin}
                   />

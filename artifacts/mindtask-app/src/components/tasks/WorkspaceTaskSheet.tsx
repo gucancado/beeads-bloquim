@@ -274,8 +274,10 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
       invalidate();
       if (isStandalone) {
         queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, "standalone", taskId] });
       } else {
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, workspaceId, taskId] });
       }
     },
     onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
@@ -291,8 +293,10 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
       invalidate();
       if (isStandalone) {
         queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, "standalone", taskId] });
       } else {
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, workspaceId, taskId] });
       }
     },
     onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
@@ -633,6 +637,14 @@ export function WorkspaceTaskSheet({ workspaceId, taskId, open, onClose }: Props
                   taskId={taskId}
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
+                />
+              )}
+              {isEditing && taskId && isStandalone && (
+                <CommentsSection
+                  standalone
+                  taskId={taskId}
+                  currentUserId={currentUserId}
+                  isAdmin={false}
                 />
               )}
             </div>

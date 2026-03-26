@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, CommentItem } from "@/hooks/useComments";
+import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, useTaskActivities, CommentItem, TaskActivityItem } from "@/hooks/useComments";
 import { Button } from "@/components/ui/button";
 import { Loader2, Bold, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
 import { format } from "date-fns";
@@ -12,7 +12,9 @@ type CommentsSectionProps =
       workspaceId: string;
       mapId: string;
       cardId: string;
+      linkedTaskId?: string | null;
       taskId?: never;
+      standalone?: never;
       currentUserId: string;
       isAdmin: boolean;
     }
@@ -21,6 +23,18 @@ type CommentsSectionProps =
       taskId: string;
       mapId?: never;
       cardId?: never;
+      linkedTaskId?: never;
+      standalone?: never;
+      currentUserId: string;
+      isAdmin: boolean;
+    }
+  | {
+      standalone: true;
+      taskId: string;
+      workspaceId?: never;
+      mapId?: never;
+      cardId?: never;
+      linkedTaskId?: never;
       currentUserId: string;
       isAdmin: boolean;
     };
@@ -65,7 +79,6 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
 
   return (
     <div className="border border-border rounded-xl bg-background focus-within:ring-2 focus-within:ring-primary/30 transition-all">
-      {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-2 pt-1.5 border-b border-border/60">
         <button
           type="button"
@@ -148,7 +161,7 @@ function CommentCard({
           <div className="min-w-0">
             <span className="text-xs font-semibold text-foreground truncate">{comment.authorName}</span>
             <span className="text-[10px] text-muted-foreground ml-1.5">
-              {format(date, "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
+              {format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
             </span>
           </div>
         </div>
@@ -183,10 +196,64 @@ function CommentCard({
   );
 }
 
-function CardCommentsSection({ workspaceId, mapId, cardId, currentUserId, isAdmin }: { workspaceId: string; mapId: string; cardId: string; currentUserId: string; isAdmin: boolean }) {
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Pendente",
+  in_progress: "Em andamento",
+  completed: "Concluída",
+  blocked: "Interrompida",
+  overdue: "Atrasada",
+};
+
+function formatActivityText(activity: TaskActivityItem): string {
+  const date = new Date(activity.createdAt);
+  const dateStr = format(date, "dd/MM/yyyy HH:mm");
+  const m = activity.metadata ?? {};
+
+  switch (activity.type) {
+    case "task_created": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      return `${dateStr}: tarefa criada por ${actor}`;
+    }
+    case "assignee_changed": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const newName = m.newAssigneeName;
+      if (newName) {
+        return `${dateStr}: ${actor} atribuiu para ${newName}`;
+      }
+      return `${dateStr}: ${actor} removeu responsável`;
+    }
+    case "status_changed": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const oldLabel = STATUS_LABELS[m.oldStatus ?? ""] ?? m.oldStatus ?? "?";
+      const newLabel = STATUS_LABELS[m.newStatus ?? ""] ?? m.newStatus ?? "?";
+      return `${dateStr}: ${actor} mudou tarefa de ${oldLabel} para ${newLabel}`;
+    }
+    default:
+      return "";
+  }
+}
+
+function ActivityEntry({ activity }: { activity: TaskActivityItem }) {
+  const text = formatActivityText(activity);
+  if (!text) return null;
+
+  return (
+    <div className="flex items-start gap-2 py-1 px-2">
+      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
+      <p className="text-xs text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+type TimelineEntry =
+  | { kind: "comment"; item: CommentItem }
+  | { kind: "activity"; item: TaskActivityItem };
+
+function CardCommentsSection({ workspaceId, mapId, cardId, linkedTaskId, currentUserId, isAdmin }: { workspaceId: string; mapId: string; cardId: string; linkedTaskId?: string | null; currentUserId: string; isAdmin: boolean }) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const { data: comments, isLoading } = useComments(workspaceId, mapId, cardId);
+  const { data: comments, isLoading: commentsLoading } = useComments(workspaceId, mapId, cardId);
+  const { data: activities, isLoading: activitiesLoading } = useTaskActivities(workspaceId, linkedTaskId ?? null);
   const createMut = useCreateComment(workspaceId, mapId, cardId);
   const toggleMut = useToggleCommentHidden(workspaceId, mapId, cardId);
 
@@ -196,13 +263,16 @@ function CardCommentsSection({ workspaceId, mapId, cardId, currentUserId, isAdmi
     toggleMut.mutate(commentId, { onSettled: () => setTogglingId(null) });
   };
 
-  return <CommentsList comments={comments} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={handleSubmit} onToggle={handleToggle} togglingId={togglingId} isPending={createMut.isPending} />;
+  const isLoading = commentsLoading || activitiesLoading;
+
+  return <CommentsList comments={comments} activities={activities} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={handleSubmit} onToggle={handleToggle} togglingId={togglingId} isPending={createMut.isPending} />;
 }
 
 function TaskCommentsSection({ workspaceId, taskId, currentUserId, isAdmin }: { workspaceId: string; taskId: string; currentUserId: string; isAdmin: boolean }) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const { data: comments, isLoading } = useTaskComments(workspaceId, taskId);
+  const { data: comments, isLoading: commentsLoading } = useTaskComments(workspaceId, taskId);
+  const { data: activities, isLoading: activitiesLoading } = useTaskActivities(workspaceId, taskId);
   const createMut = useCreateTaskComment(workspaceId, taskId);
   const toggleMut = useToggleTaskCommentHidden(workspaceId, taskId);
 
@@ -212,11 +282,20 @@ function TaskCommentsSection({ workspaceId, taskId, currentUserId, isAdmin }: { 
     toggleMut.mutate(commentId, { onSettled: () => setTogglingId(null) });
   };
 
-  return <CommentsList comments={comments} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={handleSubmit} onToggle={handleToggle} togglingId={togglingId} isPending={createMut.isPending} />;
+  const isLoading = commentsLoading || activitiesLoading;
+
+  return <CommentsList comments={comments} activities={activities} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={handleSubmit} onToggle={handleToggle} togglingId={togglingId} isPending={createMut.isPending} />;
 }
 
-function CommentsList({ comments, isLoading, currentUserId, isAdmin, onSubmit, onToggle, togglingId, isPending }: {
+function StandaloneActivitySection({ taskId, currentUserId, isAdmin }: { taskId: string; currentUserId: string; isAdmin: boolean }) {
+  const { data: activities, isLoading } = useTaskActivities(null, taskId);
+
+  return <CommentsList comments={undefined} activities={activities} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={() => {}} onToggle={() => {}} togglingId={null} isPending={false} hideEditor />;
+}
+
+function CommentsList({ comments, activities, isLoading, currentUserId, isAdmin, onSubmit, onToggle, togglingId, isPending, hideEditor }: {
   comments: CommentItem[] | undefined;
+  activities: TaskActivityItem[] | undefined;
   isLoading: boolean;
   currentUserId: string;
   isAdmin: boolean;
@@ -224,49 +303,77 @@ function CommentsList({ comments, isLoading, currentUserId, isAdmin, onSubmit, o
   onToggle: (id: string) => void;
   togglingId: string | null;
   isPending: boolean;
+  hideEditor?: boolean;
 }) {
+  const timeline = useMemo<TimelineEntry[]>(() => {
+    const entries: TimelineEntry[] = [];
+    if (comments) {
+      for (const c of comments) entries.push({ kind: "comment", item: c });
+    }
+    if (activities) {
+      for (const a of activities) entries.push({ kind: "activity", item: a });
+    }
+    entries.sort((a, b) => new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime());
+    return entries;
+  }, [comments, activities]);
+
+  const commentCount = comments?.length ?? 0;
+  const hasActivitiesOnly = !comments && !!activities;
+
   return (
     <div className="border-t pt-5 space-y-4">
       <div className="flex items-center gap-2">
         <MessageSquare className="w-4 h-4 text-muted-foreground" />
         <h3 className="text-xs font-semibold text-muted-foreground tracking-wider lowercase">
-          Comentários {comments && comments.length > 0 ? `(${comments.length})` : ""}
+          {hasActivitiesOnly ? "Atividades" : `Comentários ${commentCount > 0 ? `(${commentCount})` : ""}`}
         </h3>
       </div>
 
-      <RichTextEditor onSubmit={onSubmit} isPending={isPending} />
+      {!hideEditor && <RichTextEditor onSubmit={onSubmit} isPending={isPending} />}
 
       {isLoading ? (
         <div className="flex justify-center py-3">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
-      ) : comments && comments.length > 0 ? (
+      ) : timeline.length > 0 ? (
         <div className="space-y-2">
-          {comments.map((c) => (
-            <CommentCard
-              key={c.id}
-              comment={c}
-              currentUserId={currentUserId}
-              isAdmin={isAdmin}
-              onToggleHidden={onToggle}
-              isToggling={togglingId === c.id}
-            />
-          ))}
+          {timeline.map((entry) => {
+            if (entry.kind === "comment") {
+              return (
+                <CommentCard
+                  key={`comment-${entry.item.id}`}
+                  comment={entry.item}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  onToggleHidden={onToggle}
+                  isToggling={togglingId === entry.item.id}
+                />
+              );
+            }
+            return (
+              <ActivityEntry key={`activity-${entry.item.id}`} activity={entry.item} />
+            );
+          })}
         </div>
       ) : (
-        <p className="text-xs text-center text-muted-foreground py-2 lowercase">Nenhum comentário ainda.</p>
+        <p className="text-xs text-center text-muted-foreground py-2 lowercase">
+          {hasActivitiesOnly ? "Nenhuma atividade ainda." : "Nenhum comentário ainda."}
+        </p>
       )}
     </div>
   );
 }
 
 export function CommentsSection(props: CommentsSectionProps) {
-  const { workspaceId, currentUserId, isAdmin } = props;
+  if ("standalone" in props && props.standalone) {
+    return <StandaloneActivitySection taskId={props.taskId} currentUserId={props.currentUserId} isAdmin={props.isAdmin} />;
+  }
+
+  const { workspaceId, currentUserId, isAdmin } = props as { workspaceId: string; currentUserId: string; isAdmin: boolean };
 
   if (props.taskId) {
     return <TaskCommentsSection workspaceId={workspaceId} taskId={props.taskId} currentUserId={currentUserId} isAdmin={isAdmin} />;
   }
 
-  return <CardCommentsSection workspaceId={workspaceId} mapId={props.mapId!} cardId={props.cardId!} currentUserId={currentUserId} isAdmin={isAdmin} />;
+  return <CardCommentsSection workspaceId={workspaceId} mapId={props.mapId!} cardId={props.cardId!} linkedTaskId={props.linkedTaskId} currentUserId={currentUserId} isAdmin={isAdmin} />;
 }
-

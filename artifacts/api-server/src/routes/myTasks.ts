@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { computeOverdue } from "../lib/overdue";
@@ -212,6 +212,15 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     overdue: overdueValue,
   }).returning();
 
+  const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+
+  await db.insert(taskActivities).values({
+    taskId: newTask.id,
+    actorId: userId,
+    type: "task_created",
+    metadata: { actorName: actorUser?.name ?? null },
+  });
+
   return res.status(201).json(newTask);
 });
 
@@ -274,8 +283,10 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
     return res.status(403).json({ message: "Sem permissão" });
   }
 
+  const previousStatus = existing.status;
+
   const updateData: Record<string, any> = {
-    previousStatus: existing.status,
+    previousStatus,
     status: newStatus,
     updatedAt: new Date(),
     overdue: computeOverdue(existing.dueDate, newStatus),
@@ -283,7 +294,55 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
   if (newStatus === "completed") updateData.completedAt = new Date();
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+
+  if (previousStatus !== newStatus) {
+    const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    await db.insert(taskActivities).values({
+      taskId,
+      actorId: userId,
+      type: "status_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        oldStatus: previousStatus,
+        newStatus,
+      },
+    });
+  }
+
   return res.json(updated);
+});
+
+router.get("/:taskId/activities", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (task.workspaceId !== null) {
+    return res.status(403).json({ message: "Use a rota do workspace" });
+  }
+  if (task.assignedTo !== userId) {
+    return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  const activities = await db
+    .select({
+      id: taskActivities.id,
+      taskId: taskActivities.taskId,
+      actorId: taskActivities.actorId,
+      actorName: users.name,
+      actorAvatarUrl: users.avatarUrl,
+      type: taskActivities.type,
+      metadata: taskActivities.metadata,
+      createdAt: taskActivities.createdAt,
+    })
+    .from(taskActivities)
+    .leftJoin(users, eq(taskActivities.actorId, users.id))
+    .where(eq(taskActivities.taskId, taskId))
+    .orderBy(asc(taskActivities.createdAt));
+
+  return res.json(activities);
 });
 
 router.delete("/:taskId", requireAuth, async (req: AuthRequest, res) => {

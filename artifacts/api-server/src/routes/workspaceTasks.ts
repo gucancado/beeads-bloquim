@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaceMembers, users, subtasks } from "@workspace/db/schema";
-import { eq, and, isNull, or, inArray, asc, sql, count } from "drizzle-orm";
+import { tasks, cards, maps, workspaceMembers, users, subtasks, taskActivities } from "@workspace/db/schema";
+import { eq, and, isNull, or, inArray, asc, sql, count, desc } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -143,6 +143,8 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
   const dueDateValue = parseDateNoon(dueDate);
   const overdueValue = computeOverdue(dueDateValue, "pending");
 
+  const actorId = req.user!.userId;
+
   const [task] = await db
     .insert(tasks)
     .values({
@@ -157,9 +159,19 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
     })
     .returning();
 
-  const assignee = assignedTo
-    ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, assignedTo)).limit(1)
-    : [];
+  const [actorUser, assignee] = await Promise.all([
+    db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1),
+    assignedTo
+      ? db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, assignedTo)).limit(1)
+      : Promise.resolve([]),
+  ]);
+
+  await db.insert(taskActivities).values({
+    taskId: task.id,
+    actorId,
+    type: "task_created",
+    metadata: { actorName: actorUser[0]?.name ?? null },
+  });
 
   res.status(201).json({
     ...task,
@@ -167,7 +179,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
     cardId: null,
     cardTitle: task.title,
     workspaceName: null,
-    assigneeName: assignee[0]?.name ?? null,
+    assigneeName: (assignee as { name: string }[])[0]?.name ?? null,
   });
 });
 
@@ -197,6 +209,7 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
 
 router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
+  const actorId = req.user!.userId;
   const parsed = updateTaskSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
@@ -208,6 +221,9 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
     res.status(404).json({ error: "Not found" });
     return;
   }
+
+  const assigneeChanging = "assignedTo" in parsed.data && parsed.data.assignedTo !== existing.assignedTo;
+  const newAssigneeId = assigneeChanging ? (parsed.data.assignedTo ?? null) : null;
 
   const updateData: Record<string, any> = { updatedAt: new Date() };
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
@@ -224,15 +240,41 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
 
   await syncCardVisual(taskId, updated.status, !!updated.overdue);
 
-  const assignee = updated.assignedTo
-    ? await db.select({ name: users.name }).from(users).where(eq(users.id, updated.assignedTo)).limit(1)
-    : [];
+  const [assignee, actorUser] = await Promise.all([
+    updated.assignedTo
+      ? db.select({ name: users.name }).from(users).where(eq(users.id, updated.assignedTo)).limit(1)
+      : Promise.resolve([]),
+    db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1),
+  ]);
 
-  res.json({ ...updated, assigneeName: assignee[0]?.name ?? null });
+  if (assigneeChanging) {
+    const [oldAssignee, newAssignee] = await Promise.all([
+      existing.assignedTo
+        ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.assignedTo)).limit(1)
+        : Promise.resolve([]),
+      newAssigneeId
+        ? db.select({ name: users.name }).from(users).where(eq(users.id, newAssigneeId)).limit(1)
+        : Promise.resolve([]),
+    ]);
+
+    await db.insert(taskActivities).values({
+      taskId,
+      actorId,
+      type: "assignee_changed",
+      metadata: {
+        actorName: actorUser[0]?.name ?? null,
+        oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
+        newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
+      },
+    });
+  }
+
+  res.json({ ...updated, assigneeName: (assignee as { name: string }[])[0]?.name ?? null });
 });
 
 router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
+  const actorId = req.user!.userId;
   const { status } = req.body as { status: string };
 
   const validStatuses = ["pending", "in_progress", "completed", "blocked"];
@@ -247,9 +289,11 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
     return;
   }
 
+  const previousStatus = existing.status;
+
   const updateData: Record<string, any> = {
     status,
-    previousStatus: existing.status,
+    previousStatus,
     updatedAt: new Date(),
     completedAt: status === "completed" ? new Date() : null,
   };
@@ -260,7 +304,49 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
 
   await syncCardVisual(taskId, updated.status, !!updated.overdue);
 
+  if (previousStatus !== status) {
+    const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1);
+    await db.insert(taskActivities).values({
+      taskId,
+      actorId,
+      type: "status_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        oldStatus: previousStatus,
+        newStatus: status,
+      },
+    });
+  }
+
   res.json(updated);
+});
+
+router.get("/:taskId/activities", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const activities = await db
+    .select({
+      id: taskActivities.id,
+      taskId: taskActivities.taskId,
+      actorId: taskActivities.actorId,
+      actorName: users.name,
+      actorAvatarUrl: users.avatarUrl,
+      type: taskActivities.type,
+      metadata: taskActivities.metadata,
+      createdAt: taskActivities.createdAt,
+    })
+    .from(taskActivities)
+    .leftJoin(users, eq(taskActivities.actorId, users.id))
+    .where(eq(taskActivities.taskId, taskId))
+    .orderBy(asc(taskActivities.createdAt));
+
+  res.json(activities);
 });
 
 router.delete("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
