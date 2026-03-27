@@ -126,14 +126,15 @@ function WorkspaceCard({ ws, showHidden }: {
                         onPointerDown={(e) => { e.stopPropagation(); }}
                       />
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3 z-50" align="start">
+                    <PopoverContent className="w-auto p-3 z-50" align="start" onClick={(e) => e.stopPropagation()}>
                       <div className="grid grid-cols-8 gap-1.5">
                         {COLOR_PALETTE.map((entry) => {
                           const isSelected = ws.colorIndex === entry.index;
                           return (
                             <button
                               key={entry.index}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 colorMutation.mutate(entry.index);
                                 setColorPopoverOpen(false);
                               }}
@@ -146,7 +147,8 @@ function WorkspaceCard({ ws, showHidden }: {
                       </div>
                       {ws.colorIndex != null && (
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             colorMutation.mutate(null);
                             setColorPopoverOpen(false);
                           }}
