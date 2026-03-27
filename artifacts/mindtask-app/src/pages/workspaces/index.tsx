@@ -1,15 +1,18 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
+import { useTheme } from "next-themes";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useCreateWorkspace, useGetMe } from "@workspace/api-client-react";
 import { FolderGit2, Plus, Loader2, EyeOff, Eye, Trash2 } from "lucide-react";
+import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useQueryClient } from "@tanstack/react-query";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useListWorkspacesWithHidden, useToggleWorkspaceHidden, useDeleteWorkspace } from "@/hooks/useHidden";
+import { useListWorkspacesWithHidden, useToggleWorkspaceHidden, useDeleteWorkspace, useUpdateWorkspaceColor } from "@/hooks/useHidden";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
@@ -62,14 +65,19 @@ function getInitials(name: string) {
 }
 
 function WorkspaceCard({ ws, showHidden }: {
-  ws: { id: string; name: string; hidden: boolean; role: string; taskCounts?: TaskCounts; members?: WorkspaceMemberPreview[] };
+  ws: { id: string; name: string; hidden: boolean; role: string; colorIndex?: number | null; taskCounts?: TaskCounts; members?: WorkspaceMemberPreview[] };
   showHidden: boolean;
 }) {
   const toggleHidden = useToggleWorkspaceHidden(ws.id);
   const deleteWorkspace = useDeleteWorkspace(ws.id);
+  const colorMutation = useUpdateWorkspaceColor(ws.id);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const { toast } = useToast();
   const isAdmin = ws.role === "admin";
+  const { resolvedTheme } = useTheme();
+  const spaceColor = getColorByIndex(ws.colorIndex);
+  const iconBg = spaceColor ?? (resolvedTheme === "dark" ? "#374151" : "#e5e7eb");
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -103,11 +111,61 @@ function WorkspaceCard({ ws, showHidden }: {
     <div className={`relative group ${ws.hidden ? 'opacity-60' : ''}`}>
       <Link href={`/workspaces/${ws.id}`}>
         <div className="group/card bg-card p-6 rounded-3xl border border-border/60 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300 cursor-pointer flex flex-col h-full hover:-translate-y-1">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-6 group-hover/card:bg-primary group-hover/card:text-primary-foreground transition-colors">
-            <FolderGit2 className="w-6 h-6" />
-          </div>
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="text-xl font-bold font-display text-foreground group-hover/card:text-primary transition-colors">{ws.name}</h3>
+            <div className="flex items-end gap-2.5 min-w-0">
+              <div className="relative shrink-0">
+                {isAdmin ? (
+                  <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        title="Escolher cor"
+                        className="w-5 h-5 rounded-sm transition-colors hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 relative z-10"
+                        style={{ backgroundColor: iconBg }}
+                        onClick={(e) => { e.stopPropagation(); }}
+                        onPointerDown={(e) => { e.stopPropagation(); }}
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3 z-50" align="start">
+                      <div className="grid grid-cols-8 gap-1.5">
+                        {COLOR_PALETTE.map((entry) => {
+                          const isSelected = ws.colorIndex === entry.index;
+                          return (
+                            <button
+                              key={entry.index}
+                              onClick={() => {
+                                colorMutation.mutate(entry.index);
+                                setColorPopoverOpen(false);
+                              }}
+                              className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
+                            >
+                              <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {ws.colorIndex != null && (
+                        <button
+                          onClick={() => {
+                            colorMutation.mutate(null);
+                            setColorPopoverOpen(false);
+                          }}
+                          className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
+                        >
+                          remover cor
+                        </button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <span
+                    className="block w-5 h-5 rounded-sm transition-colors"
+                    style={{ backgroundColor: iconBg }}
+                  />
+                )}
+              </div>
+              <h3 className="text-xl font-bold font-display text-foreground group-hover/card:text-primary transition-colors truncate">{ws.name}</h3>
+            </div>
             {ws.hidden && (
               <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 lowercase">
                 <EyeOff className="w-3 h-3" /> Oculto
@@ -222,9 +280,24 @@ function WorkspaceCard({ ws, showHidden }: {
   );
 }
 
+function useSidebarOrder() {
+  const token = localStorage.getItem("mindtask_token");
+  return useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/sidebar/workspaces"],
+    queryFn: async () => {
+      const res = await fetch("/api/sidebar/workspaces", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to fetch sidebar order");
+      return res.json();
+    },
+  });
+}
+
 export default function WorkspacesPage() {
   const [showHidden, setShowHidden] = useState(false);
   const { data: workspaces, isLoading } = useListWorkspacesWithHidden(showHidden);
+  const { data: sidebarOrder } = useSidebarOrder();
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -251,17 +324,28 @@ export default function WorkspacesPage() {
 
   const filteredWorkspaces = useMemo(() => {
     if (!workspaces) return [];
-    if (selectedUserIds.length === 0) return workspaces;
-    return workspaces.filter((ws) => {
-      const members = ws.members ?? [];
-      return selectedUserIds.some((uid) => {
-        if (uid === me?.id) {
-          return members.length === 1 && members[0].userId === me.id;
-        }
-        return members.some((m) => m.userId === uid);
+    let list = workspaces;
+    if (selectedUserIds.length > 0) {
+      list = workspaces.filter((ws) => {
+        const members = ws.members ?? [];
+        return selectedUserIds.some((uid) => {
+          if (uid === me?.id) {
+            return members.length === 1 && members[0].userId === me.id;
+          }
+          return members.some((m) => m.userId === uid);
+        });
       });
-    });
-  }, [workspaces, selectedUserIds, me?.id]);
+    }
+    if (sidebarOrder && sidebarOrder.length > 0) {
+      const orderMap = new Map(sidebarOrder.map((s, i) => [s.id, i]));
+      return [...list].sort((a, b) => {
+        const aIdx = orderMap.get(a.id) ?? Infinity;
+        const bIdx = orderMap.get(b.id) ?? Infinity;
+        return aIdx - bIdx;
+      });
+    }
+    return list;
+  }, [workspaces, selectedUserIds, me?.id, sidebarOrder]);
 
   const toggleUser = (userId: string) => {
     setSelectedUserIds((prev) =>

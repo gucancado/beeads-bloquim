@@ -83,6 +83,25 @@ export function useDeleteMap(workspaceId: string, mapId: string) {
   });
 }
 
+export function useUpdateWorkspaceColor(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (colorIndex: number | null) => {
+      const res = await customFetch(`/api/workspaces/${workspaceId}/color`, {
+        method: "PATCH",
+        body: JSON.stringify({ colorIndex }),
+      });
+      if (!res.ok) throw new Error("Failed to update workspace color");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
+    },
+  });
+}
+
 export function useListWorkspacesWithHidden(showHidden: boolean) {
   return useQuery({
     queryKey: ["/api/workspaces", { showHidden }],
@@ -95,6 +114,7 @@ export function useListWorkspacesWithHidden(showHidden: boolean) {
         name: string;
         hidden: boolean;
         role: string;
+        colorIndex: number | null;
         createdAt: string;
         createdBy: string;
         taskCounts: {
