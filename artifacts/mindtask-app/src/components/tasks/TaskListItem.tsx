@@ -3,10 +3,20 @@ import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User, ArrowRight, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0].toUpperCase())
+    .join("");
+}
 
 export interface TaskListItemMember {
   userId: string;
@@ -440,12 +450,15 @@ export function TaskListItem({
                 onClick={handleAssigneeClick}
                 title={members.length > 0 ? "Clique para alterar responsável" : undefined}
               >
-                {localTask.assigneeAvatarUrl ? (
-                  <img
-                    src={localTask.assigneeAvatarUrl}
-                    alt={localTask.assigneeName ?? ""}
-                    className="w-4 h-4 rounded-full object-cover shrink-0"
-                  />
+                {localTask.assigneeName ? (
+                  <Avatar className="w-4 h-4 shrink-0">
+                    {localTask.assigneeAvatarUrl ? (
+                      <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="text-[8px] font-semibold bg-primary/10 text-primary">
+                      {getInitials(localTask.assigneeName)}
+                    </AvatarFallback>
+                  </Avatar>
                 ) : (
                   <User className="w-3.5 h-3.5 shrink-0" />
                 )}
@@ -508,12 +521,15 @@ export function TaskListItem({
                     onClick={handleAssigneeClick}
                     title={members.length > 0 ? "Clique para alterar responsável" : undefined}
                   >
-                    {localTask.assigneeAvatarUrl ? (
-                      <img
-                        src={localTask.assigneeAvatarUrl}
-                        alt={localTask.assigneeName ?? ""}
-                        className="w-8 h-8 rounded-full object-cover shrink-0"
-                      />
+                    {localTask.assigneeName ? (
+                      <Avatar className="w-8 h-8 shrink-0">
+                        {localTask.assigneeAvatarUrl ? (
+                          <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
+                        ) : null}
+                        <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                          {getInitials(localTask.assigneeName)}
+                        </AvatarFallback>
+                      </Avatar>
                     ) : (
                       <User className="w-6 h-6 shrink-0" />
                     )}

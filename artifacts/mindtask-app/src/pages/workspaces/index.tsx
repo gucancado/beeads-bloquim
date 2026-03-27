@@ -149,11 +149,14 @@ function WorkspaceCard({ ws, showHidden }: {
             {ws.members && ws.members.length > 0 && (
               <TooltipProvider delayDuration={200}>
                 <div className="flex items-center mb-4">
-                  <div className="flex -space-x-2">
-                    {ws.members.slice(0, MAX_VISIBLE_AVATARS).map((member) => (
+                  <div className="flex -space-x-2 isolate">
+                    {ws.members.slice(0, MAX_VISIBLE_AVATARS).map((member, index) => (
                       <Tooltip key={member.id}>
                         <TooltipTrigger asChild>
-                          <Avatar className="w-7 h-7 border-2 border-card ring-0 cursor-default">
+                          <Avatar
+                            className="w-7 h-7 border-2 border-card ring-0 cursor-default hover:z-10 transition-transform hover:scale-110"
+                            style={{ zIndex: MAX_VISIBLE_AVATARS - index }}
+                          >
                             {member.avatarUrl ? (
                               <AvatarImage src={member.avatarUrl} alt={member.name} />
                             ) : null}
