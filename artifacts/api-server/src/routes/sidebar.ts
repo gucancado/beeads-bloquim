@@ -53,6 +53,7 @@ router.get("/workspaces", requireAuth, async (req: AuthRequest, res) => {
   const result = workspaceList.map((ws) => ({
     id: ws.id,
     name: ws.name,
+    colorIndex: ws.colorIndex ?? null,
     createdAt: ws.createdAt,
     sortOrder: orderMap.has(ws.id) ? orderMap.get(ws.id)! : null,
     expanded: expandedMap.has(ws.id) ? expandedMap.get(ws.id)! : true,

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -19,6 +20,8 @@ import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
 
 function getInitials(name: string) {
   return name
@@ -172,6 +175,7 @@ export default function WorkspaceDetailPage() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
 
   const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
   const { data: workspaceMembers } = useListWorkspaceMembers(workspaceId);
@@ -269,6 +273,29 @@ export default function WorkspaceDetailPage() {
     },
     onError: () => {
       toast({ title: "Falha ao renomear espaço", variant: "destructive" });
+    },
+  });
+
+  const colorMutation = useMutation({
+    mutationFn: async (colorIndex: number | null) => {
+      const token = localStorage.getItem("mindtask_token");
+      const res = await fetch(`/api/workspaces/${workspaceId}/color`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ colorIndex }),
+      });
+      if (!res.ok) throw new Error("Failed to update color");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
+    },
+    onError: () => {
+      toast({ title: "Falha ao atualizar a cor", variant: "destructive" });
     },
   });
 
@@ -488,13 +515,69 @@ export default function WorkspaceDetailPage() {
                     className="text-4xl font-display font-bold text-foreground bg-transparent border-b-2 border-primary outline-none w-full"
                   />
                 ) : (
-                  <h1
-                    className={`text-4xl font-display font-bold text-foreground ${isAdmin ? "cursor-pointer hover:text-primary/80 transition-colors" : ""}`}
-                    onClick={startEditingTitle}
-                    title={isAdmin ? "Clique para editar" : undefined}
-                  >
-                    {workspace.name}
-                  </h1>
+                  <div className="flex items-center gap-3">
+                    {isAdmin ? (
+                      <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            title="Escolher cor"
+                            className="shrink-0 w-5 h-5 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                            style={
+                              getColorByIndex(workspace.colorIndex)
+                                ? { backgroundColor: getColorByIndex(workspace.colorIndex)! }
+                                : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
+                            }
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-3" align="start">
+                          <div className="grid grid-cols-8 gap-1.5">
+                            {COLOR_PALETTE.map((entry) => {
+                              const isSelected = workspace.colorIndex === entry.index;
+                              return (
+                                <button
+                                  key={entry.index}
+                                  onClick={() => {
+                                    colorMutation.mutate(entry.index);
+                                    setColorPopoverOpen(false);
+                                  }}
+                                  className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
+                                >
+                                  <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {workspace.colorIndex && (
+                            <button
+                              onClick={() => {
+                                colorMutation.mutate(null);
+                                setColorPopoverOpen(false);
+                              }}
+                              className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
+                            >
+                              Remover cor
+                            </button>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <span
+                        className="shrink-0 w-5 h-5 rounded-sm"
+                        style={
+                          getColorByIndex(workspace.colorIndex)
+                            ? { backgroundColor: getColorByIndex(workspace.colorIndex)! }
+                            : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
+                        }
+                      />
+                    )}
+                    <h1
+                      className={`text-4xl font-display font-bold text-foreground ${isAdmin ? "cursor-pointer hover:text-primary/80 transition-colors" : ""}`}
+                      onClick={startEditingTitle}
+                      title={isAdmin ? "Clique para editar" : undefined}
+                    >
+                      {workspace.name}
+                    </h1>
+                  </div>
                 )}
                 {workspace.members && workspace.members.length > 0 && (
                   <TooltipProvider delayDuration={200}>

@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect } from "react";
+import { getColorByIndex } from "@workspace/db/colorPalette";
 
 interface SidebarMap {
   id: string;
@@ -27,10 +28,22 @@ interface SidebarMap {
 interface SidebarWorkspace {
   id: string;
   name: string;
+  colorIndex: number | null;
   createdAt: string;
   sortOrder: number | null;
   expanded: boolean;
   maps: SidebarMap[];
+}
+
+function WorkspaceColorDot({ colorIndex, size = 10 }: { colorIndex: number | null; size?: number }) {
+  const hex = getColorByIndex(colorIndex);
+  if (!hex) return null;
+  return (
+    <span
+      style={{ backgroundColor: hex, width: size, height: size, minWidth: size }}
+      className="rounded-sm shrink-0 inline-block"
+    />
+  );
 }
 
 function CollapsedWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) {
@@ -41,13 +54,17 @@ function CollapsedWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) 
     <Link href={`/workspaces/${workspace.id}`}>
       <span
         title={workspace.name}
-        className={`flex justify-center py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+        className={`flex justify-center items-center py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
           isWsActive
             ? "bg-sidebar-accent text-primary"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         }`}
       >
-        <ListTodo className="w-4 h-4" />
+        {workspace.colorIndex ? (
+          <WorkspaceColorDot colorIndex={workspace.colorIndex} size={12} />
+        ) : (
+          <ListTodo className="w-4 h-4" />
+        )}
       </span>
     </Link>
   );
@@ -85,6 +102,7 @@ function SortableWorkspaceItem({
         >
           <GripVertical className="w-3.5 h-3.5" />
         </button>
+        {workspace.colorIndex && <WorkspaceColorDot colorIndex={workspace.colorIndex} size={10} />}
         {hasMaps ? (
           <button
             onClick={() => onToggleExpanded(workspace.id, !workspace.expanded)}

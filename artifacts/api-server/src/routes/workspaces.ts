@@ -8,7 +8,10 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
+import { MAX_COLOR_INDEX } from "@workspace/db/colorPalette";
+
 const workspaceNameSchema = z.object({ name: z.string().min(1) });
+const workspaceColorSchema = z.object({ colorIndex: z.number().int().min(1).max(MAX_COLOR_INDEX).nullable() });
 const addMemberSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "editor", "executor"]),
@@ -197,6 +200,23 @@ router.put("/:workspaceId", requireAuth, requireWorkspaceRole(["admin"]), async 
     .limit(1);
 
   res.json({ ...updated, role: membership?.role ?? "admin" });
+});
+
+router.patch("/:workspaceId/color", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
+  const { workspaceId } = req.params;
+  const parsed = workspaceColorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const [updated] = await db
+    .update(workspaces)
+    .set({ colorIndex: parsed.data.colorIndex })
+    .where(eq(workspaces.id, workspaceId))
+    .returning();
+
+  res.json(updated);
 });
 
 router.patch("/:workspaceId/hidden", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {

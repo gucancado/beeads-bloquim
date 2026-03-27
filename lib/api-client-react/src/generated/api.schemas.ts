@@ -98,6 +98,7 @@ export interface WorkspaceTaskCounts {
 export interface WorkspaceResponse {
   id: string;
   name: string;
+  colorIndex?: number | null;
   createdBy: string;
   createdAt: string;
   role: WorkspaceRole;
@@ -125,6 +126,7 @@ export interface MapResponse {
 export interface WorkspaceDetailResponse {
   id: string;
   name: string;
+  colorIndex?: number | null;
   createdBy: string;
   createdAt: string;
   role: WorkspaceRole;
