@@ -115,7 +115,7 @@ function WorkspaceCard({ ws, showHidden }: {
             <div className="flex items-end gap-2.5 min-w-0">
               <div className="relative shrink-0">
                 <span
-                  className="block w-5 h-5 rounded-sm transition-colors"
+                  className={`block w-5 h-5 rounded-sm transition-colors ${isAdmin ? "invisible" : ""}`}
                   style={{ backgroundColor: iconBg }}
                 />
               </div>
