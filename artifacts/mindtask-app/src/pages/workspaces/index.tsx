@@ -114,57 +114,10 @@ function WorkspaceCard({ ws, showHidden }: {
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex items-end gap-2.5 min-w-0">
               <div className="relative shrink-0">
-                {isAdmin ? (
-                  <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        title="Escolher cor"
-                        className="w-5 h-5 rounded-sm transition-colors hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 relative z-10"
-                        style={{ backgroundColor: iconBg }}
-                        onClick={(e) => { e.stopPropagation(); }}
-                        onPointerDown={(e) => { e.stopPropagation(); }}
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3 z-50" align="start" onClick={(e) => e.stopPropagation()}>
-                      <div className="grid grid-cols-8 gap-1.5">
-                        {COLOR_PALETTE.map((entry) => {
-                          const isSelected = ws.colorIndex === entry.index;
-                          return (
-                            <button
-                              key={entry.index}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                colorMutation.mutate(entry.index);
-                                setColorPopoverOpen(false);
-                              }}
-                              className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
-                            >
-                              <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {ws.colorIndex != null && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            colorMutation.mutate(null);
-                            setColorPopoverOpen(false);
-                          }}
-                          className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
-                        >
-                          remover cor
-                        </button>
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                ) : (
-                  <span
-                    className="block w-5 h-5 rounded-sm transition-colors"
-                    style={{ backgroundColor: iconBg }}
-                  />
-                )}
+                <span
+                  className="block w-5 h-5 rounded-sm transition-colors"
+                  style={{ backgroundColor: iconBg }}
+                />
               </div>
               <h3 className="text-xl font-bold font-display text-foreground group-hover/card:text-primary transition-colors truncate">{ws.name}</h3>
             </div>
@@ -227,6 +180,49 @@ function WorkspaceCard({ ws, showHidden }: {
           </div>
         </div>
       </Link>
+
+      {isAdmin && (
+        <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              title="Escolher cor"
+              className="absolute top-6 left-6 w-5 h-5 rounded-sm transition-colors hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 z-10"
+              style={{ backgroundColor: iconBg }}
+            />
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-3 z-50" align="start">
+            <div className="grid grid-cols-8 gap-1.5">
+              {COLOR_PALETTE.map((entry) => {
+                const isSelected = ws.colorIndex === entry.index;
+                return (
+                  <button
+                    key={entry.index}
+                    onClick={() => {
+                      colorMutation.mutate(entry.index);
+                      setColorPopoverOpen(false);
+                    }}
+                    className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
+                  >
+                    <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
+                  </button>
+                );
+              })}
+            </div>
+            {ws.colorIndex != null && (
+              <button
+                onClick={() => {
+                  colorMutation.mutate(null);
+                  setColorPopoverOpen(false);
+                }}
+                className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
+              >
+                remover cor
+              </button>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
 
       {isAdmin && (
         <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
