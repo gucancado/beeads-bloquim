@@ -2,11 +2,7 @@ import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
 import { useEffect, useState } from "react";
 
-interface ThemeToggleProps {
-  collapsed?: boolean;
-}
-
-export function ThemeToggle({ collapsed }: ThemeToggleProps) {
+export function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -22,9 +18,7 @@ export function ThemeToggle({ collapsed }: ThemeToggleProps) {
 
   if (!mounted) {
     return (
-      <div
-        className={`${collapsed ? 'w-10 h-10 mx-auto rounded-xl' : 'w-full rounded-xl h-10'} bg-sidebar-accent/20 animate-pulse`}
-      />
+      <div className="w-10 h-10 rounded-xl bg-sidebar-accent/20 animate-pulse" />
     );
   }
 

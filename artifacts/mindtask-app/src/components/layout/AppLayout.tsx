@@ -63,7 +63,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         className={`bg-sidebar text-sidebar-foreground flex flex-col shadow-xl z-20 shrink-0 transition-all duration-300 ease-in-out ${collapsed ? 'w-16' : 'w-72'}`}
       >
         {/* Logo + toggle */}
-        <div className="flex items-center gap-3 p-4 pr-3 border-b border-sidebar-border/50 min-h-[65px]">
+        <div className="flex items-center gap-2 p-4 pr-3 border-b border-sidebar-border/50 min-h-[65px]">
           {!collapsed && (
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
@@ -72,13 +72,23 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <span className="font-display font-bold text-xl tracking-tight truncate lowercase">Bloquim</span>
             </div>
           )}
-          <button
-            onClick={toggleCollapsed}
-            title={collapsed ? "expandir menu" : "recolher menu"}
-            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
-          >
-            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-          </button>
+          <div className={`flex items-center gap-1 ${collapsed ? 'flex-col w-full' : ''}`}>
+            <ThemeToggle />
+            <button
+              title="sair"
+              onClick={() => logoutMutation.mutate()}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+            <button
+              onClick={toggleCollapsed}
+              title={collapsed ? "expandir menu" : "recolher menu"}
+              className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
+            >
+              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         {/* Nav */}
@@ -132,42 +142,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </button>
           )}
 
-          {collapsed ? (
-            <div className="flex flex-col items-center gap-1">
-              <button
-                title={`${user.name} · editar perfil`}
-                onClick={() => setProfileOpen(true)}
-                className="w-10 h-10 rounded-full hover:ring-2 hover:ring-primary/40 transition-all shrink-0"
-              >
-                <Avatar className="w-10 h-10 rounded-full">
-                  {(user as { avatarUrl?: string | null }).avatarUrl && (
-                    <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
-                  )}
-                  <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
-                    {user.name.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </button>
-              <ThemeToggle collapsed />
-              <button
-                title="sair"
-                onClick={() => logoutMutation.mutate()}
-                className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1">
-              <ThemeToggle />
-              <button
-                title="sair"
-                onClick={() => logoutMutation.mutate()}
-                className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
+          {collapsed && (
+            <button
+              title={`${user.name} · editar perfil`}
+              onClick={() => setProfileOpen(true)}
+              className="w-10 h-10 mx-auto rounded-full hover:ring-2 hover:ring-primary/40 transition-all shrink-0"
+            >
+              <Avatar className="w-10 h-10 rounded-full">
+                {(user as { avatarUrl?: string | null }).avatarUrl && (
+                  <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
+                )}
+                <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
+                  {user.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </button>
           )}
         </div>
       </aside>
