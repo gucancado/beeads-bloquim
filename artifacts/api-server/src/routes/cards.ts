@@ -73,6 +73,15 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
     .where(eq(cards.id, card.id))
     .returning();
 
+  const userId = (req as AuthRequest).user!.userId;
+  const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+  await db.insert(taskActivities).values({
+    taskId: task.id,
+    actorId: userId,
+    type: "task_created",
+    metadata: { actorName: actorUser?.name ?? null },
+  });
+
   res.status(201).json(updated);
 });
 

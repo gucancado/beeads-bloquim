@@ -33,7 +33,7 @@ artifacts/
         maps.ts       # CRUD de mapas (retorna cards + conexões)
         cards.ts      # CRUD de cards + tasks por card (com sync de status→cor)
         connections.ts # Conexões entre cards (montado em /maps/:mId/connections)
-        myTasks.ts    # GET /api/my-tasks
+        myTasks.ts    # GET/POST /api/my-tasks, PATCH /:taskId/association
         index.ts      # Montagem de todas as rotas
       middlewares/
         auth.ts       # JWT middleware + signToken()
@@ -50,7 +50,7 @@ artifacts/
       components/
         layout/AppLayout.tsx   # Sidebar + auth redirect via useEffect
         maps/MindMapNode.tsx   # Node customizado com cor por status
-        maps/CardPanel.tsx     # Sheet lateral p/ editar card + criar/editar tarefa
+        tasks/TaskDetailModal.tsx  # Modal unificado para editar/criar tarefas (standalone ou workspace)
 
 lib/
   api-spec/openapi.yaml  # Contrato de API completo

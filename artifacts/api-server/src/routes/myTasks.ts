@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { computeOverdue } from "../lib/overdue";
@@ -345,6 +345,67 @@ router.get("/:taskId/activities", requireAuth, async (req: AuthRequest, res) => 
   return res.json(activities);
 });
 
+const associationSchema = z.object({
+  workspaceId: z.string().uuid().nullable().optional(),
+  mapId: z.string().uuid().nullable().optional(),
+});
+
+router.patch("/:taskId/association", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const parsed = associationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+  }
+
+  const [existing] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!existing) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (existing.workspaceId !== null) {
+    const [membership] = await db
+      .select()
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, existing.workspaceId), eq(workspaceMembers.userId, userId)));
+    if (!membership) return res.status(403).json({ message: "Sem permissão" });
+  } else {
+    if (existing.assignedTo !== userId) return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (parsed.data.workspaceId !== undefined) {
+    const newWorkspaceId = parsed.data.workspaceId;
+    if (newWorkspaceId !== null) {
+      const [membership] = await db
+        .select()
+        .from(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, newWorkspaceId), eq(workspaceMembers.userId, userId)));
+      if (!membership) return res.status(403).json({ message: "Você não é membro deste workspace" });
+    }
+    updateData.workspaceId = newWorkspaceId;
+    if (newWorkspaceId === null) {
+      updateData.assignedTo = userId;
+      updateData.mapId = null;
+    }
+  }
+
+  if (parsed.data.mapId !== undefined) {
+    const targetWorkspaceId = (updateData.workspaceId !== undefined ? updateData.workspaceId : existing.workspaceId) as string | null;
+    if (parsed.data.mapId !== null) {
+      if (!targetWorkspaceId) {
+        return res.status(400).json({ message: "Selecione um workspace antes de associar a um plano" });
+      }
+      const [map] = await db.select().from(maps).where(and(eq(maps.id, parsed.data.mapId), eq(maps.workspaceId, targetWorkspaceId)));
+      if (!map) return res.status(400).json({ message: "Plano não encontrado neste workspace" });
+    }
+    updateData.mapId = parsed.data.mapId;
+  }
+
+  const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+  return res.json(updated);
+});
+
 router.delete("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const { taskId } = req.params;
@@ -378,6 +439,53 @@ router.get("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   }
 
   return res.json(task);
+});
+
+router.get("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+  if (task.assignedTo !== userId) return res.status(403).json({ message: "Sem permissão" });
+
+  const rows = await db
+    .select({
+      id: taskComments.id,
+      taskId: taskComments.taskId,
+      authorId: taskComments.authorId,
+      authorName: users.name,
+      authorAvatar: users.avatarUrl,
+      content: taskComments.content,
+      hidden: taskComments.hidden,
+      createdAt: taskComments.createdAt,
+      updatedAt: taskComments.updatedAt,
+    })
+    .from(taskComments)
+    .innerJoin(users, eq(taskComments.authorId, users.id))
+    .where(eq(taskComments.taskId, taskId))
+    .orderBy(asc(taskComments.createdAt));
+
+  return res.json(rows);
+});
+
+router.post("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+  const { content } = req.body;
+
+  if (!content || typeof content !== "string" || !content.trim()) {
+    return res.status(400).json({ message: "Conteúdo obrigatório" });
+  }
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+  if (task.assignedTo !== userId) return res.status(403).json({ message: "Sem permissão" });
+
+  const [comment] = await db.insert(taskComments).values({ taskId, authorId: userId, content }).returning();
+  const [author] = await db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, userId)).limit(1);
+
+  return res.status(201).json({ ...comment, authorName: author?.name ?? null, authorAvatar: author?.avatarUrl ?? null });
 });
 
 export default router;

@@ -14,8 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { CardPanel } from "@/components/maps/CardPanel";
-import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
+import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -1008,16 +1007,17 @@ export default function WorkspaceDetailPage() {
       </div>
 
       {openCard && (
-        <CardPanel
+        <TaskDetailModal
           workspaceId={openCard.workspaceId}
           mapId={openCard.mapId}
           cardId={openCard.cardId}
+          open={!!openCard}
           onClose={handleClosePanel}
           onDeleteCard={handleDeleteCardFromPanel}
         />
       )}
 
-      <WorkspaceTaskSheet
+      <TaskDetailModal
         workspaceId={workspaceId}
         taskId={editingTaskId}
         open={taskSheetOpen}

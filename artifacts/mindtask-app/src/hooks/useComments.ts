@@ -126,6 +126,29 @@ export function useToggleTaskCommentHidden(workspaceId: string, taskId: string) 
   });
 }
 
+export function useStandaloneTaskComments(taskId: string | null) {
+  return useQuery<CommentItem[]>({
+    queryKey: [`standalone-task-comments`, taskId],
+    queryFn: () => apiFetch<CommentItem[]>(`${BASE}/api/my-tasks/${taskId}/comments`),
+    enabled: !!taskId,
+    staleTime: 0,
+  });
+}
+
+export function useCreateStandaloneTaskComment(taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (content: string) =>
+      apiFetch<CommentItem>(`${BASE}/api/my-tasks/${taskId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`standalone-task-comments`, taskId] });
+    },
+  });
+}
+
 export function useTaskActivities(workspaceId: string | null, taskId: string | null) {
   const isWorkspace = !!workspaceId;
   return useQuery<TaskActivityItem[]>({

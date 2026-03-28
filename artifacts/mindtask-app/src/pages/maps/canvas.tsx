@@ -5,7 +5,7 @@ import { ReactFlow, Controls, Background, useNodesState, useEdgesState, addEdge,
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
-import { CardPanel } from "@/components/maps/CardPanel";
+import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -628,10 +628,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         </div>
       </div>
 
-      <CardPanel
+      <TaskDetailModal
         workspaceId={workspaceId}
         mapId={mapId}
         cardId={selectedCardId}
+        open={!!selectedCardId}
         onClose={() => setSelectedCardId(null)}
         onDeleteCard={handleDeleteCard}
       />

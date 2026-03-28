@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, useTaskActivities, CommentItem, TaskActivityItem } from "@/hooks/useComments";
+import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, useTaskActivities, useStandaloneTaskComments, useCreateStandaloneTaskComment, CommentItem, TaskActivityItem } from "@/hooks/useComments";
 import { Button } from "@/components/ui/button";
 import { Loader2, Bold, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
 import { format } from "date-fns";
@@ -288,9 +288,13 @@ function TaskCommentsSection({ workspaceId, taskId, currentUserId, isAdmin }: { 
 }
 
 function StandaloneActivitySection({ taskId, currentUserId, isAdmin }: { taskId: string; currentUserId: string; isAdmin: boolean }) {
-  const { data: activities, isLoading } = useTaskActivities(null, taskId);
+  const { data: comments, isLoading: commentsLoading } = useStandaloneTaskComments(taskId);
+  const { data: activities, isLoading: activitiesLoading } = useTaskActivities(null, taskId);
+  const createMut = useCreateStandaloneTaskComment(taskId);
 
-  return <CommentsList comments={undefined} activities={activities} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={() => {}} onToggle={() => {}} togglingId={null} isPending={false} hideEditor />;
+  const isLoading = commentsLoading || activitiesLoading;
+
+  return <CommentsList comments={comments} activities={activities} isLoading={isLoading} currentUserId={currentUserId} isAdmin={isAdmin} onSubmit={(html) => createMut.mutate(html)} onToggle={() => {}} togglingId={null} isPending={createMut.isPending} />;
 }
 
 function CommentsList({ comments, activities, isLoading, currentUserId, isAdmin, onSubmit, onToggle, togglingId, isPending, hideEditor }: {

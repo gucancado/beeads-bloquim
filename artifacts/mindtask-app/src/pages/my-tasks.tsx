@@ -2,8 +2,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
 import { CheckSquare, Loader2, Plus } from "lucide-react";
-import { CardPanel } from "@/components/maps/CardPanel";
-import { WorkspaceTaskSheet } from "@/components/tasks/WorkspaceTaskSheet";
+import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
@@ -260,23 +259,24 @@ export default function MyTasksPage() {
       </div>
 
       {openCard && (
-        <CardPanel
+        <TaskDetailModal
           workspaceId={openCard.workspaceId}
           mapId={openCard.mapId}
           cardId={openCard.cardId}
+          open={!!openCard}
           onClose={handleClosePanel}
           onDeleteCard={handleDeleteCardFromPanel}
         />
       )}
 
-      <WorkspaceTaskSheet
+      <TaskDetailModal
         workspaceId={standaloneTask?.workspaceId ?? ""}
         taskId={standaloneTask?.id ?? null}
         open={!!standaloneTask}
         onClose={handleCloseSheet}
       />
 
-      <WorkspaceTaskSheet
+      <TaskDetailModal
         workspaceId=""
         taskId={null}
         open={createSheetOpen}
