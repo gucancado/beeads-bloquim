@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User, ArrowRight, Pencil } from "lucide-react";
+import { Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -48,8 +48,6 @@ interface Props {
   invalidateQueryKeys?: string[][];
   onOpenDetail?: (task: TaskListItemData) => void;
   showWorkspaceName?: boolean;
-  showMapLink?: boolean;
-  showEditButton?: boolean;
   showMapName?: boolean;
 }
 
@@ -94,8 +92,6 @@ export function TaskListItem({
   invalidateQueryKeys = [],
   onOpenDetail,
   showWorkspaceName = false,
-  showMapLink = false,
-  showEditButton = false,
   showMapName = false,
 }: Props) {
   const queryClient = useQueryClient();
@@ -420,88 +416,22 @@ export function TaskListItem({
           )}
 
           {/* Due date — inline editable */}
-          <div className="flex items-center gap-1.5 relative cursor-pointer" onClick={e => { e.stopPropagation(); try { dueDateInputRef.current?.showPicker?.(); } catch {} }}>
-            <CalendarIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-            {localTask.dueDate ? (
-              <span
-                className={`cursor-pointer hover:underline decoration-dotted ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                title="Clique para alterar data"
-              >
-                {format(new Date(localTask.dueDate.slice(0, 10) + "T00:00:00"), "dd/MM/yyyy")}
-              </span>
-            ) : (
-              <span className="text-muted-foreground/50 text-xs cursor-pointer hover:text-muted-foreground" title="Definir prazo">—</span>
-            )}
+          <label className="inline-flex items-center gap-1.5 cursor-pointer" onClick={e => e.stopPropagation()}>
+            <CalendarIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground pointer-events-none" />
             <input
               ref={dueDateInputRef}
               type="date"
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              className={`bg-transparent border-none outline-none text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors w-[110px] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer ${savingField === "dueDate" ? "opacity-60" : ""}`}
+              style={{ position: "relative" }}
               value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
               onChange={handleDueDateChange}
+              onClick={e => e.stopPropagation()}
               title="Alterar prazo"
             />
-          </div>
+          </label>
 
-          {/* Assignee — inline editable (detail.tsx uses inline display) */}
-          {!showWorkspaceName && (
-            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()} ref={assigneeRef}>
-              <div
-                className={`flex items-center gap-1.5 cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
-                onClick={handleAssigneeClick}
-                title={members.length > 0 ? "Clique para alterar responsável" : undefined}
-              >
-                {localTask.assigneeName ? (
-                  <Avatar className="w-4 h-4 shrink-0">
-                    {localTask.assigneeAvatarUrl ? (
-                      <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
-                    ) : null}
-                    <AvatarFallback className="text-[8px] font-semibold bg-primary/10 text-primary">
-                      {getInitials(localTask.assigneeName)}
-                    </AvatarFallback>
-                  </Avatar>
-                ) : (
-                  <User className="w-3.5 h-3.5 shrink-0" />
-                )}
-                {localTask.assigneeName ? (
-                  <span>{localTask.assigneeName}</span>
-                ) : (
-                  <span className="lowercase">Sem responsável</span>
-                )}
-              </div>
-
-              {assigneeOpen && members.length > 0 && createPortal(
-                <>
-                  <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-                  <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-                    >
-                      <User className="w-3 h-3" /> Sem responsável
-                    </button>
-                    {members.map(m => (
-                      <button
-                        key={m.userId}
-                        onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
-                      >
-                        {m.avatarUrl ? (
-                          <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                        ) : (
-                          <User className="w-3 h-3" />
-                        )}
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                </>,
-                document.body
-              )}
-            </div>
-          )}
-
-          {/* Standalone badge (detail page) */}
-          {!task.mapId && !showWorkspaceName && (
+          {/* Standalone badge — shown in all contexts when task has no plan */}
+          {!task.mapId && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase">
               Avulsa
             </span>
@@ -509,87 +439,63 @@ export function TaskListItem({
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-        {showWorkspaceName ? (
-          /* my-tasks layout: avatar + optional map link */
-          <>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
-                    onClick={handleAssigneeClick}
-                    title={members.length > 0 ? "Clique para alterar responsável" : undefined}
-                  >
-                    {localTask.assigneeName ? (
-                      <Avatar className="w-8 h-8 shrink-0">
-                        {localTask.assigneeAvatarUrl ? (
-                          <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
-                        ) : null}
-                        <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                          {getInitials(localTask.assigneeName)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <User className="w-6 h-6 shrink-0" />
-                    )}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {localTask.assigneeName ?? "Sem responsável"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {assigneeOpen && members.length > 0 && createPortal(
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-                <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-                  >
-                    <User className="w-3 h-3" /> Sem responsável
-                  </button>
-                  {members.map(m => (
-                    <button
-                      key={m.userId}
-                      onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
-                    >
-                      {m.avatarUrl ? (
-                        <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                      ) : (
-                        <User className="w-3 h-3" />
-                      )}
-                      {m.name}
-                    </button>
-                  ))}
-                </div>
-              </>,
-              document.body
-            )}
-
-          </>
-        ) : (
-          /* detail.tsx layout: edit button + map link */
-          <>
-            {showEditButton && (
-              <button
-                className="rounded-lg bg-background border border-border shadow-sm hover:border-primary hover:text-primary text-muted-foreground transition-colors opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1 text-xs font-medium"
-                onClick={(e) => { e.stopPropagation(); onOpenDetail?.(localTask); }}
+      {/* Right side: always show large avatar with tooltip */}
+      <div className="flex flex-col items-center gap-2 shrink-0" onClick={e => e.stopPropagation()} ref={assigneeRef}>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
+                onClick={handleAssigneeClick}
+                title={members.length > 0 ? "Clique para alterar responsável" : undefined}
               >
-                <Pencil className="w-3.5 h-3.5" /> <span className="lowercase">Editar</span>
+                {localTask.assigneeName ? (
+                  <Avatar className="w-8 h-8 shrink-0">
+                    {localTask.assigneeAvatarUrl ? (
+                      <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                      {getInitials(localTask.assigneeName)}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <User className="w-6 h-6 shrink-0" />
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {localTask.assigneeName ?? "Sem responsável"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {assigneeOpen && members.length > 0 && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+            <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
+              >
+                <User className="w-3 h-3" /> Sem responsável
               </button>
-            )}
-            {showMapLink && localTask.mapId && (
-              <Link href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}>
-                <button className="rounded-lg text-muted-foreground hover:text-primary text-xs px-2 h-7 lowercase flex items-center gap-1 hover:bg-muted transition-colors">
-                  Ver no Plano <ArrowRight className="w-3 h-3 ml-1" />
+              {members.map(m => (
+                <button
+                  key={m.userId}
+                  onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                >
+                  {m.avatarUrl ? (
+                    <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                  ) : (
+                    <User className="w-3 h-3" />
+                  )}
+                  {m.name}
                 </button>
-              </Link>
-            )}
-          </>
+              ))}
+            </div>
+          </>,
+          document.body
         )}
       </div>
     </div>

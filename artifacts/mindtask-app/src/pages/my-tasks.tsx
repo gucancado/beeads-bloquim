@@ -223,7 +223,6 @@ export default function MyTasksPage() {
                             invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
                             onOpenDetail={openTaskItem}
                             showWorkspaceName
-                            showMapLink
                             showMapName
                           />
                         ))}
@@ -244,7 +243,6 @@ export default function MyTasksPage() {
                             invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
                             onOpenDetail={openTaskItem}
                             showWorkspaceName
-                            showMapLink
                             showMapName
                           />
                         ))}

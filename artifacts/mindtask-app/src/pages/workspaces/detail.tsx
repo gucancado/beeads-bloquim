@@ -829,8 +829,6 @@ export default function WorkspaceDetailPage() {
                                     members={detailMembers}
                                     invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
                                     onOpenDetail={openTaskItem}
-                                    showEditButton
-                                    showMapLink
                                     showMapName
                                   />
                                 ))}
@@ -850,8 +848,6 @@ export default function WorkspaceDetailPage() {
                                     members={detailMembers}
                                     invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
                                     onOpenDetail={openTaskItem}
-                                    showEditButton
-                                    showMapLink
                                     showMapName
                                   />
                                 ))}
