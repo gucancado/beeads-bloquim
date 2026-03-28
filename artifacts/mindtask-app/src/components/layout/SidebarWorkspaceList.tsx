@@ -129,7 +129,7 @@ function SortableWorkspaceItem({
             <span className="truncate">{workspace.name}</span>
           </span>
         </Link>
-        <Link href={`/workspaces/${workspace.id}`}>
+        <Link href={`/workspaces/${workspace.id}?tab=tasks`}>
           <span
             title={`tarefas de ${workspace.name}`}
             className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-sidebar-foreground/30 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all opacity-0 group-hover/ws:opacity-100"

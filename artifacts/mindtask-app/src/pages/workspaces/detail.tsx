@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden, useDeleteMap } from "@/hooks/useHidden";
@@ -151,9 +151,24 @@ function MapCard({ map, workspaceId, isAdmin }: {
   );
 }
 
+const VALID_TABS = ["maps", "tasks", "dashboard", "members"] as const;
+type TabValue = typeof VALID_TABS[number];
+
+function isValidTab(v: string | null): v is TabValue {
+  return VALID_TABS.includes(v as TabValue);
+}
+
 export default function WorkspaceDetailPage() {
   const [, params] = useRoute("/workspaces/:id");
   const workspaceId = params?.id || "";
+  const search = useSearch();
+  const tabParam = new URLSearchParams(search).get("tab");
+  const tabFromUrl: TabValue = isValidTab(tabParam) ? tabParam : "maps";
+  const [activeTab, setActiveTab] = useState<TabValue>(tabFromUrl);
+
+  useEffect(() => {
+    setActiveTab(tabFromUrl);
+  }, [workspaceId, tabFromUrl]);
 
   const { data: workspace, isLoading: isWsLoading } = useGetWorkspace(workspaceId);
   const { data: dashboard } = useGetDashboard(workspaceId);
@@ -635,7 +650,7 @@ export default function WorkspaceDetailPage() {
               </div>
             </div>
 
-            <Tabs defaultValue="maps" className="w-full">
+            <Tabs value={activeTab} onValueChange={(v) => { if (isValidTab(v)) setActiveTab(v); }} className="w-full">
               <TabsList className="bg-transparent border-b-0 h-auto p-0 flex gap-6 pb-px">
                 <TabsTrigger value="maps" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
                   <Map className="w-5 h-5 mr-2" /> Planos
