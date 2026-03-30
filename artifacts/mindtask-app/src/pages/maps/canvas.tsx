@@ -162,11 +162,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     taskDueDate: string | null;
   }>) => {
     pendingUpdatesRef.current.set(cardId, Date.now());
-    setNodes(prev => prev.map(n =>
-      n.id === cardId
-        ? { ...n, data: { ...n.data, ...patch } }
-        : n,
-    ));
+    setNodes(prev => prev.map(n => {
+      if (n.id !== cardId) return n;
+      const updatedData = { ...n.data, ...patch };
+      if ('statusVisual' in patch) {
+        if (patch.statusVisual === 'completed') {
+          if (!updatedData.taskCompletedAt) {
+            updatedData.taskCompletedAt = new Date().toISOString();
+          }
+        } else {
+          updatedData.taskCompletedAt = null;
+        }
+      }
+      return { ...n, data: updatedData };
+    }));
   }, [setNodes]);
 
   const handleEditingChange = useCallback((cardId: string, isEditing: boolean) => {
