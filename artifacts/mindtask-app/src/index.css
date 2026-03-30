@@ -238,3 +238,28 @@
 .comment-rendered-content em {
   font-style: italic;
 }
+
+.completed-avatar {
+  width: 1.25rem;
+  height: 1.25rem;
+  filter: grayscale(100%);
+  opacity: 0.6;
+}
+.group\/node:hover .completed-avatar {
+  width: 2rem;
+  height: 2rem;
+  filter: grayscale(0%);
+  opacity: 1;
+}
+
+.completed-avatar-placeholder {
+  width: 1.25rem;
+  height: 1.25rem;
+  opacity: 0.6;
+}
+.group\/node:hover .completed-avatar-placeholder {
+  width: 2rem;
+  height: 2rem;
+  opacity: 1;
+  background-color: #d1fae5;
+}

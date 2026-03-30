@@ -23,6 +23,7 @@ interface MindMapNodeProps {
     taskAssigneeName?: string | null;
     taskAssigneeAvatarUrl?: string | null;
     taskDescription?: string | null;
+    taskCompletedAt?: string | null;
     workspaceId?: string;
     mapId?: string;
     onOpen?: (id: string) => void;
@@ -212,6 +213,77 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       );
     }
   };
+
+  const isCompleted = data.statusVisual === 'completed';
+
+  if (isCompleted) {
+    let completedDateStr: string | null = null;
+    if (data.taskCompletedAt) {
+      try {
+        completedDateStr = format(new Date(data.taskCompletedAt), 'dd/MM/yyyy');
+      } catch {
+        completedDateStr = null;
+      }
+    }
+    return (
+      <div
+        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md hover:border-emerald-300 ${selected ? 'shadow-md scale-[1.02]' : 'shadow-sm'}`}
+        style={{
+          backgroundColor: '#f3f4f6',
+          borderColor: selected ? '#9ca3af' : undefined,
+        }}
+      >
+        {/* Left connection strip */}
+        <div className="group/strip-l absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
+          <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
+          <Handle type="source" position={Position.Left} id="source-left" className={STRIP_HANDLE_CLS} />
+        </div>
+
+        {/* Right connection strip */}
+        <div className="group/strip-r absolute right-0 top-0 h-full w-3 z-10 rounded-r-2xl">
+          <Handle type="target" position={Position.Right} id="target-right" className={STRIP_HANDLE_CLS} />
+          <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} />
+        </div>
+
+        {/* Card content */}
+        <div className="px-4 py-3 relative overflow-hidden rounded-xl">
+          <div className="flex items-start justify-between gap-2">
+            <h3
+              className="font-display font-medium text-xs leading-tight break-words pr-1 text-gray-400 transition-all duration-300 group-hover/node:text-gray-700 group-hover/node:opacity-100 group-hover/node:text-sm group-hover/node:font-bold"
+              style={{ opacity: 0.7 }}
+            >
+              {data.title}
+            </h3>
+            <button
+              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag"
+              style={{ backgroundColor: '#e5e7eb', color: '#9ca3af' }}
+              title="Expandir card"
+              onClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            {data.taskAssigneeAvatarUrl ? (
+              <img
+                src={data.taskAssigneeAvatarUrl}
+                alt={data.taskAssigneeName ?? ''}
+                className="completed-avatar rounded-full object-cover flex-shrink-0 transition-all duration-300"
+              />
+            ) : data.taskAssigneeName ? (
+              <div className="completed-avatar-placeholder rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0 transition-all duration-300">
+                <User className="w-3 h-3 text-gray-400 transition-colors duration-300 group-hover/node:text-emerald-600" />
+              </div>
+            ) : null}
+            <span className="text-[10px] text-gray-400 transition-colors duration-300 group-hover/node:text-emerald-600">
+              {completedDateStr ? `concluída em ${completedDateStr}` : 'concluída'}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

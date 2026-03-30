@@ -1250,6 +1250,10 @@ components:
         taskAssigneeAvatarUrl:
           type: string
           nullable: true
+        taskCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, mapId, title, positionX, positionY, statusVisual, createdAt, updatedAt]
 
     CardDetailResponse:

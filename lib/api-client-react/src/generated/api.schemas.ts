@@ -163,6 +163,7 @@ export interface CardResponse {
   taskAssigneeId?: string | null;
   taskOverdue?: boolean;
   taskAssigneeAvatarUrl?: string | null;
+  taskCompletedAt?: string | null;
 }
 
 export interface ConnectionResponse {
