@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
@@ -693,6 +693,9 @@ export function TaskDetailModal({
             handleCloseModal();
           }}
         >
+          <DialogTitle className="sr-only">
+            {isCardMode ? "Editar card" : isEditing ? "Editar tarefa" : "Nova tarefa"}
+          </DialogTitle>
           {autoCreateError ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3">
               <AlertTriangle className="w-8 h-8 text-destructive" />

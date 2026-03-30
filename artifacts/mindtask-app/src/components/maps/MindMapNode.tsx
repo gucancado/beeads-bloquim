@@ -87,9 +87,14 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     setIsTruncated(el.scrollHeight > el.clientHeight + 1);
   }, [plainDescription, maxLines]);
 
-  const dueDateStr = data.taskDueDate
-    ? format(new Date(data.taskDueDate.slice(0, 10) + 'T00:00:00'), 'dd/MM/yy')
-    : null;
+  let dueDateStr: string | null = null;
+  if (data.taskDueDate) {
+    try {
+      dueDateStr = format(new Date(data.taskDueDate.slice(0, 10) + 'T00:00:00'), 'dd/MM/yy');
+    } catch {
+      dueDateStr = null;
+    }
+  }
 
   const isOverdue =
     data.taskDueDate &&
