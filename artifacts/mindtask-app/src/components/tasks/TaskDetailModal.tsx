@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
@@ -653,13 +653,11 @@ export function TaskDetailModal({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      setLocalSubtasks(prev => {
-        const oldIndex = prev.findIndex(s => s.id === active.id);
-        const newIndex = prev.findIndex(s => s.id === over.id);
-        const reordered = arrayMove(prev, oldIndex, newIndex);
-        if (taskIdResolved) saveSubtasksMutation.mutate(reordered.filter(s => s.text.trim() !== ""));
-        return reordered;
-      });
+      const oldIndex = localSubtasks.findIndex(s => s.id === active.id);
+      const newIndex = localSubtasks.findIndex(s => s.id === over.id);
+      const reordered = arrayMove(localSubtasks, oldIndex, newIndex);
+      setLocalSubtasks(reordered);
+      if (taskIdResolved) saveSubtasksMutation.mutate(reordered.filter(s => s.text.trim() !== ""));
     }
   };
 
@@ -696,6 +694,9 @@ export function TaskDetailModal({
           <DialogTitle className="sr-only">
             {isCardMode ? "Editar card" : isEditing ? "Editar tarefa" : "Nova tarefa"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {isCardMode ? "Detalhes do card selecionado" : "Formulário de tarefa"}
+          </DialogDescription>
           {autoCreateError ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3">
               <AlertTriangle className="w-8 h-8 text-destructive" />
