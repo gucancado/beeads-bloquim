@@ -49,6 +49,7 @@ interface EditingEditorProps {
 const EditingEditor = forwardRef<TextNodeEditorHandle, EditingEditorProps>(
   ({ initialContent, containerRef, menuRef, onSave }, ref) => {
     const savedRef = useRef(false);
+    const initialContentRef = useRef(initialContent);
 
     const editor = useEditor({
       extensions: [StarterKit],
@@ -88,13 +89,17 @@ const EditingEditor = forwardRef<TextNodeEditorHandle, EditingEditorProps>(
     }, [editor]);
 
     // Click-outside: save and exit edit mode
+    // Uses initialContentRef as fallback when editor hasn't initialized yet (immediatelyRender: false)
+    // so the node never gets stuck in editing mode with a null editor.
     useEffect(() => {
       const handleMouseDown = (e: MouseEvent) => {
         const target = e.target as Node;
         if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-        if (savedRef.current || !editor || editor.isDestroyed) return;
+        if (savedRef.current || editor?.isDestroyed) return;
         try {
-          const content = JSON.stringify(editor.getJSON());
+          const content = editor
+            ? JSON.stringify(editor.getJSON())
+            : initialContentRef.current;
           onSave(content, isEmptyDoc(content));
           savedRef.current = true;
         } catch { /* ignore */ }
