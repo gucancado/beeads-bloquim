@@ -218,10 +218,36 @@ function formatActivityText(activity: TaskActivityItem): string {
     case "assignee_changed": {
       const actor = m.actorName ?? activity.actorName ?? "Alguém";
       const newName = m.newAssigneeName;
-      if (newName) {
-        return `${dateStr}: ${actor} atribuiu para ${newName}`;
+      if (!newName) {
+        return `${dateStr}: ${actor} removeu responsável.`;
       }
-      return `${dateStr}: ${actor} removeu responsável`;
+      if (m.actorId && m.newAssigneeId && m.actorId === m.newAssigneeId) {
+        return `${dateStr}: ${actor} atribuiu a tarefa para si.`;
+      }
+      return `${dateStr}: ${actor} atribuiu a tarefa para ${newName}.`;
+    }
+    case "priority_changed": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const PRIORITY_LABELS: Record<string, string> = {
+        low: "baixa",
+        medium: "média",
+        high: "alta",
+        critical: "urgente",
+      };
+      const oldLabel = PRIORITY_LABELS[m.oldPriority ?? ""] ?? m.oldPriority ?? "?";
+      const newLabel = PRIORITY_LABELS[m.newPriority ?? ""] ?? m.newPriority ?? "?";
+      return `${dateStr}: ${actor} alterou prioridade de ${oldLabel} para ${newLabel}.`;
+    }
+    case "due_date_changed": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const formatDate = (d: string | null | undefined) => {
+        if (!d) return "sem prazo";
+        const [year, month, day] = d.slice(0, 10).split("-");
+        return `${day}/${month}/${year}`;
+      };
+      const oldDate = formatDate(m.oldDueDate);
+      const newDate = formatDate(m.newDueDate);
+      return `${dateStr}: ${actor} alterou prazo de ${oldDate} para ${newDate}.`;
     }
     case "status_changed": {
       const actor = m.actorName ?? activity.actorName ?? "Alguém";

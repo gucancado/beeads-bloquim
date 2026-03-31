@@ -224,6 +224,8 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
 
   const assigneeChanging = "assignedTo" in parsed.data && parsed.data.assignedTo !== existing.assignedTo;
   const newAssigneeId = assigneeChanging ? (parsed.data.assignedTo ?? null) : null;
+  const priorityChanging = parsed.data.priority !== undefined && parsed.data.priority !== existing.priority;
+  const dueDateChanging = "dueDate" in parsed.data && (parsed.data.dueDate ?? null) !== (existing.dueDate ? existing.dueDate.toISOString().slice(0, 10) : null);
 
   const updateData: Record<string, any> = { updatedAt: new Date() };
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
@@ -263,8 +265,36 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
       type: "assignee_changed",
       metadata: {
         actorName: actorUser[0]?.name ?? null,
+        actorId,
+        newAssigneeId,
         oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
         newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
+      },
+    });
+  }
+
+  if (priorityChanging) {
+    await db.insert(taskActivities).values({
+      taskId,
+      actorId,
+      type: "priority_changed",
+      metadata: {
+        actorName: actorUser[0]?.name ?? null,
+        oldPriority: existing.priority ?? null,
+        newPriority: parsed.data.priority ?? null,
+      },
+    });
+  }
+
+  if (dueDateChanging) {
+    await db.insert(taskActivities).values({
+      taskId,
+      actorId,
+      type: "due_date_changed",
+      metadata: {
+        actorName: actorUser[0]?.name ?? null,
+        oldDueDate: existing.dueDate ? existing.dueDate.toISOString().slice(0, 10) : null,
+        newDueDate: parsed.data.dueDate ?? null,
       },
     });
   }

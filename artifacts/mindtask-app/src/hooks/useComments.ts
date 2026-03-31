@@ -18,7 +18,7 @@ export interface TaskActivityItem {
   actorId: string | null;
   actorName: string | null;
   actorAvatarUrl: string | null;
-  type: "task_created" | "assignee_changed" | "status_changed";
+  type: "task_created" | "assignee_changed" | "status_changed" | "priority_changed" | "due_date_changed";
   metadata: Record<string, string | null>;
   createdAt: string;
 }

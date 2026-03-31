@@ -91,6 +91,8 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   "task_created",
   "assignee_changed",
   "status_changed",
+  "priority_changed",
+  "due_date_changed",
 ]);
 
 export const taskActivities = pgTable("task_activities", {

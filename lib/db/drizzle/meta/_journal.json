@@ -64,6 +64,13 @@
       "when": 1774912036395,
       "tag": "0008_blue_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774979038486,
+      "tag": "0009_blue_snowbird",
+      "breakpoints": true
     }
   ]
 }

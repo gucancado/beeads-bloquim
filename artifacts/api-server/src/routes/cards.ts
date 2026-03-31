@@ -406,11 +406,13 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
 
+  const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+
   if (parsed.data.assignedTo !== undefined && currentTask && currentTask.assignedTo !== parsed.data.assignedTo) {
-    const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    const newAssigneeId = parsed.data.assignedTo ?? null;
     let newAssigneeName: string | null = null;
-    if (parsed.data.assignedTo) {
-      const [newUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, parsed.data.assignedTo)).limit(1);
+    if (newAssigneeId) {
+      const [newUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, newAssigneeId)).limit(1);
       newAssigneeName = newUser?.name ?? null;
     }
     let oldAssigneeName: string | null = null;
@@ -424,10 +426,42 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
       type: "assignee_changed",
       metadata: {
         actorName: actorUser?.name ?? null,
+        actorId: userId,
+        newAssigneeId,
         oldAssigneeName,
         newAssigneeName,
       },
     });
+  }
+
+  if (parsed.data.priority !== undefined && currentTask && parsed.data.priority !== currentTask.priority) {
+    await db.insert(taskActivities).values({
+      taskId: card.taskId,
+      actorId: userId,
+      type: "priority_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        oldPriority: currentTask.priority ?? null,
+        newPriority: parsed.data.priority ?? null,
+      },
+    });
+  }
+
+  if (parsed.data.dueDate !== undefined && currentTask) {
+    const oldDateStr = currentTask.dueDate ? currentTask.dueDate.toISOString().slice(0, 10) : null;
+    const newDateStr = parsed.data.dueDate ?? null;
+    if (oldDateStr !== newDateStr) {
+      await db.insert(taskActivities).values({
+        taskId: card.taskId,
+        actorId: userId,
+        type: "due_date_changed",
+        metadata: {
+          actorName: actorUser?.name ?? null,
+          oldDueDate: oldDateStr,
+          newDueDate: newDateStr,
+        },
+      });
+    }
   }
 
   res.json(updatedTask);
