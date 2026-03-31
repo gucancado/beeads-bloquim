@@ -823,6 +823,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onPaneClick={onPaneClick}
+            onPaneContextMenu={(e) => e.preventDefault()}
+            panOnDrag={[2]}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
