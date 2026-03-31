@@ -201,7 +201,8 @@ const STATUS_LABELS: Record<string, string> = {
   pending: "Pendente",
   in_progress: "Em andamento",
   completed: "Concluída",
-  blocked: "Interrompida",
+  blocked: "Cancelada",
+  draft: "Rascunho",
   overdue: "Atrasada",
 };
 

@@ -446,10 +446,11 @@ export default function WorkspaceDetailPage() {
   };
 
   const STATUS_OPTIONS = [
-    { value: "in_progress", label: "em andamento", labelPlural: "em andamento",  activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600" },
-    { value: "pending",     label: "pendente",      labelPlural: "pendentes",     activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600" },
-    { value: "blocked",     label: "interrompida",  labelPlural: "interrompidas", activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600" },
-    { value: "completed",   label: "concluída",     labelPlural: "concluídas",    activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" },
+    { value: "in_progress", label: "em andamento", labelPlural: "em andamento", activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600" },
+    { value: "pending",     label: "pendente",      labelPlural: "pendentes",    activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600" },
+    { value: "draft",       label: "rascunho",      labelPlural: "rascunhos",    activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600" },
+    { value: "blocked",     label: "cancelada",     labelPlural: "canceladas",   activeClass: "bg-slate-500 text-white border-slate-500 hover:bg-slate-600" },
+    { value: "completed",   label: "concluída",     labelPlural: "concluídas",   activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" },
   ];
 
   const toggleStatus = (value: string) => {

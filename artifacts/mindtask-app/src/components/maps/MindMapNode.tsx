@@ -43,7 +43,8 @@ interface MindMapNodeProps {
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'pendente', dot: 'bg-blue-500' },
   { value: 'in_progress', label: 'em andamento', dot: 'bg-amber-500' },
-  { value: 'blocked', label: 'interrompida', dot: 'bg-purple-500' },
+  { value: 'draft', label: 'rascunho', dot: 'bg-purple-500' },
+  { value: 'blocked', label: 'cancelada', dot: 'bg-slate-500' },
   { value: 'completed', label: 'concluída', dot: 'bg-emerald-500' },
 ];
 
@@ -53,7 +54,8 @@ function statusLabel(s: string) {
     case 'in_progress': return 'em andamento';
     case 'completed': return 'concluída';
     case 'overdue': return 'vencida';
-    case 'blocked': return 'interrompida';
+    case 'blocked': return 'cancelada';
+    case 'draft': return 'rascunho';
     case 'no_task': return 'sem tarefa';
     default: return s.replace('_', ' ');
   }
@@ -170,7 +172,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     data.onInlineUpdate?.(id, { statusVisual: newStatus });
     if (data.taskId) {
       updateTaskStatusMut.mutate(
-        { workspaceId, mapId, cardId: id, data: { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'blocked' } },
+        { workspaceId, mapId, cardId: id, data: { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'blocked' | 'draft' } },
         { onSuccess: invalidateAll },
       );
     }
@@ -220,25 +222,43 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   };
 
   const isCompleted = data.statusVisual === 'completed';
+  const isCancelled = data.statusVisual === 'blocked';
+  const isMutedNode = isCompleted || isCancelled;
 
-  if (isCompleted) {
+  if (isMutedNode) {
     let completedDateStr: string | null = null;
-    if (data.taskCompletedAt) {
+    if (isCompleted && data.taskCompletedAt) {
       try {
         completedDateStr = format(new Date(data.taskCompletedAt), 'dd/MM/yyyy');
       } catch {
         completedDateStr = null;
       }
     }
+    const mutedHoverBorder = isCompleted ? 'hover:border-emerald-300' : 'hover:border-slate-400';
+    const mutedIconColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
+    const mutedTextColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
+    const statusText = isCompleted
+      ? (completedDateStr ? `concluída em ${completedDateStr}` : 'concluída')
+      : 'cancelada';
     return (
       <div
-        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md hover:border-emerald-300 ${selected ? 'shadow-md scale-[1.02]' : 'shadow-sm'}`}
+        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md ${mutedHoverBorder} ${selected ? 'shadow-md scale-[1.02]' : 'shadow-sm'}`}
         style={{
           backgroundColor: '#f3f4f6',
           borderColor: selected ? '#9ca3af' : undefined,
         }}
         onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
       >
+        {/* Add child button — floats to the right, outside the card */}
+        <button
+          className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
+          style={{ backgroundColor: '#9ca3af', color: '#fff' }}
+          title="Adicionar card filho"
+          onClick={(e) => { e.stopPropagation(); data.onAddChild?.(id); }}
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+
         {/* Left connection strip */}
         <div className="group/strip-l absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
           <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
@@ -279,11 +299,11 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               />
             ) : data.taskAssigneeName ? (
               <div className="completed-avatar-placeholder rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0 transition-all duration-300">
-                <User className="w-3 h-3 text-gray-400 transition-colors duration-300 group-hover/node:text-emerald-600" />
+                <User className={`w-3 h-3 text-gray-400 transition-colors duration-300 ${mutedIconColor}`} />
               </div>
             ) : null}
-            <span className="text-[10px] text-gray-400 transition-colors duration-300 group-hover/node:text-emerald-600">
-              {completedDateStr ? `concluída em ${completedDateStr}` : 'concluída'}
+            <span className={`text-[10px] text-gray-400 transition-colors duration-300 ${mutedTextColor}`}>
+              {statusText}
             </span>
           </div>
         </div>

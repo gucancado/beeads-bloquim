@@ -73,7 +73,7 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
     )
     .groupBy(tasks.status);
 
-  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0 } as Record<string, number>;
+  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0, draft: 0 } as Record<string, number>;
   for (const row of rows) {
     if (row.status && row.status in result) {
       result[row.status] = Number(row.cnt);
@@ -198,7 +198,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
   const { title, description, dueDate, priority } = parsed.data;
   const dueDateValue = parseDateNoon(dueDate);
-  const overdueValue = computeOverdue(dueDateValue, "pending");
+  const overdueValue = computeOverdue(dueDateValue, "draft");
 
   const [newTask] = await db.insert(tasks).values({
     workspaceId: null,
@@ -208,7 +208,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     assignedTo: userId,
     dueDate: dueDateValue,
     priority,
-    status: "pending",
+    status: "draft",
     overdue: overdueValue,
   }).returning();
 
@@ -261,7 +261,7 @@ router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
 });
 
 const statusSchema = z.object({
-  status: z.enum(["pending", "in_progress", "blocked", "completed"]),
+  status: z.enum(["pending", "in_progress", "blocked", "completed", "draft"]),
 });
 
 router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {

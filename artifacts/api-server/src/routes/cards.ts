@@ -32,7 +32,7 @@ const createTaskSchema = z.object({
 });
 
 const updateTaskStatusSchema = z.object({
-  status: z.enum(["pending", "in_progress", "completed", "blocked"]),
+  status: z.enum(["pending", "in_progress", "completed", "blocked", "draft"]),
 });
 
 const updateTaskDetailsSchema = z.object({
@@ -43,8 +43,8 @@ const updateTaskDetailsSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
-function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "no_task" {
-  if (overdue && status !== "completed" && status !== "blocked") return "overdue";
+function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft" | "no_task" {
+  if (overdue && status !== "completed" && status !== "blocked" && status !== "draft") return "overdue";
   return status as any;
 }
 
@@ -64,12 +64,12 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "pending" })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft" })
     .returning();
 
   const [updated] = await db
     .update(cards)
-    .set({ taskId: task.id, statusVisual: "pending", updatedAt: new Date() })
+    .set({ taskId: task.id, statusVisual: "draft", updatedAt: new Date() })
     .where(eq(cards.id, card.id))
     .returning();
 
@@ -161,14 +161,14 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
   }
 
   const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate.slice(0, 10) + "T12:00:00.000Z") : undefined;
-  const overdue = computeOverdue(dueDate ?? null, "pending");
-  const visual = toVisualStatus("pending", overdue);
+  const overdue = computeOverdue(dueDate ?? null, "draft");
+  const visual = toVisualStatus("draft", overdue);
 
   const userId = req.user!.userId;
 
   const [task] = await db
     .insert(tasks)
-    .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "pending", overdue })
+    .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "draft", overdue })
     .returning();
 
   await db

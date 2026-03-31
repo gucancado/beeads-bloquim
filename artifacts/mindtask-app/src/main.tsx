@@ -10,7 +10,11 @@ window.addEventListener("unhandledrejection", (event) => {
 
 window.addEventListener("error", (event) => {
   if (event.error === null || event.error === undefined) {
-    if (event.message && event.message !== "Script error.") {
+    if (
+      event.message &&
+      event.message !== "Script error." &&
+      !event.message.includes("ResizeObserver loop")
+    ) {
       console.error("[mindtask] uncaught null-error exception:", event.message, event.filename, event.lineno);
     }
   } else if (!(event.error instanceof Error)) {

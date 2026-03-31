@@ -13,8 +13,8 @@ function parseDateNoon(value: string | null | undefined): Date | null {
   return new Date(dateOnly + "T12:00:00.000Z");
 }
 
-function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "no_task" {
-  if (overdue && status !== "completed" && status !== "blocked") return "overdue";
+function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft" | "no_task" {
+  if (overdue && status !== "completed" && status !== "blocked" && status !== "draft") return "overdue";
   return status as any;
 }
 
@@ -53,7 +53,7 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     )
     .groupBy(tasks.status);
 
-  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0 } as Record<string, number>;
+  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0, draft: 0 } as Record<string, number>;
   for (const row of rows) {
     if (row.status && row.status in result) {
       result[row.status] = Number(row.cnt);
@@ -141,7 +141,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
   const { title, description, assignedTo, dueDate, priority } = parsed.data;
 
   const dueDateValue = parseDateNoon(dueDate);
-  const overdueValue = computeOverdue(dueDateValue, "pending");
+  const overdueValue = computeOverdue(dueDateValue, "draft");
 
   const actorId = req.user!.userId;
 
@@ -154,7 +154,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       assignedTo: assignedTo ?? null,
       dueDate: dueDateValue,
       priority: priority ?? "medium",
-      status: "pending",
+      status: "draft",
       overdue: overdueValue,
     })
     .returning();
@@ -307,7 +307,7 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
   const actorId = req.user!.userId;
   const { status } = req.body as { status: string };
 
-  const validStatuses = ["pending", "in_progress", "completed", "blocked"];
+  const validStatuses = ["pending", "in_progress", "completed", "blocked", "draft"];
   if (!validStatuses.includes(status)) {
     res.status(400).json({ error: "Invalid status" });
     return;

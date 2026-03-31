@@ -737,7 +737,8 @@ export function TaskDetailModal({
                         <SelectContent>
                           <SelectItem value="pending"><span className="lowercase">Pendente</span></SelectItem>
                           <SelectItem value="in_progress"><span className="lowercase">Em andamento</span></SelectItem>
-                          <SelectItem value="blocked"><span className="lowercase">Interrompida</span></SelectItem>
+                          <SelectItem value="draft"><span className="lowercase">Rascunho</span></SelectItem>
+                          <SelectItem value="blocked"><span className="lowercase">Cancelada</span></SelectItem>
                         </SelectContent>
                       </Select>
                     )}

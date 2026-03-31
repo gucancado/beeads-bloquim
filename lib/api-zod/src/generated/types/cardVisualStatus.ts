@@ -15,4 +15,6 @@ export const CardVisualStatus = {
   in_progress: "in_progress",
   completed: "completed",
   overdue: "overdue",
+  blocked: "blocked",
+  draft: "draft",
 } as const;

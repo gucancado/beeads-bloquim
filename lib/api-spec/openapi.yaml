@@ -948,7 +948,7 @@ components:
 
     TaskStatus:
       type: string
-      enum: [pending, in_progress, completed, overdue, blocked]
+      enum: [pending, in_progress, completed, overdue, blocked, draft]
 
     TaskPriority:
       type: string
@@ -956,7 +956,7 @@ components:
 
     CardVisualStatus:
       type: string
-      enum: [no_task, pending, in_progress, completed, overdue]
+      enum: [no_task, pending, in_progress, completed, overdue, blocked, draft]
 
     WorkspaceRole:
       type: string

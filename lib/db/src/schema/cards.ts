@@ -19,6 +19,7 @@ export const cardVisualStatusEnum = pgEnum("card_visual_status", [
   "completed",
   "overdue",
   "blocked",
+  "draft",
 ]);
 
 export const cards = pgTable("cards", {

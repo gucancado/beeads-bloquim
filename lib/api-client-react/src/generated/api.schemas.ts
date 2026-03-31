@@ -27,6 +27,7 @@ export const TaskStatus = {
   completed: "completed",
   overdue: "overdue",
   blocked: "blocked",
+  draft: "draft",
 } as const;
 
 export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
@@ -47,6 +48,8 @@ export const CardVisualStatus = {
   in_progress: "in_progress",
   completed: "completed",
   overdue: "overdue",
+  blocked: "blocked",
+  draft: "draft",
 } as const;
 
 export type WorkspaceRole = (typeof WorkspaceRole)[keyof typeof WorkspaceRole];

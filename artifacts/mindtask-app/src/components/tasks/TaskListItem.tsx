@@ -54,7 +54,8 @@ interface Props {
 const STATUS_OPTIONS = [
   { value: "pending",     label: "pendente",      color: "bg-blue-500 text-white border-transparent" },
   { value: "in_progress", label: "em andamento",  color: "bg-amber-500 text-white border-transparent" },
-  { value: "blocked",     label: "interrompida",  color: "bg-purple-500 text-white border-transparent" },
+  { value: "draft",       label: "rascunho",      color: "bg-purple-500 text-white border-transparent" },
+  { value: "blocked",     label: "cancelada",     color: "bg-slate-500 text-white border-transparent" },
   { value: "completed",   label: "concluída",     color: "bg-emerald-500 text-white border-transparent" },
 ];
 
@@ -142,7 +143,7 @@ export function TaskListItem({
     }
   }, [task, editingTitle]);
 
-  const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked";
+  const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked" && localTask.status !== "draft";
   const isLinkedToCard = !!(task.cardId && task.mapId);
 
   const isStandaloneTask = !task.workspaceId;

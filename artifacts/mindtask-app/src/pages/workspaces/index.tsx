@@ -40,7 +40,7 @@ const STATUS_BADGES: Array<{
   className: string;
 }> = [
   { key: "overdue", label: "vencidas", className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60" },
-  { key: "blocked", label: "interrompidas", className: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900/60" },
+  { key: "blocked", label: "canceladas", className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" },
   { key: "in_progress", label: "em andamento", className: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60" },
   { key: "pending", label: "pendentes", className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" },
 ];

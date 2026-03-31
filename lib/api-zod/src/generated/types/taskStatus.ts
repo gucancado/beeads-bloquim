@@ -14,4 +14,5 @@ export const TaskStatus = {
   completed: "completed",
   overdue: "overdue",
   blocked: "blocked",
+  draft: "draft",
 } as const;
