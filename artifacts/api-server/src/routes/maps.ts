@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { maps, cards, cardConnections, tasks, users, userMapAccess } from "@workspace/db/schema";
+import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
@@ -90,8 +90,9 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
   }));
 
   const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));
+  const textElementList = await db.select().from(mapTextElements).where(eq(mapTextElements.mapId, mapId));
 
-  res.json({ ...map, cards: cardList, connections: connectionList });
+  res.json({ ...map, cards: cardList, connections: connectionList, textElements: textElementList });
 });
 
 router.put("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {

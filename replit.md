@@ -50,15 +50,18 @@ artifacts/
       components/
         layout/AppLayout.tsx   # Sidebar + auth redirect via useEffect
         maps/MindMapNode.tsx   # Node customizado com cor por status
+        maps/TextNode.tsx      # Node de texto livre com Tiptap, resize, menu de formatação
         tasks/TaskDetailModal.tsx  # Modal unificado para editar/criar tarefas (standalone ou workspace)
 
 lib/
   api-spec/openapi.yaml  # Contrato de API completo
   api-client-react/      # Hooks React Query gerados (customFetch injeta JWT)
     src/custom-fetch.ts  # Injeta Authorization: Bearer <token> em todas as requests
+    src/text-elements.ts # Hooks manuais para text elements (create/update/delete)
   api-zod/               # Schemas Zod gerados
   db/src/schema/
     users.ts, workspaces.ts, maps.ts, tasks.ts, cards.ts
+    textElements.ts      # Tabela map_text_elements
 ```
 
 ## Rotas de API
@@ -83,6 +86,9 @@ lib/
 | PATCH | /api/workspaces/:wId/maps/:mId/cards/:cId/task/details | Atualizar detalhes (assignee, deadline, priority) |
 | POST | /api/workspaces/:wId/maps/:mId/connections | Criar conexão |
 | DELETE | /api/workspaces/:wId/maps/:mId/connections/:connId | Remover conexão |
+| POST | /api/workspaces/:wId/maps/:mId/text-elements | Criar elemento de texto |
+| PUT | /api/workspaces/:wId/maps/:mId/text-elements/:id | Atualizar elemento de texto |
+| DELETE | /api/workspaces/:wId/maps/:mId/text-elements/:id | Remover elemento de texto |
 | GET | /api/my-tasks | Minhas tarefas (do usuário logado) |
 
 ## Funcionalidades Implementadas
@@ -120,7 +126,7 @@ lib/
 
 ## Entidades do Banco
 
-- users, workspaces, workspace_members, maps, cards, card_connections, tasks
+- users, workspaces, workspace_members, maps, cards, card_connections, tasks, map_text_elements
 - Enums: workspace_role, task_status, task_priority, card_visual_status
 - Sincronização automática: ao atualizar task.status → card.status_visual é atualizado na mesma operação
 

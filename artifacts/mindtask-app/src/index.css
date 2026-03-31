@@ -263,3 +263,8 @@
   opacity: 1;
   background-color: #d1fae5;
 }
+
+/* Preserve rich text formatting (bold/italic) in text node view mode */
+.tiptap-view strong { font-weight: bold; }
+.tiptap-view em { font-style: italic; }
+.tiptap-view p { margin: 0; }

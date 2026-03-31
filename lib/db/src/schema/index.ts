@@ -4,3 +4,4 @@ export * from "./maps";
 export * from "./tasks";
 export * from "./cards";
 export * from "./comments";
+export * from "./textElements";

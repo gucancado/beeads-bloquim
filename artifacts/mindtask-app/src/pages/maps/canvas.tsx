@@ -1,13 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode } from 'reactflow';
+import { ReactFlow, Controls, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
+import TextNode from "@/components/maps/TextNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest } from "@workspace/api-client-react";
-import { Loader2, ArrowLeft, Plus } from "lucide-react";
+import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement } from "@workspace/api-client-react";
+import { Loader2, ArrowLeft, Plus, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,7 +19,7 @@ interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   targetHandle?: string;
 }
 
-const nodeTypes = { mindmap: MindMapNode };
+const nodeTypes = { mindmap: MindMapNode, textnode: TextNode };
 const edgeTypes = { deletable: DeletableEdge };
 
 const INACTIVE_STATUSES = new Set(['blocked', 'pending']);
@@ -124,6 +125,9 @@ function edgeIntersectsNodeBBox(
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
+  const { getViewport, screenToFlowPosition } = useReactFlow();
+  const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
+  const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
     query: { refetchInterval: 3000 },
   });
@@ -182,8 +186,49 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     editingCardIdRef.current = isEditing ? cardId : null;
   }, []);
 
+  const buildTextNode = useCallback((el: {
+    id: string;
+    mapId: string;
+    content: string;
+    positionX: number;
+    positionY: number;
+    width: number;
+    height: number;
+    fontSize: number;
+    color: string;
+  }, onDelete: (elementId: string) => void): Node => ({
+    id: el.id,
+    type: 'textnode',
+    position: { x: el.positionX, y: el.positionY },
+    data: {
+      elementId: el.id,
+      content: el.content,
+      fontSize: el.fontSize,
+      color: el.color,
+      workspaceId,
+      mapId,
+      onDelete,
+    },
+  }), [workspaceId, mapId]);
+
+  const handleDeleteTextNode = useCallback((elementId: string) => {
+    setNodes(prev => prev.filter(n => n.id !== elementId));
+  }, [setNodes]);
+
   useEffect(() => {
     if (!mapData) return;
+
+    const mapDataWithText = mapData as typeof mapData & { textElements?: Array<{
+      id: string;
+      mapId: string;
+      content: string;
+      positionX: number;
+      positionY: number;
+      width: number;
+      height: number;
+      fontSize: number;
+      color: string;
+    }> };
 
     if (!initializedRef.current) {
       const initialNodes: Node[] = mapData.cards.map(c => ({
@@ -192,24 +237,42 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         position: { x: c.positionX, y: c.positionY },
         data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
       }));
-      setNodes(initialNodes);
+
+      const textNodes: Node[] = (mapDataWithText.textElements ?? []).map(el =>
+        buildTextNode(el, handleDeleteTextNode)
+      );
+
+      setNodes([...initialNodes, ...textNodes]);
 
       const initialEdges: Edge[] = mapData.connections.map(c => buildEdgeFromConn(c, mapData.cards));
       setEdges(initialEdges);
       initializedRef.current = true;
     } else {
       setNodes(prev => {
-        const serverIds = new Set(mapData.cards.map(c => c.id));
-        const filtered = prev.filter(n => serverIds.has(n.id));
-        const existingIds = new Set(filtered.map(n => n.id));
-        const newNodes: Node[] = mapData.cards
-          .filter(c => !existingIds.has(c.id))
+        const serverCardIds = new Set(mapData.cards.map(c => c.id));
+        const serverTextIds = new Set((mapDataWithText.textElements ?? []).map(el => el.id));
+
+        const filtered = prev.filter(n => {
+          if (n.type === 'textnode') return serverTextIds.has(n.id);
+          return serverCardIds.has(n.id);
+        });
+
+        const existingCardIds = new Set(filtered.filter(n => n.type === 'mindmap').map(n => n.id));
+        const existingTextIds = new Set(filtered.filter(n => n.type === 'textnode').map(n => n.id));
+
+        const newCardNodes: Node[] = mapData.cards
+          .filter(c => !existingCardIds.has(c.id))
           .map(c => ({
             id: c.id,
             type: 'mindmap',
             position: { x: c.positionX, y: c.positionY },
             data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
           }));
+
+        const newTextNodes: Node[] = (mapDataWithText.textElements ?? [])
+          .filter(el => !existingTextIds.has(el.id))
+          .map(el => buildTextNode(el, handleDeleteTextNode));
+
         const currentlyEditingId = editingCardIdRef.current;
         const now = Date.now();
         const PENDING_GUARD_MS = 5000;
@@ -218,6 +281,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         });
         return [
           ...filtered.map(n => {
+            if (n.type === 'textnode') {
+              const serverEl = (mapDataWithText.textElements ?? []).find(el => el.id === n.id);
+              if (!serverEl) return n;
+              return n;
+            }
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
             const hasPendingUpdate = pendingUpdatesRef.current.has(n.id);
@@ -226,7 +294,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             }
             return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
           }),
-          ...newNodes,
+          ...newCardNodes,
+          ...newTextNodes,
         ];
       });
 
@@ -256,6 +325,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const createConnMut = useCreateConnection();
   const deleteConnMut = useDeleteConnection();
   const createCardMut = useCreateCard();
+  const createTextMut = useCreateTextElement();
+  const updateTextMut = useUpdateTextElement();
+  const deleteTextMut = useDeleteTextElement();
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     const parentNode = nodesRef.current.find(n => n.id === parentCardId);
@@ -283,6 +355,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      // Text nodes are excluded from edge insertion logic
+      if (node.type === 'textnode') return;
+
       const currentEdges = edgesRef.current;
       const currentNodes = nodesRef.current;
 
@@ -302,6 +377,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const sourceNode = currentNodes.find(n => n.id === edge.source);
         const targetNode = currentNodes.find(n => n.id === edge.target);
         if (!sourceNode || !targetNode) continue;
+
+        // Skip edges involving text nodes
+        if (sourceNode.type === 'textnode' || targetNode.type === 'textnode') continue;
 
         const srcW = sourceNode.width ?? 200;
         const srcH = sourceNode.height ?? 80;
@@ -334,6 +412,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      // If this is a text node, use the text element update mutation
+      if (node.type === 'textnode') {
+        updateTextMut.mutate({
+          workspaceId, mapId, elementId: node.id,
+          data: { positionX: node.position.x, positionY: node.position.y },
+        });
+        return;
+      }
+
       // Always save position
       updateCardMut.mutate({
         workspaceId, mapId, cardId: node.id,
@@ -448,12 +535,18 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
       }
     },
-    [workspaceId, mapId, updateCardMut, highlightedEdgeId, deleteConnMut, createConnMut, queryClient, mapData],
+    [workspaceId, mapId, updateCardMut, updateTextMut, highlightedEdgeId, deleteConnMut, createConnMut, queryClient, mapData],
   );
 
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) return;
+
+      // Reject connections involving text nodes
+      const currentNodes = nodesRef.current;
+      const sourceNode = currentNodes.find(n => n.id === params.source);
+      const targetNode = currentNodes.find(n => n.id === params.target);
+      if (sourceNode?.type === 'textnode' || targetNode?.type === 'textnode') return;
 
       const srcHandle = params.sourceHandle ?? '';
       const tgtHandle = params.targetHandle ?? '';
@@ -552,6 +645,85 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     );
   }, [workspaceId, mapId, createCardMut, queryClient]);
 
+  const createTextAt = useCallback((flowX: number, flowY: number) => {
+    createTextMut.mutate(
+      {
+        workspaceId,
+        mapId,
+        data: {
+          positionX: flowX,
+          positionY: flowY,
+          width: 200,
+          height: 80,
+          fontSize: 14,
+          color: '#374151',
+          content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] }),
+        },
+      },
+      {
+        onSuccess: (newEl) => {
+          const newNode: Node = {
+            id: newEl.id,
+            type: 'textnode',
+            position: { x: newEl.positionX, y: newEl.positionY },
+            data: {
+              elementId: newEl.id,
+              content: newEl.content,
+              fontSize: newEl.fontSize,
+              color: newEl.color,
+              workspaceId,
+              mapId,
+              onDelete: handleDeleteTextNode,
+              autoFocus: true,
+            },
+          };
+          setNodes(prev => [...prev, newNode]);
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+        },
+      },
+    );
+  }, [workspaceId, mapId, createTextMut, queryClient, setNodes, handleDeleteTextNode]);
+
+  const handleTextButtonMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 8;
+    textDragRef.current = { dragging: false, startX, startY };
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+        textDragRef.current = { dragging: true, startX, startY };
+        setTextGhost({ x: ev.clientX, y: ev.clientY });
+      } else if (textDragRef.current?.dragging) {
+        setTextGhost({ x: ev.clientX, y: ev.clientY });
+      }
+    };
+
+    const handleMouseUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      const wasDragging = textDragRef.current?.dragging ?? false;
+      textDragRef.current = null;
+      setTextGhost(null);
+
+      if (wasDragging) {
+        const flowPos = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+        createTextAt(flowPos.x - 100, flowPos.y - 40);
+      } else {
+        const vp = getViewport();
+        const el = document.querySelector('.react-flow__renderer');
+        const w = el ? (el as HTMLElement).clientWidth : 800;
+        const h = el ? (el as HTMLElement).clientHeight : 600;
+        createTextAt((-vp.x + w / 2) / vp.zoom - 100, (-vp.y + h / 2) / vp.zoom - 40);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [getViewport, screenToFlowPosition, createTextAt]);
 
   const onPaneClick = useCallback(() => {
     setSelectedCardId(null);
@@ -597,7 +769,24 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           </div>
         </div>
 
-        <div className="absolute top-4 right-4 z-10">
+        {textGhost && (
+          <div
+            className="pointer-events-none fixed z-[9999] border-2 border-dashed border-blue-400 bg-blue-50/70 dark:bg-blue-950/50 rounded-lg"
+            style={{ left: textGhost.x - 100, top: textGhost.y - 40, width: 200, height: 80 }}
+          />
+        )}
+
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <Button
+            onMouseDown={handleTextButtonMouseDown}
+            disabled={createTextMut.isPending}
+            variant="outline"
+            title="Clique para adicionar texto no centro • Arraste para posicionar"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none"
+          >
+            {createTextMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Type className="w-4 h-4 mr-2" />}
+            <span className="lowercase">Texto</span>
+          </Button>
           <Button onClick={handleAddCard} disabled={createCardMut.isPending} className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20">
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
             <span className="lowercase">Adicionar Nó</span>
@@ -626,7 +815,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             fitView
             fitViewOptions={{ padding: 0.2 }}
             onNodesDelete={(deletedNodes) => {
-              deletedNodes.forEach(n => handleDeleteCard(n.id));
+              deletedNodes.forEach(n => {
+                if (n.type === 'textnode') {
+                  handleDeleteTextNode(n.id);
+                  deleteTextMut.mutate({ workspaceId, mapId, elementId: n.id });
+                } else {
+                  handleDeleteCard(n.id);
+                }
+              });
             }}
             deleteKeyCode="Delete"
             className="w-full h-full"

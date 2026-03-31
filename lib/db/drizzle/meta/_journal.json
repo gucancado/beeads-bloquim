@@ -57,6 +57,13 @@
       "when": 1774740000000,
       "tag": "0007_workspace_color_to_index",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774912036395,
+      "tag": "0008_blue_salo",
+      "breakpoints": true
     }
   ]
 }
