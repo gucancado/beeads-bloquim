@@ -54,6 +54,7 @@ const EditingEditor = forwardRef<TextNodeEditorHandle, EditingEditorProps>(
       extensions: [StarterKit],
       content: parseContent(initialContent),
       editable: true,
+      immediatelyRender: false,
       autofocus: 'end',
       editorProps: {
         attributes: { class: 'outline-none nodrag nopan w-full h-full min-h-[1em]' },

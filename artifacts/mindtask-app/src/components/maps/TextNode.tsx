@@ -74,9 +74,6 @@ function TextNode({ id, data, selected }: TextNodeProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<TextNodeEditorHandle>(null);
 
-  // Distinguish first click (select/move) from second click (edit)
-  const wasSelectedBeforeClick = useRef(false);
-
   const updateMut = useUpdateTextElement();
   const deleteMut = useDeleteTextElement();
 
@@ -120,14 +117,9 @@ function TextNode({ id, data, selected }: TextNodeProps) {
     }
   }, [isEditing]);
 
-  const handleMouseDown = useCallback(() => {
-    wasSelectedBeforeClick.current = selected && !isEditing;
-  }, [selected, isEditing]);
-
   const handleClick = useCallback((e: React.MouseEvent) => {
-    if (isEditing) return;
-    if (wasSelectedBeforeClick.current) enterEditMode(e);
-  }, [isEditing, enterEditMode]);
+    enterEditMode(e);
+  }, [enterEditMode]);
 
   const handleFontSizeChange = useCallback((newSize: number) => {
     setFontSize(newSize);
@@ -216,7 +208,6 @@ function TextNode({ id, data, selected }: TextNodeProps) {
           outlineOffset: '4px',
           borderRadius: '4px',
         }}
-        onMouseDown={handleMouseDown}
         onClick={handleClick}
         onDoubleClick={enterEditMode}
       >
