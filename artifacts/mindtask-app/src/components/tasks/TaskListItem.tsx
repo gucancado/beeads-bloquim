@@ -78,7 +78,7 @@ function getPriorityColor(p: string) {
 
 function translatePriority(p: string) {
   switch (p) {
-    case "critical": return "crítica";
+    case "critical": return "máxima";
     case "high":     return "alta";
     case "medium":   return "média";
     case "low":      return "baixa";
@@ -371,7 +371,7 @@ export function TaskListItem({
                 <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
                 <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
                   {[
-                    { value: "critical", label: "crítica" },
+                    { value: "critical", label: "máxima" },
                     { value: "high",     label: "alta" },
                     { value: "medium",   label: "média" },
                     { value: "low",      label: "baixa" },

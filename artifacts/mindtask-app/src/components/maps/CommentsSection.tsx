@@ -232,7 +232,7 @@ function formatActivityText(activity: TaskActivityItem): string {
         low: "baixa",
         medium: "média",
         high: "alta",
-        critical: "urgente",
+        critical: "máxima",
       };
       const oldLabel = PRIORITY_LABELS[m.oldPriority ?? ""] ?? m.oldPriority ?? "?";
       const newLabel = PRIORITY_LABELS[m.newPriority ?? ""] ?? m.newPriority ?? "?";

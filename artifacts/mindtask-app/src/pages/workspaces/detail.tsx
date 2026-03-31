@@ -900,7 +900,7 @@ export default function WorkspaceDetailPage() {
                         <h3 className="text-xl font-bold font-display mb-6 lowercase">Por Prioridade</h3>
                         <div className="space-y-4">
                           {[
-                            { label: 'Crítica', value: dashboard.tasksByPriority.critical, color: 'bg-red-500' },
+                            { label: 'Máxima', value: dashboard.tasksByPriority.critical, color: 'bg-red-500' },
                             { label: 'Alta', value: dashboard.tasksByPriority.high, color: 'bg-orange-500' },
                             { label: 'Média', value: dashboard.tasksByPriority.medium, color: 'bg-blue-500' },
                             { label: 'Baixa', value: dashboard.tasksByPriority.low, color: 'bg-slate-400' },

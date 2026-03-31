@@ -942,7 +942,7 @@ export function TaskDetailModal({
                             <SelectItem value="low"><span className="lowercase">Baixa</span></SelectItem>
                             <SelectItem value="medium"><span className="lowercase">Média</span></SelectItem>
                             <SelectItem value="high"><span className="lowercase">Alta</span></SelectItem>
-                            <SelectItem value="critical"><span className="lowercase">Crítica</span></SelectItem>
+                            <SelectItem value="critical"><span className="lowercase">Máxima</span></SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
