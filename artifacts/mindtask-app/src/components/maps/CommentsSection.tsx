@@ -47,6 +47,7 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
     extensions: [
       StarterKit,
     ],
+    immediatelyRender: false,
     editorProps: {
       attributes: {
         class: "comment-editor-area",

@@ -9,7 +9,11 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 
 window.addEventListener("error", (event) => {
-  if (event.error !== null && event.error !== undefined && !(event.error instanceof Error)) {
+  if (event.error === null || event.error === undefined) {
+    if (event.message && event.message !== "Script error.") {
+      console.error("[mindtask] uncaught null-error exception:", event.message, event.filename, event.lineno);
+    }
+  } else if (!(event.error instanceof Error)) {
     console.error("[mindtask] uncaught non-Error exception:", JSON.stringify(event.error), typeof event.error);
   }
 });

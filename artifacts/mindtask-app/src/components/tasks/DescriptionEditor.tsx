@@ -12,6 +12,7 @@ interface DescriptionEditorProps {
 export function DescriptionEditor({ value, onChange, onBlur }: DescriptionEditorProps) {
   const editor = useEditor({
     extensions: [StarterKit],
+    immediatelyRender: false,
     editorProps: {
       attributes: {
         class: "description-editor-area",
