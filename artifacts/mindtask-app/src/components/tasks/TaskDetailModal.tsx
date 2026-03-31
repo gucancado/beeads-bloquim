@@ -955,8 +955,9 @@ export function TaskDetailModal({
                         <Input
                           type="date"
                           value={dueDate}
-                          onChange={e => { setDueDate(e.target.value); markDirty(); }}
-                          onBlur={e => {
+                          onChange={e => {
+                            setDueDate(e.target.value);
+                            markDirty();
                             if (isCardMode) saveCardTaskDetails({ dueDate: e.target.value });
                             else if (isEditing && resolvedTaskId) saveMutation.mutate({ dueDate: e.target.value || null });
                           }}

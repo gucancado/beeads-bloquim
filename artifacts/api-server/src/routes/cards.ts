@@ -449,7 +449,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
 
   if (parsed.data.dueDate !== undefined && currentTask) {
     const oldDateStr = currentTask.dueDate ? currentTask.dueDate.toISOString().slice(0, 10) : null;
-    const newDateStr = parsed.data.dueDate ?? null;
+    const newDateStr = parsed.data.dueDate ? parsed.data.dueDate.slice(0, 10) : null;
     if (oldDateStr !== newDateStr) {
       await db.insert(taskActivities).values({
         taskId: card.taskId,
