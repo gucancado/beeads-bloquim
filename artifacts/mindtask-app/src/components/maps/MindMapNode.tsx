@@ -237,6 +237,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           backgroundColor: '#f3f4f6',
           borderColor: selected ? '#9ca3af' : undefined,
         }}
+        onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
       >
         {/* Left connection strip */}
         <div className="group/strip-l absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
@@ -299,6 +300,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           ? `0 10px 25px -5px ${color.replace(')', ' / 0.3)')}`
           : undefined,
       }}
+      onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
     >
       {/* Add child button — floats to the right, outside the card */}
       <button
@@ -347,12 +349,14 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               onBlur={handleTitleBlur}
               onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setTitleValue(data.title); setEditingTitle(false); data.onEditingChange?.(id, false); } }}
               onClick={e => e.stopPropagation()}
+              onDoubleClick={e => e.stopPropagation()}
             />
           ) : (
             <h3
               className="font-display font-bold text-foreground text-base leading-tight break-words pr-2 cursor-text hover:bg-muted/30 rounded px-0.5 transition-colors"
               title="Clique para editar o título"
               onClick={(e) => { e.stopPropagation(); setEditingTitle(true); data.onEditingChange?.(id, true); }}
+              onDoubleClick={(e) => e.stopPropagation()}
             >
               {data.title}
             </h3>
@@ -441,6 +445,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                     <div
                       className={`flex items-center cursor-pointer nodrag ${hasTask ? 'hover:ring-2 hover:ring-primary/40 rounded-full transition-all' : 'cursor-default'}`}
                       onClick={(e) => { if (hasTask) { e.stopPropagation(); setEditingAssignee(true); } }}
+                      onDoubleClick={(e) => e.stopPropagation()}
                       title={hasTask ? 'Clique para alterar responsável' : undefined}
                     >
                       {data.taskAssigneeAvatarUrl ? (
@@ -487,6 +492,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 className={`flex items-center gap-1 text-[11px] font-medium ml-auto cursor-pointer rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} ${hasTask ? '' : 'cursor-default'} nodrag`}
                 title={hasTask ? 'Clique para editar prazo' : undefined}
                 onClick={(e) => { if (hasTask) { e.stopPropagation(); setEditingDueDate(true); } }}
+                onDoubleClick={(e) => e.stopPropagation()}
               >
                 <Calendar className="w-3 h-3 flex-shrink-0" />
                 <span>{dueDateStr}</span>
@@ -508,6 +514,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           <div
             className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
             title={hasTask ? 'Clique para alterar status' : undefined}
+            onDoubleClick={(e) => e.stopPropagation()}
             onClick={(e) => {
               if (!hasTask) return;
               e.stopPropagation();

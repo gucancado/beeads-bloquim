@@ -645,6 +645,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     );
   }, [workspaceId, mapId, createCardMut, queryClient]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'n') {
+        const target = e.target as HTMLElement;
+        const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable;
+        if (isEditable) return;
+        e.preventDefault();
+        handleAddCard();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleAddCard]);
+
   const createTextAt = useCallback((flowX: number, flowY: number) => {
     createTextMut.mutate(
       {
