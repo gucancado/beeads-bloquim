@@ -9,15 +9,10 @@ import EditingEditor, { TextNodeEditorHandle } from './TextNodeEditor';
 
 const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48];
 const TEXT_COLORS = [
-  { label: 'Cinza escuro', value: '#374151' },
   { label: 'Preto', value: '#111827' },
-  { label: 'Cinza', value: '#6b7280' },
+  { label: 'Vermelho', value: '#dc2626' },
   { label: 'Azul', value: '#2563eb' },
   { label: 'Verde', value: '#16a34a' },
-  { label: 'Vermelho', value: '#dc2626' },
-  { label: 'Laranja', value: '#ea580c' },
-  { label: 'Roxo', value: '#9333ea' },
-  { label: 'Rosa', value: '#db2777' },
 ];
 
 const EMPTY_TIPTAP_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -163,16 +158,21 @@ function TextNode({ id, data, selected }: TextNodeProps) {
       style={{ top: menuPos.top, left: menuPos.left, minWidth: 200 }}
       onMouseDown={e => e.stopPropagation()}
     >
-      <select
-        value={fontSize}
-        onChange={e => handleFontSizeChange(Number(e.target.value))}
-        className="text-xs bg-transparent border border-gray-200 dark:border-gray-700 rounded-lg px-1.5 py-1 outline-none cursor-pointer"
-        title="Tamanho da fonte"
-      >
-        {FONT_SIZES.map(s => (
-          <option key={s} value={s}>{s}px</option>
-        ))}
-      </select>
+      <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <button
+          title="Diminuir fonte"
+          className="text-sm px-1.5 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-30"
+          disabled={FONT_SIZES.indexOf(fontSize) <= 0}
+          onMouseDown={e => { e.preventDefault(); e.stopPropagation(); const i = FONT_SIZES.indexOf(fontSize); if (i > 0) handleFontSizeChange(FONT_SIZES[i - 1]); }}
+        >−</button>
+        <span className="text-xs w-8 text-center select-none">{fontSize}</span>
+        <button
+          title="Aumentar fonte"
+          className="text-sm px-1.5 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-30"
+          disabled={FONT_SIZES.indexOf(fontSize) >= FONT_SIZES.length - 1}
+          onMouseDown={e => { e.preventDefault(); e.stopPropagation(); const i = FONT_SIZES.indexOf(fontSize); if (i < FONT_SIZES.length - 1) handleFontSizeChange(FONT_SIZES[i + 1]); }}
+        >+</button>
+      </div>
 
       <div className="flex items-center gap-1">
         {TEXT_COLORS.map(c => (
@@ -208,7 +208,14 @@ function TextNode({ id, data, selected }: TextNodeProps) {
       {floatingMenu}
       <div
         ref={containerRef}
-        style={{ display: 'inline-block', maxWidth: 480, cursor: isEditing ? 'text' : 'grab' }}
+        style={{
+          display: 'inline-block',
+          maxWidth: 480,
+          cursor: isEditing ? 'text' : 'grab',
+          outline: selected && !isEditing ? '2px solid hsl(36 100% 50%)' : 'none',
+          outlineOffset: '4px',
+          borderRadius: '4px',
+        }}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
         onDoubleClick={enterEditMode}

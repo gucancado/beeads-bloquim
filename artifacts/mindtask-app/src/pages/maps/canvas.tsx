@@ -789,7 +789,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           </Button>
           <Button onClick={handleAddCard} disabled={createCardMut.isPending} className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20">
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-            <span className="lowercase">Adicionar Nó</span>
+            <span className="lowercase">Tarefa</span>
           </Button>
         </div>
 

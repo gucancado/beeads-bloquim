@@ -268,3 +268,10 @@
 .tiptap-view strong { font-weight: bold; }
 .tiptap-view em { font-style: italic; }
 .tiptap-view p { margin: 0; }
+
+/* Block links (e.g. mailto:) from being interactive in view-only mode */
+.tiptap-view a {
+  pointer-events: none;
+  text-decoration: none;
+  color: inherit;
+}
