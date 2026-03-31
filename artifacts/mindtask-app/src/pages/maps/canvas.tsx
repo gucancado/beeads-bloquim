@@ -125,7 +125,7 @@ function edgeIntersectsNodeBBox(
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
-  const { getViewport, screenToFlowPosition } = useReactFlow();
+  const { getViewport, setViewport, screenToFlowPosition } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
@@ -659,6 +659,22 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleAddCard]);
 
+  const reactFlowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = reactFlowRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaX === 0) return;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      const vp = getViewport();
+      setViewport({ x: vp.x - e.deltaX, y: vp.y, zoom: vp.zoom });
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [getViewport, setViewport]);
+
   const createTextAt = useCallback((flowX: number, flowY: number) => {
     createTextMut.mutate(
       {
@@ -813,7 +829,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           </p>
         </div>
 
-        <div className="flex-1 w-full h-full">
+        <div ref={reactFlowRef} className="flex-1 w-full h-full">
           <ReactFlow
             nodes={nodes}
             edges={edges}
