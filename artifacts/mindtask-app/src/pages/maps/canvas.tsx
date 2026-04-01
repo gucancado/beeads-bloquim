@@ -24,7 +24,7 @@ interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
 const nodeTypes = { mindmap: MindMapNode, textnode: TextNode, approvalnode: ApprovalNode };
 const edgeTypes = { deletable: DeletableEdge, approval: ApprovalEdge };
 
-const INACTIVE_STATUSES = new Set(['blocked', 'pending']);
+const INACTIVE_STATUSES = new Set(['blocked', 'pending', 'draft']);
 
 const EDGE_BASE = {
   type: 'deletable' as const,
