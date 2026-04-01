@@ -420,39 +420,53 @@ export function TaskDetailModal({
     );
   };
 
+  interface SaveMutationInput {
+    body: UpdateTaskPayload;
+    taskId: string;
+    standalone: boolean;
+    wsId: string;
+  }
+
   const saveMutation = useMutation({
-    mutationFn: (body: UpdateTaskPayload) =>
-      customFetch(isStandalone ? `/api/my-tasks/${resolvedTaskId}` : `/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`, {
+    mutationFn: ({ body, taskId, standalone, wsId }: SaveMutationInput) =>
+      customFetch(standalone ? `/api/my-tasks/${taskId}` : `/api/workspaces/${wsId}/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (_, { taskId, standalone, wsId }) => {
       invalidateTask();
-      if (isStandalone) {
-        queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${resolvedTaskId}`] });
-        queryClient.invalidateQueries({ queryKey: [`task-activities`, "standalone", resolvedTaskId] });
+      if (standalone) {
+        queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, "standalone", taskId] });
       } else {
-        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`] });
-        queryClient.invalidateQueries({ queryKey: [`task-activities`, effectiveWorkspaceId, resolvedTaskId] });
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${wsId}/tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, wsId, taskId] });
       }
     },
     onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
   });
 
+  interface StatusMutationInput {
+    newStatus: string;
+    taskId: string;
+    standalone: boolean;
+    wsId: string;
+  }
+
   const statusMutation = useMutation({
-    mutationFn: (newStatus: string) =>
-      customFetch(isStandalone ? `/api/my-tasks/${resolvedTaskId}/status` : `/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}/status`, {
+    mutationFn: ({ newStatus, taskId, standalone, wsId }: StatusMutationInput) =>
+      customFetch(standalone ? `/api/my-tasks/${taskId}/status` : `/api/workspaces/${wsId}/tasks/${taskId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: newStatus }),
       }),
-    onSuccess: () => {
+    onSuccess: (_, { taskId, standalone, wsId }) => {
       invalidateTask();
-      if (isStandalone) {
-        queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${resolvedTaskId}`] });
-        queryClient.invalidateQueries({ queryKey: [`task-activities`, "standalone", resolvedTaskId] });
+      if (standalone) {
+        queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, "standalone", taskId] });
       } else {
-        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`] });
-        queryClient.invalidateQueries({ queryKey: [`task-activities`, effectiveWorkspaceId, resolvedTaskId] });
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${wsId}/tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`task-activities`, wsId, taskId] });
       }
     },
     onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
@@ -524,22 +538,22 @@ export function TaskDetailModal({
     if (!isStandalone) {
       payload.assignedTo = assignedTo === "unassigned" ? null : assignedTo;
     }
-    saveMutation.mutate(payload);
+    saveMutation.mutate({ body: payload, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
     if (effectiveWorkspaceId && taskIdResolved) {
       saveSubtasksMutation.mutate(localSubtasks.filter(s => s.text.trim() !== ""));
     }
   };
 
   const handleStatusChange = (newStatus: string) => {
-    if (!isEditing) return;
+    if (!isEditing || !resolvedTaskId) return;
     setStatus(newStatus);
     markDirty();
     if (isCardMode) handleCardStatusChange(newStatus);
-    else statusMutation.mutate(newStatus);
+    else statusMutation.mutate({ newStatus, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
   };
 
   const handleConcluir = () => {
-    if (!isEditing) return;
+    if (!isEditing || !resolvedTaskId) return;
     markDirty();
     const previousStatus = isCardMode
       ? (card?.task?.previousStatus ?? "pending")
@@ -547,11 +561,11 @@ export function TaskDetailModal({
     if (status === "completed") {
       setStatus(previousStatus);
       if (isCardMode) handleCardStatusChange(previousStatus);
-      else statusMutation.mutate(previousStatus);
+      else statusMutation.mutate({ newStatus: previousStatus, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
     } else {
       setStatus("completed");
       if (isCardMode) handleCardStatusChange("completed");
-      else statusMutation.mutate("completed");
+      else statusMutation.mutate({ newStatus: "completed", taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
     }
   };
 
@@ -906,7 +920,7 @@ export function TaskDetailModal({
                               setAssignedTo(v);
                               markDirty();
                               if (isCardMode) saveCardTaskDetails({ assignedTo: v });
-                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ assignedTo: v === "unassigned" ? null : v });
+                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { assignedTo: v === "unassigned" ? null : v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                             }}
                           >
                             <SelectTrigger className="bg-background rounded-xl h-10">
@@ -933,7 +947,7 @@ export function TaskDetailModal({
                             setPriority(v);
                             markDirty();
                             if (isCardMode) saveCardTaskDetails({ priority: v });
-                            else if (isEditing && resolvedTaskId) saveMutation.mutate({ priority: v });
+                            else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { priority: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                           }}
                         >
                           <SelectTrigger className="bg-background rounded-xl h-10">
@@ -960,7 +974,7 @@ export function TaskDetailModal({
                             setDueDate(e.target.value);
                             markDirty();
                             if (isCardMode) saveCardTaskDetails({ dueDate: e.target.value });
-                            else if (isEditing && resolvedTaskId) saveMutation.mutate({ dueDate: e.target.value || null });
+                            else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { dueDate: e.target.value || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                           }}
                           className="bg-background rounded-xl h-10 text-sm"
                         />
@@ -1009,7 +1023,7 @@ export function TaskDetailModal({
                         onChange={v => { setDescription(v); markDirty(); }}
                         onBlur={() => {
                           if (isCardMode) saveCard();
-                          else if (isEditing && resolvedTaskId) saveMutation.mutate({ description: description || null });
+                          else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { description: description || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                         }}
                       />
                     </div>

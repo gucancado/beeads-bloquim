@@ -31,7 +31,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function MyTasksPage() {
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress", "draft"]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
   const [openCard, setOpenCard] = useState<OpenCard | null>(null);
   const [standaloneTask, setStandaloneTask] = useState<StandaloneTask | null>(null);
@@ -222,6 +222,7 @@ export default function MyTasksPage() {
                             task={task}
                             members={membersByWorkspace[task.workspaceId] ?? []}
                             invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
+                            countsQueryKeys={[countsQueryKey]}
                             onOpenDetail={openTaskItem}
                             showWorkspaceName
                             showMapName
@@ -242,6 +243,7 @@ export default function MyTasksPage() {
                             task={task}
                             members={membersByWorkspace[task.workspaceId] ?? []}
                             invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
+                            countsQueryKeys={[countsQueryKey]}
                             onOpenDetail={openTaskItem}
                             showWorkspaceName
                             showMapName

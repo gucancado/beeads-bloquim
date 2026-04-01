@@ -46,6 +46,7 @@ interface Props {
   task: TaskListItemData;
   members?: TaskListItemMember[];
   invalidateQueryKeys?: string[][];
+  countsQueryKeys?: string[][];
   onOpenDetail?: (task: TaskListItemData) => void;
   showWorkspaceName?: boolean;
   showMapName?: boolean;
@@ -91,6 +92,7 @@ export function TaskListItem({
   task,
   members = [],
   invalidateQueryKeys = [],
+  countsQueryKeys = [],
   onOpenDetail,
   showWorkspaceName = false,
   showMapName = false,
@@ -174,6 +176,10 @@ export function TaskListItem({
     }
   }, [task.workspaceId, task.id, invalidate, isStandaloneTask]);
 
+  const invalidateCounts = useCallback(() => {
+    countsQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
+  }, [countsQueryKeys, queryClient]);
+
   const patchStatus = useCallback(async (newStatus: string) => {
     try {
       const url = isStandaloneTask
@@ -184,11 +190,11 @@ export function TaskListItem({
         body: JSON.stringify({ status: newStatus }),
       });
       setLocalTask(prev => ({ ...prev, ...updated }));
-      invalidate();
+      invalidateCounts();
     } catch (err) {
       console.error("Inline status update failed:", err);
     }
-  }, [task.workspaceId, task.id, invalidate, isStandaloneTask]);
+  }, [task.workspaceId, task.id, isStandaloneTask, invalidateCounts]);
 
   const updateCardTitle = useCallback(async (newTitle: string) => {
     try {

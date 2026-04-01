@@ -181,7 +181,7 @@ export default function WorkspaceDetailPage() {
   const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, "admin" | "editor" | "executor">>({});
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress", "draft"]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
@@ -829,6 +829,7 @@ export default function WorkspaceDetailPage() {
                                     task={task}
                                     members={detailMembers}
                                     invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
+                                    countsQueryKeys={[countsQueryKey]}
                                     onOpenDetail={openTaskItem}
                                     showMapName
                                   />
@@ -848,6 +849,7 @@ export default function WorkspaceDetailPage() {
                                     task={task}
                                     members={detailMembers}
                                     invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
+                                    countsQueryKeys={[countsQueryKey]}
                                     onOpenDetail={openTaskItem}
                                     showMapName
                                   />
