@@ -71,6 +71,7 @@ export function ApprovalTaskView({ taskId, workspaceId, onClose }: ApprovalTaskV
   const { data: task, isLoading } = useQuery<ApprovalTaskDetail>({
     queryKey: [`/api/workspaces/${workspaceId}/tasks/${taskId}`],
     queryFn: () => customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}`),
+    enabled: !!taskId && !!workspaceId,
   });
 
   const invalidate = () => {

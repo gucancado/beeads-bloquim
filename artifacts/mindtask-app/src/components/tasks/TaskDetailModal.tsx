@@ -472,6 +472,7 @@ export function TaskDetailModal({
   const [taskMapId, setTaskMapId] = useState<string | null>(null);
   const [autoCreateDirty, setAutoCreateDirty] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const initializedForTaskRef = useRef<string | null>(null);
 
   const effectiveWorkspaceId = propWorkspaceId || taskWorkspaceId || "";
   const isStandalone = !effectiveWorkspaceId;
@@ -574,15 +575,19 @@ export function TaskDetailModal({
   useEffect(() => {
     if (!isCardMode) {
       if (task && isEditing) {
-        setTitle(task.title ?? "");
-        setDescription(task.description ?? "");
-        setAssignedTo(task.assignedTo ?? "unassigned");
-        setPriority(task.priority ?? "medium");
-        setDueDate(task.dueDate ? task.dueDate.split("T")[0] : "");
-        setStatus(task.status ?? "pending");
-        setTaskWorkspaceId(task.workspaceId ?? null);
-        setTaskMapId(task.mapId ?? null);
+        if (initializedForTaskRef.current !== resolvedTaskId) {
+          initializedForTaskRef.current = resolvedTaskId;
+          setTitle(task.title ?? "");
+          setDescription(task.description ?? "");
+          setAssignedTo(task.assignedTo ?? "unassigned");
+          setPriority(task.priority ?? "medium");
+          setDueDate(task.dueDate ? task.dueDate.split("T")[0] : "");
+          setStatus(task.status ?? "pending");
+          setTaskWorkspaceId(task.workspaceId ?? null);
+          setTaskMapId(task.mapId ?? null);
+        }
       } else if (!isEditing) {
+        initializedForTaskRef.current = null;
         setTitle("");
         setDescription("");
         setAssignedTo("unassigned");
@@ -592,7 +597,7 @@ export function TaskDetailModal({
         setLocalSubtasks([]);
       }
     }
-  }, [task, isEditing, open, isCardMode]);
+  }, [task, isEditing, open, isCardMode, resolvedTaskId]);
 
   const invalidateCard = () => {
     if (!mapId || !cardId) return;
