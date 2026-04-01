@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 
 function getInitials(name: string) {
   return name
@@ -52,13 +53,7 @@ interface Props {
   showMapName?: boolean;
 }
 
-const STATUS_OPTIONS = [
-  { value: "pending",     label: "pendente",      color: "bg-blue-500 text-white border-transparent" },
-  { value: "in_progress", label: "em andamento",  color: "bg-amber-500 text-white border-transparent" },
-  { value: "draft",       label: "rascunho",      color: "bg-purple-500 text-white border-transparent" },
-  { value: "blocked",     label: "cancelada",     color: "bg-slate-500 text-white border-transparent" },
-  { value: "completed",   label: "concluída",     color: "bg-emerald-500 text-white border-transparent" },
-];
+const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 function getStatusColor(s: string) {
   return STATUS_OPTIONS.find(o => o.value === s)?.color ?? "";

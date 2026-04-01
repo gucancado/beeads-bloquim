@@ -2,6 +2,7 @@ import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback } from 
 import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex } from '@/lib/utils';
+import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized } from '@/lib/taskStatusConstants';
 import { Maximize2, Calendar, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -40,25 +41,12 @@ interface MindMapNodeProps {
   selected: boolean;
 }
 
-const STATUS_OPTIONS = [
-  { value: 'pending', label: 'pendente', dot: 'bg-blue-500' },
-  { value: 'in_progress', label: 'em andamento', dot: 'bg-amber-500' },
-  { value: 'draft', label: 'rascunho', dot: 'bg-purple-500' },
-  { value: 'blocked', label: 'cancelada', dot: 'bg-slate-500' },
-  { value: 'completed', label: 'concluída', dot: 'bg-emerald-500' },
-];
+const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 function statusLabel(s: string) {
-  switch (s) {
-    case 'pending': return 'pendente';
-    case 'in_progress': return 'em andamento';
-    case 'completed': return 'concluída';
-    case 'overdue': return 'vencida';
-    case 'blocked': return 'cancelada';
-    case 'draft': return 'rascunho';
-    case 'no_task': return 'sem tarefa';
-    default: return s.replace('_', ' ');
-  }
+  if (s === 'overdue') return 'vencida';
+  if (s === 'no_task') return 'sem tarefa';
+  return getStatusLabelCentralized(s);
 }
 
 const STRIP_HANDLE_CLS = [
@@ -238,8 +226,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     const mutedIconColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
     const mutedTextColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
     const statusText = isCompleted
-      ? (completedDateStr ? `concluída em ${completedDateStr}` : 'concluída')
-      : 'cancelada';
+      ? (completedDateStr ? `concluído em ${completedDateStr}` : 'concluído')
+      : getStatusLabelCentralized('blocked');
     return (
       <div
         className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md ${mutedHoverBorder} ${selected ? 'shadow-md scale-[1.02]' : 'shadow-sm'}`}

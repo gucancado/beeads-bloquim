@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard } from "lucide-react";
+import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -545,11 +546,12 @@ export function TaskDetailModal({
   };
 
   const handleStatusChange = (newStatus: string) => {
-    if (!isEditing || !resolvedTaskId) return;
+    if (!isEditing) return;
+    if (!isCardMode && !resolvedTaskId) return;
     setStatus(newStatus);
     markDirty();
     if (isCardMode) handleCardStatusChange(newStatus);
-    else statusMutation.mutate({ newStatus, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+    else statusMutation.mutate({ newStatus, taskId: resolvedTaskId!, standalone: isStandalone, wsId: effectiveWorkspaceId });
   };
 
   const handleConcluir = () => {
@@ -742,32 +744,20 @@ export function TaskDetailModal({
                       🔴 Atrasada
                     </span>
                   )}
-                  <div className="flex items-center gap-2 ml-auto">
-                    {isEditing && isTaskReady && status !== "completed" && (
-                      <Select value={status} onValueChange={handleStatusChange}>
-                        <SelectTrigger className="h-auto w-auto px-3 py-1 rounded-full border text-xs font-semibold bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground transition-all shadow-none focus:ring-0 gap-1.5">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending"><span className="lowercase">Pendente</span></SelectItem>
-                          <SelectItem value="in_progress"><span className="lowercase">Em andamento</span></SelectItem>
-                          <SelectItem value="draft"><span className="lowercase">Rascunho</span></SelectItem>
-                          <SelectItem value="blocked"><span className="lowercase">Cancelada</span></SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {isEditing && isTaskReady && (
+                  <div className="flex items-center gap-1.5 ml-auto flex-wrap justify-end">
+                    {isEditing && isTaskReady && TASK_STATUS_ORDER.map(opt => (
                       <button
-                        onClick={handleConcluir}
-                        className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all ${
-                          status === "completed"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                            : "bg-background text-muted-foreground border-border hover:border-emerald-400 hover:text-emerald-600"
+                        key={opt.value}
+                        onClick={() => handleStatusChange(opt.value)}
+                        className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all lowercase ${
+                          status === opt.value
+                            ? opt.activeClass
+                            : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
                         }`}
                       >
-                        <span className="lowercase">{status === "completed" ? "Concluída" : "Concluir"}</span>
+                        {opt.label}
                       </button>
-                    )}
+                    ))}
                     {isEditing && (
                       <Button
                         variant="ghost"
