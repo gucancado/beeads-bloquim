@@ -198,12 +198,12 @@ function CommentCard({
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: "Pendente",
-  in_progress: "Em andamento",
-  completed: "Concluída",
-  blocked: "Cancelada",
-  draft: "Rascunho",
-  overdue: "Atrasada",
+  pending: "pendente",
+  in_progress: "em andamento",
+  completed: "concluída",
+  blocked: "cancelada",
+  draft: "rascunho",
+  overdue: "atrasada",
 };
 
 function formatActivityText(activity: TaskActivityItem): string {

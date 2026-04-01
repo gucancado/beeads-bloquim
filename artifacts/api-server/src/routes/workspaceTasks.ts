@@ -302,16 +302,20 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   res.json({ ...updated, assigneeName: (assignee as { name: string }[])[0]?.name ?? null });
 });
 
+const patchStatusSchema = z.object({
+  status: z.enum(["pending", "in_progress", "completed", "blocked", "draft"]),
+});
+
 router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
   const actorId = req.user!.userId;
-  const { status } = req.body as { status: string };
 
-  const validStatuses = ["pending", "in_progress", "completed", "blocked", "draft"];
-  if (!validStatuses.includes(status)) {
+  const parsed = patchStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
     res.status(400).json({ error: "Invalid status" });
     return;
   }
+  const { status } = parsed.data;
 
   const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
   if (!existing) {

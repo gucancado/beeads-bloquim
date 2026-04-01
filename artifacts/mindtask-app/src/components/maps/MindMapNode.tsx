@@ -103,6 +103,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     if (data.taskId) {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks/${data.taskId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
+      queryClient.invalidateQueries({ queryKey: [`task-activities`, workspaceId, data.taskId] });
     }
   }, [queryClient, mapQueryKey, workspaceId, mapId, id, data.taskId]);
 
