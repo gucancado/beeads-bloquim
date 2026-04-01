@@ -210,6 +210,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const { getViewport, setViewport, screenToFlowPosition } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
+  const [cardGhost, setCardGhost] = useState<{ x: number; y: number } | null>(null);
+  const cardDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
     query: { refetchInterval: 3000 },
   });
@@ -744,11 +746,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     [onEdgesChange, deleteConnMut, workspaceId, mapId],
   );
 
-  const handleAddCard = useCallback(() => {
-    const centerX = 200 + Math.random() * 200;
-    const centerY = 200 + Math.random() * 200;
+  const createCardAt = useCallback((flowX: number, flowY: number) => {
     createCardMut.mutate(
-      { workspaceId, mapId, data: { title: "Novo Nó", positionX: centerX, positionY: centerY } },
+      { workspaceId, mapId, data: { title: "Novo Nó", positionX: flowX, positionY: flowY } },
       {
         onSuccess: (newCard) => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
@@ -757,6 +757,56 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       },
     );
   }, [workspaceId, mapId, createCardMut, queryClient]);
+
+  const CARD_HALF_W = 90;
+  const CARD_HALF_H = 36;
+
+  const handleAddCard = useCallback(() => {
+    const vp = getViewport();
+    const el = document.querySelector('.react-flow__renderer');
+    const w = el ? (el as HTMLElement).clientWidth : 800;
+    const h = el ? (el as HTMLElement).clientHeight : 600;
+    const centerX = (-vp.x + w / 2) / vp.zoom - CARD_HALF_W;
+    const centerY = (-vp.y + h / 2) / vp.zoom - CARD_HALF_H;
+    createCardAt(centerX, centerY);
+  }, [getViewport, createCardAt]);
+
+  const handleCardButtonMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 8;
+    cardDragRef.current = { dragging: false, startX, startY };
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+        cardDragRef.current = { dragging: true, startX, startY };
+        setCardGhost({ x: ev.clientX, y: ev.clientY });
+      } else if (cardDragRef.current?.dragging) {
+        setCardGhost({ x: ev.clientX, y: ev.clientY });
+      }
+    };
+
+    const handleMouseUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      const wasDragging = cardDragRef.current?.dragging ?? false;
+      cardDragRef.current = null;
+      setCardGhost(null);
+
+      if (wasDragging) {
+        const flowPos = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+        createCardAt(flowPos.x - CARD_HALF_W, flowPos.y - CARD_HALF_H);
+      } else {
+        handleAddCard();
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [screenToFlowPosition, createCardAt, handleAddCard]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -919,6 +969,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           />
         )}
 
+        {cardGhost && (
+          <div
+            className="pointer-events-none fixed z-[9999] border-2 border-dashed border-primary bg-primary/10 rounded-xl"
+            style={{ left: cardGhost.x - 90, top: cardGhost.y - 36, width: 180, height: 72 }}
+          />
+        )}
+
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
           <Button
             onMouseDown={handleTextButtonMouseDown}
@@ -930,7 +987,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             {createTextMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Type className="w-4 h-4 mr-2" />}
             <span className="lowercase">Texto</span>
           </Button>
-          <Button onClick={handleAddCard} disabled={createCardMut.isPending} className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20">
+          <Button
+            onMouseDown={handleCardButtonMouseDown}
+            disabled={createCardMut.isPending}
+            title="Clique para adicionar tarefa no centro • Arraste para posicionar"
+            className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20 select-none"
+          >
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
             <span className="lowercase">Tarefa</span>
           </Button>
