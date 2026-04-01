@@ -12,6 +12,8 @@ interface ApprovalNodeProps {
     approvalDecision: string | null;
     dueDate: string | null;
     taskTitle: string;
+    cardId?: string;
+    onOpen?: (cardId: string) => void;
   };
   selected: boolean;
 }
@@ -30,6 +32,12 @@ function decisionLabel(decision: string | null): { label: string; cls: string } 
 }
 
 function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
+  const handleDoubleClick = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    if (data.onOpen && data.cardId) {
+      data.onOpen(data.cardId);
+    }
+  };
   let dueDateStr: string | null = null;
   if (data.dueDate) {
     try {
@@ -52,6 +60,7 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
           ? 'border-violet-500 shadow-lg shadow-violet-500/20'
           : 'border-violet-200 dark:border-violet-800 shadow-md'
       }`}
+      onDoubleClick={handleDoubleClick}
     >
       <div className="absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
         <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
