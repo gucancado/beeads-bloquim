@@ -256,12 +256,73 @@ function formatActivityText(activity: TaskActivityItem): string {
       const newLabel = STATUS_LABELS[m.newStatus ?? ""] ?? m.newStatus ?? "?";
       return `${dateStr}: ${actor} mudou tarefa de ${oldLabel} para ${newLabel}`;
     }
+    case "task_approved": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const comment = m.comment ? ` — "${m.comment}"` : "";
+      return `${dateStr}: ${actor} aprovou a tarefa${comment}`;
+    }
+    case "task_rejected": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const comment = m.comment ? ` — "${m.comment}"` : "";
+      return `${dateStr}: ${actor} reprovou a tarefa${comment}`;
+    }
     default:
       return "";
   }
 }
 
+function ApprovalCommentEntry({ activity }: { activity: TaskActivityItem }) {
+  const m = activity.metadata ?? {};
+  const date = new Date(activity.createdAt);
+  const actor = m.actorName ?? activity.actorName ?? "Alguém";
+  const avatarUrl = activity.actorAvatarUrl;
+  const decision = m.decision as "approved" | "rejected" | undefined;
+  const comment = m.comment;
+
+  return (
+    <div className="rounded-xl border p-3 bg-background border-border">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0 overflow-hidden">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={actor} className="w-full h-full object-cover rounded-full" />
+            ) : (
+              actor.charAt(0).toUpperCase()
+            )}
+          </div>
+          <div className="min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span className="text-xs font-semibold text-foreground truncate">{actor}</span>
+            <span className="text-[10px] text-muted-foreground">
+              {format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-1.5 py-0 text-[10px] font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800">
+              aprovação
+            </span>
+            {decision === "approved" && (
+              <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                aprovada
+              </span>
+            )}
+            {decision === "rejected" && (
+              <span className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-0 text-[10px] font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800">
+                reprovada
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {comment && (
+        <p className="text-sm text-foreground mt-2">{comment}</p>
+      )}
+    </div>
+  );
+}
+
 function ActivityEntry({ activity }: { activity: TaskActivityItem }) {
+  if (activity.type === "approval_comment") {
+    return <ApprovalCommentEntry activity={activity} />;
+  }
+
   const text = formatActivityText(activity);
   if (!text) return null;
 
@@ -390,6 +451,36 @@ function CommentsList({ comments, activities, isLoading, currentUserId, isAdmin,
       ) : (
         <p className="text-xs text-center text-muted-foreground py-2 lowercase">
           {hasActivitiesOnly ? "Nenhuma atividade ainda." : "Nenhum comentário ainda."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function ApprovalTaskActivityHistory({ workspaceId, taskId }: { workspaceId: string; taskId: string }) {
+  const { data: activities, isLoading } = useTaskActivities(workspaceId, taskId);
+
+  return (
+    <div className="border-t pt-5 space-y-2">
+      <div className="flex items-center gap-2 pb-1">
+        <MessageSquare className="w-4 h-4 text-muted-foreground" />
+        <h3 className="text-xs font-semibold text-muted-foreground tracking-wider lowercase">
+          Histórico de atividades
+        </h3>
+      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-3">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : activities && activities.length > 0 ? (
+        <div className="space-y-0.5">
+          {activities.map((a) => (
+            <ActivityEntry key={a.id} activity={a} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-center text-muted-foreground py-2 lowercase">
+          Nenhuma atividade ainda.
         </p>
       )}
     </div>

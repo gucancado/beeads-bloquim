@@ -41,6 +41,7 @@ export interface TaskListItemData {
   mapName?: string | null;
   cardId?: string | null;
   workspaceName?: string | null;
+  isApprovalTask?: boolean | null;
 }
 
 interface Props {
@@ -431,6 +432,13 @@ export function TaskListItem({
               title="Alterar prazo"
             />
           </label>
+
+          {/* Approval task badge */}
+          {task.isApprovalTask && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-2 py-0.5 rounded-full tracking-wide lowercase">
+              aprovação
+            </span>
+          )}
 
           {/* Standalone badge — shown in all contexts when task has no plan */}
           {!task.mapId && (

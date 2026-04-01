@@ -1,11 +1,13 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaceMembers, users, subtasks, taskActivities } from "@workspace/db/schema";
-import { eq, and, isNull, or, inArray, asc, sql, count, desc } from "drizzle-orm";
+import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
+
+type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
 function parseDateNoon(value: string | null | undefined): Date | null {
   if (!value) return null;
@@ -15,7 +17,9 @@ function parseDateNoon(value: string | null | undefined): Date | null {
 
 function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft" | "no_task" {
   if (overdue && status !== "completed" && status !== "blocked" && status !== "draft") return "overdue";
-  return status as any;
+  const validStatuses = ["pending", "in_progress", "completed", "overdue", "blocked", "draft"] as const;
+  type ValidStatus = typeof validStatuses[number];
+  return validStatuses.includes(status as ValidStatus) ? (status as ValidStatus) : "pending";
 }
 
 async function syncCardVisual(taskId: string, status: string, overdue: boolean) {
@@ -49,6 +53,7 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       and(
         eq(tasks.workspaceId, workspaceId),
         buildAssigneeFilter(),
+        not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))),
       )
     )
     .groupBy(tasks.status);
@@ -66,7 +71,11 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
   const { status, assignedTo } = req.query as { status?: string; assignedTo?: string };
-  const statuses = status ? status.split(",").filter(Boolean) : [];
+  const VALID_STATUSES = ["pending", "in_progress", "completed", "overdue", "blocked", "draft"] as const;
+  type ValidStatus = typeof VALID_STATUSES[number];
+  const statuses: ValidStatus[] = (status ? status.split(",").filter(Boolean) : []).filter(
+    (s): s is ValidStatus => VALID_STATUSES.includes(s as ValidStatus)
+  );
   const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : [];
 
   const buildAssigneeFilter = () => {
@@ -94,6 +103,8 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       completedAt: tasks.completedAt,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
+      isApprovalTask: tasks.isApprovalTask,
+      parentTaskId: tasks.parentTaskId,
       cardId: cards.id,
       cardTitle: cards.title,
       mapName: maps.name,
@@ -107,8 +118,9 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     .where(
       and(
         eq(tasks.workspaceId, workspaceId),
-        statuses.length > 0 ? inArray(tasks.status, statuses as any[]) : undefined,
+        statuses.length > 0 ? inArray(tasks.status, statuses) : undefined,
         buildAssigneeFilter(),
+        not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))),
       )
     )
     .orderBy(
@@ -194,7 +206,7 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
 
   const [assignee, members, taskSubtasks] = await Promise.all([
     task.assignedTo
-      ? db.select({ name: users.name }).from(users).where(eq(users.id, task.assignedTo)).limit(1)
+      ? db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, task.assignedTo)).limit(1)
       : Promise.resolve([]),
     db
       .select({ userId: workspaceMembers.userId, name: users.name, role: workspaceMembers.role })
@@ -204,7 +216,24 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt)),
   ]);
 
-  res.json({ ...task, assigneeName: assignee[0]?.name ?? null, members, subtasks: taskSubtasks });
+  let parentTask: { id: string; title: string; status: string; completedAt: Date | null } | null = null;
+  if (task.isApprovalTask && task.parentTaskId) {
+    const [pt] = await db
+      .select({ id: tasks.id, title: tasks.title, status: tasks.status, completedAt: tasks.completedAt })
+      .from(tasks)
+      .where(eq(tasks.id, task.parentTaskId))
+      .limit(1);
+    parentTask = pt ?? null;
+  }
+
+  res.json({
+    ...task,
+    assigneeName: assignee[0]?.name ?? null,
+    assigneeAvatarUrl: assignee[0]?.avatarUrl ?? null,
+    members,
+    subtasks: taskSubtasks,
+    parentTask,
+  });
 });
 
 router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -350,6 +379,39 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
         newStatus: status,
       },
     });
+  }
+
+  const approvalTaskNewStatus = getApprovalTaskStatus(status);
+  const approvalChildTasks = await db
+    .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status })
+    .from(tasks)
+    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)));
+
+  const actorUserForCascade = previousStatus !== status
+    ? (await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1))[0]
+    : null;
+
+  for (const child of approvalChildTasks) {
+    const childOverdue = computeOverdue(child.dueDate, approvalTaskNewStatus);
+    const childVisual = toVisualStatus(approvalTaskNewStatus, childOverdue);
+    await db.update(tasks)
+      .set({ status: approvalTaskNewStatus, overdue: childOverdue, updatedAt: new Date() })
+      .where(eq(tasks.id, child.id));
+    await db.update(cards)
+      .set({ statusVisual: childVisual, updatedAt: new Date() })
+      .where(eq(cards.taskId, child.id));
+    if (child.status !== approvalTaskNewStatus) {
+      await db.insert(taskActivities).values({
+        taskId: child.id,
+        actorId,
+        type: "status_changed",
+        metadata: {
+          actorName: actorUserForCascade?.name ?? null,
+          oldStatus: child.status,
+          newStatus: approvalTaskNewStatus,
+        },
+      });
+    }
   }
 
   res.json(updated);
@@ -527,6 +589,422 @@ router.delete("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole(
 
   await db.delete(subtasks).where(and(eq(subtasks.id, subtaskId), eq(subtasks.taskId, taskId)));
   res.json({ success: true });
+});
+
+const MAX_APPROVERS = 3;
+
+function getApprovalTaskStatus(parentStatus: string): TaskStatus {
+  switch (parentStatus) {
+    case "draft":
+      return "draft";
+    case "pending":
+      return "pending";
+    case "blocked":
+      return "blocked";
+    case "in_progress":
+      return "pending";
+    case "completed":
+      return "in_progress";
+    default:
+      return "pending";
+  }
+}
+
+router.get("/:taskId/approvals", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [parentTask] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!parentTask) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const approvalTasks = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      status: tasks.status,
+      approvalOrder: tasks.approvalOrder,
+      approvalStatus: tasks.approvalStatus,
+      dueDate: tasks.dueDate,
+      assignedTo: tasks.assignedTo,
+      approverName: users.name,
+      approverAvatarUrl: users.avatarUrl,
+    })
+    .from(tasks)
+    .leftJoin(users, eq(users.id, tasks.assignedTo))
+    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
+    .orderBy(asc(tasks.approvalOrder));
+
+  res.json({
+    approvalMode: parentTask.approvalMode ?? "sequential",
+    approvals: approvalTasks,
+  });
+});
+
+const addApproverSchema = z.object({
+  approverId: z.string().uuid(),
+  dueDate: z.string().nullable().optional(),
+});
+
+router.post("/:taskId/approvals", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [parentTask] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!parentTask) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (parentTask.isApprovalTask) {
+    res.status(400).json({ error: "Cannot add approvers to an approval task" });
+    return;
+  }
+
+  const parsed = addApproverSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const { approverId, dueDate } = parsed.data;
+
+  const existing = await db
+    .select({ id: tasks.id, assignedTo: tasks.assignedTo })
+    .from(tasks)
+    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)));
+  if (existing.length >= MAX_APPROVERS) {
+    res.status(400).json({ error: `Maximum of ${MAX_APPROVERS} approvers allowed` });
+    return;
+  }
+
+  const alreadyApprover = existing.some(t => t.assignedTo === approverId);
+  if (alreadyApprover) {
+    res.status(400).json({ error: "This member is already an approver for this task" });
+    return;
+  }
+
+  const [approverMember] = await db
+    .select({ name: users.name, avatarUrl: users.avatarUrl })
+    .from(workspaceMembers)
+    .innerJoin(users, eq(users.id, workspaceMembers.userId))
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, approverId)))
+    .limit(1);
+  if (!approverMember) {
+    res.status(400).json({ error: "Approver must be a member of this workspace" });
+    return;
+  }
+
+  const nextOrder = existing.length;
+  const approvalStatus = getApprovalTaskStatus(parentTask.status);
+  const dueDateValue = dueDate !== undefined
+    ? parseDateNoon(dueDate)
+    : (parentTask.dueDate ?? null);
+
+  const [approvalTask] = await db.insert(tasks).values({
+    workspaceId,
+    mapId: parentTask.mapId,
+    title: `aprovação: ${parentTask.title}`,
+    assignedTo: approverId,
+    dueDate: dueDateValue,
+    priority: "medium",
+    status: approvalStatus,
+    isApprovalTask: true,
+    parentTaskId: taskId,
+    approvalOrder: nextOrder,
+    overdue: computeOverdue(dueDateValue, approvalStatus),
+  }).returning();
+
+  if (parentTask.mapId) {
+    const [parentCard] = await db
+      .select({ positionX: cards.positionX, positionY: cards.positionY })
+      .from(cards)
+      .where(eq(cards.taskId, taskId))
+      .limit(1);
+
+    const offsetX = 350 + nextOrder * 50;
+    const offsetY = 150 + nextOrder * 120;
+    const approvalX = parentCard ? parentCard.positionX + offsetX : offsetX;
+    const approvalY = parentCard ? parentCard.positionY + offsetY : offsetY;
+
+    await db.insert(cards).values({
+      mapId: parentTask.mapId,
+      title: `aprovação: ${parentTask.title}`,
+      positionX: approvalX,
+      positionY: approvalY,
+      taskId: approvalTask.id,
+      statusVisual: toVisualStatus(approvalStatus, computeOverdue(dueDateValue, approvalStatus)),
+    });
+  }
+
+  res.status(201).json({
+    id: approvalTask.id,
+    title: approvalTask.title,
+    status: approvalTask.status,
+    approvalOrder: approvalTask.approvalOrder,
+    approvalStatus: approvalTask.approvalStatus,
+    dueDate: approvalTask.dueDate,
+    assignedTo: approvalTask.assignedTo,
+    approverName: approverMember.name,
+    approverAvatarUrl: approverMember.avatarUrl,
+  });
+});
+
+router.delete("/:taskId/approvals/:approvalTaskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId, approvalTaskId } = req.params;
+
+  const [parentTask] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!parentTask) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [approvalTask] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(
+      eq(tasks.id, approvalTaskId),
+      eq(tasks.parentTaskId, taskId),
+      eq(tasks.isApprovalTask, true),
+      eq(tasks.workspaceId, workspaceId),
+    ))
+    .limit(1);
+  if (!approvalTask) {
+    res.status(404).json({ error: "Approval task not found" });
+    return;
+  }
+
+  await db.delete(cards).where(eq(cards.taskId, approvalTask.id));
+  await db.delete(tasks).where(eq(tasks.id, approvalTask.id));
+
+  const remaining = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
+    .orderBy(asc(tasks.approvalOrder));
+
+  for (let i = 0; i < remaining.length; i++) {
+    await db.update(tasks).set({ approvalOrder: i }).where(eq(tasks.id, remaining[i].id));
+  }
+
+  res.json({ success: true });
+});
+
+const reorderApprovalsSchema = z.object({
+  orderedIds: z.array(z.string().uuid()),
+});
+
+router.put("/:taskId/approvals/reorder", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [parentTask] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!parentTask) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const parsed = reorderApprovalsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error" });
+    return;
+  }
+
+  const existingApprovals = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)));
+
+  const existingIds = new Set(existingApprovals.map(t => t.id));
+  const orderedIds = parsed.data.orderedIds;
+
+  const hasDuplicates = new Set(orderedIds).size !== orderedIds.length;
+  const sameSet = orderedIds.length === existingIds.size && orderedIds.every(id => existingIds.has(id));
+  if (hasDuplicates || !sameSet) {
+    res.status(400).json({ error: "orderedIds must contain exactly the approval task IDs for this task, without duplicates" });
+    return;
+  }
+
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db.update(tasks)
+      .set({ approvalOrder: i })
+      .where(and(eq(tasks.id, orderedIds[i]), eq(tasks.parentTaskId, taskId)));
+  }
+
+  res.json({ success: true });
+});
+
+const approvalDecisionSchema = z.object({
+  comment: z.string().nullable().optional(),
+});
+
+router.post("/:taskId/approve", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const parsed = approvalDecisionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error" });
+    return;
+  }
+
+  const [approvalTask] = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId), eq(tasks.isApprovalTask, true)))
+    .limit(1);
+
+  if (!approvalTask) {
+    res.status(404).json({ error: "Approval task not found" });
+    return;
+  }
+
+  const comment = parsed.data.comment ?? null;
+
+  const [updated] = await db
+    .update(tasks)
+    .set({
+      status: "completed",
+      approvalStatus: "approved",
+      approvalComment: comment,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId))
+    .returning();
+
+  await syncCardVisual(taskId, updated.status, !!updated.overdue);
+
+  const [actorUserApprove] = await db.select({ name: users.name }).from(users).where(eq(users.id, req.user!.userId)).limit(1);
+
+  await db.insert(taskActivities).values({
+    taskId,
+    actorId: req.user!.userId,
+    type: "task_approved",
+    metadata: {
+      actorName: actorUserApprove?.name ?? null,
+      comment: comment,
+    },
+  });
+
+  if (approvalTask.parentTaskId) {
+    await db.insert(taskActivities).values({
+      taskId: approvalTask.parentTaskId,
+      actorId: req.user!.userId,
+      type: "approval_comment",
+      metadata: {
+        actorName: actorUserApprove?.name ?? null,
+        decision: "approved",
+        comment: comment,
+        approvalTaskTitle: approvalTask.title,
+      },
+    });
+  }
+
+  res.json(updated);
+});
+
+router.post("/:taskId/reject", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const parsed = approvalDecisionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error" });
+    return;
+  }
+
+  const [approvalTask] = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId), eq(tasks.isApprovalTask, true)))
+    .limit(1);
+
+  if (!approvalTask) {
+    res.status(404).json({ error: "Approval task not found" });
+    return;
+  }
+
+  const comment = parsed.data.comment ?? null;
+
+  const [updated] = await db
+    .update(tasks)
+    .set({
+      status: "pending",
+      approvalStatus: "rejected",
+      approvalComment: comment,
+      completedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId))
+    .returning();
+
+  await syncCardVisual(taskId, updated.status, !!updated.overdue);
+
+  const [actorUserReject] = await db.select({ name: users.name }).from(users).where(eq(users.id, req.user!.userId)).limit(1);
+
+  await db.insert(taskActivities).values({
+    taskId,
+    actorId: req.user!.userId,
+    type: "task_rejected",
+    metadata: {
+      actorName: actorUserReject?.name ?? null,
+      comment: comment,
+    },
+  });
+
+  if (approvalTask.parentTaskId) {
+    const [parentTask] = await db
+      .select({ id: tasks.id, status: tasks.status, dueDate: tasks.dueDate })
+      .from(tasks)
+      .where(eq(tasks.id, approvalTask.parentTaskId))
+      .limit(1);
+
+    if (parentTask && parentTask.status !== "in_progress") {
+      const parentOverdue = computeOverdue(parentTask.dueDate, "in_progress");
+      await db.update(tasks)
+        .set({ status: "in_progress", overdue: parentOverdue, updatedAt: new Date() })
+        .where(eq(tasks.id, approvalTask.parentTaskId));
+      await syncCardVisual(approvalTask.parentTaskId, "in_progress", parentOverdue);
+    }
+
+    await db.insert(taskActivities).values({
+      taskId: approvalTask.parentTaskId,
+      actorId: req.user!.userId,
+      type: "approval_comment",
+      metadata: {
+        actorName: actorUserReject?.name ?? null,
+        decision: "rejected",
+        comment: comment,
+        approvalTaskTitle: approvalTask.title,
+      },
+    });
+  }
+
+  res.json(updated);
+});
+
+const patchApprovalModeSchema = z.object({
+  approvalMode: z.enum(["sequential", "parallel"]),
+});
+
+router.patch("/:taskId/approval-mode", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const parsed = patchApprovalModeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error" });
+    return;
+  }
+
+  const [updated] = await db.update(tasks)
+    .set({ approvalMode: parsed.data.approvalMode, updatedAt: new Date() })
+    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId)))
+    .returning({ id: tasks.id, approvalMode: tasks.approvalMode });
+
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  res.json(updated);
 });
 
 export default router;

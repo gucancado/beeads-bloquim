@@ -7,6 +7,7 @@ import {
   boolean,
   integer,
   jsonb,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -30,6 +31,17 @@ export const taskPriorityEnum = pgEnum("task_priority", [
   "critical",
 ]);
 
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export const approvalModeEnum = pgEnum("approval_mode", [
+  "sequential",
+  "parallel",
+]);
+
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   mapId: uuid("map_id")
@@ -47,6 +59,12 @@ export const tasks = pgTable("tasks", {
   previousStatus: taskStatusEnum("previous_status"),
   overdue: boolean("overdue").notNull().default(false),
   completedAt: timestamp("completed_at"),
+  isApprovalTask: boolean("is_approval_task").notNull().default(false),
+  parentTaskId: uuid("parent_task_id").references((): AnyPgColumn => tasks.id, { onDelete: "cascade" }),
+  approvalOrder: integer("approval_order"),
+  approvalStatus: approvalStatusEnum("approval_status"),
+  approvalComment: text("approval_comment"),
+  approvalMode: approvalModeEnum("approval_mode"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -94,6 +112,9 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   "status_changed",
   "priority_changed",
   "due_date_changed",
+  "approval_comment",
+  "task_approved",
+  "task_rejected",
 ]);
 
 export const taskActivities = pgTable("task_activities", {

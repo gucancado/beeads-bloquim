@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments } from "@workspace/db/schema";
-import { eq, and, or, asc, sql, inArray, isNull, count } from "drizzle-orm";
+import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { computeOverdue } from "../lib/overdue";
 import { z } from "zod";
@@ -147,6 +147,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       overdue: tasks.overdue,
+      isApprovalTask: tasks.isApprovalTask,
+      parentTaskId: tasks.parentTaskId,
       cardId: cards.id,
       cardTitle: cards.title,
       mapName: maps.name,
@@ -165,6 +167,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         workspaceId ? eq(tasks.workspaceId, workspaceId) : undefined,
         buildStatusFilter(),
         buildAssigneeFilter(),
+        not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))),
       )
     )
     .orderBy(

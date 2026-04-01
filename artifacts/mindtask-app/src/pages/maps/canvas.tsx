@@ -6,6 +6,8 @@ import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
+import ApprovalNode from "@/components/maps/ApprovalNode";
+import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type } from "lucide-react";
@@ -19,8 +21,8 @@ interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   targetHandle?: string;
 }
 
-const nodeTypes = { mindmap: MindMapNode, textnode: TextNode };
-const edgeTypes = { deletable: DeletableEdge };
+const nodeTypes = { mindmap: MindMapNode, textnode: TextNode, approvalnode: ApprovalNode };
+const edgeTypes = { deletable: DeletableEdge, approval: ApprovalEdge };
 
 const INACTIVE_STATUSES = new Set(['blocked', 'pending']);
 
@@ -49,6 +51,86 @@ function isEdgeAnimated(sourceId: string, targetId: string, cards: Array<{ id: s
   if (source && INACTIVE_STATUSES.has(source.statusVisual)) return false;
   if (target && INACTIVE_STATUSES.has(target.statusVisual)) return false;
   return true;
+}
+
+type ApprovalCardMeta = {
+  id: string;
+  taskId?: string | null;
+  statusVisual: string;
+  taskIsApprovalTask?: boolean;
+  taskParentTaskId?: string | null;
+  taskApprovalMode?: string | null;
+  taskApprovalDecision?: string | null;
+  taskApprovalOrder?: number | null;
+  taskAssigneeName?: string | null;
+  taskAssigneeAvatarUrl?: string | null;
+  taskDueDate?: string | null;
+  title?: string;
+};
+
+function buildApprovalEdges(
+  cardList: ApprovalCardMeta[],
+): Edge[] {
+  const approvalCards = cardList.filter(c => c.taskIsApprovalTask && c.taskParentTaskId);
+  if (!approvalCards.length) return [];
+
+  const taskIdToCardId = new Map<string, string>();
+  for (const c of cardList) {
+    if (c.taskId) taskIdToCardId.set(c.taskId, c.id);
+  }
+
+  const parentGroups = new Map<string, ApprovalCardMeta[]>();
+  for (const c of approvalCards) {
+    const parentTaskId = c.taskParentTaskId!;
+    if (!parentGroups.has(parentTaskId)) parentGroups.set(parentTaskId, []);
+    parentGroups.get(parentTaskId)!.push(c);
+  }
+
+  const edges: Edge[] = [];
+  for (const [parentTaskId, children] of parentGroups) {
+    const parentCardId = taskIdToCardId.get(parentTaskId);
+    if (!parentCardId) continue;
+
+    const parentCard = cardList.find(c => c.id === parentCardId);
+    const approvalMode = parentCard?.taskApprovalMode ?? 'sequential';
+
+    const sortedChildren = [...children].sort(
+      (a, b) => (a.taskApprovalOrder ?? 0) - (b.taskApprovalOrder ?? 0),
+    );
+
+    if (approvalMode === 'sequential') {
+      const sourceCardIds = [parentCardId, ...sortedChildren.slice(0, -1).map(c => c.id)];
+      const targetCardIds = sortedChildren.map(c => c.id);
+      sourceCardIds.forEach((sourceId, i) => {
+        edges.push({
+          id: `approval-${sourceId}-${targetCardIds[i]}`,
+          source: sourceId,
+          target: targetCardIds[i],
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left',
+          type: 'approval',
+          deletable: false,
+          selectable: false,
+          data: { isApprovalEdge: true },
+        });
+      });
+    } else {
+      for (const child of sortedChildren) {
+        edges.push({
+          id: `approval-${parentCardId}-${child.id}`,
+          source: parentCardId,
+          target: child.id,
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left',
+          type: 'approval',
+          deletable: false,
+          selectable: false,
+          data: { isApprovalEdge: true },
+        });
+      }
+    }
+  }
+  return edges;
 }
 
 function buildEdgeFromConn(
@@ -231,12 +313,19 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     }> };
 
     if (!initializedRef.current) {
-      const initialNodes: Node[] = mapData.cards.map(c => ({
-        id: c.id,
-        type: 'mindmap',
-        position: { x: c.positionX, y: c.positionY },
-        data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
-      }));
+      const initialNodes: Node[] = mapData.cards.map(c => {
+        const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
+        return {
+          id: c.id,
+          type: isApproval ? 'approvalnode' : 'mindmap',
+          position: { x: c.positionX, y: c.positionY },
+          data: isApproval
+            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title }
+            : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
+          draggable: true,
+          deletable: !isApproval,
+        };
+      });
 
       const textNodes: Node[] = (mapDataWithText.textElements ?? []).map(el =>
         buildTextNode(el, handleDeleteTextNode)
@@ -244,7 +333,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
       setNodes([...initialNodes, ...textNodes]);
 
-      const initialEdges: Edge[] = mapData.connections.map(c => buildEdgeFromConn(c, mapData.cards));
+      const regularEdges: Edge[] = mapData.connections.map(c => buildEdgeFromConn(c, mapData.cards));
+      const approvalEdges: Edge[] = buildApprovalEdges(mapData.cards as ApprovalCardMeta[]);
+      const initialEdges: Edge[] = [...regularEdges, ...approvalEdges];
       setEdges(initialEdges);
       initializedRef.current = true;
     } else {
@@ -257,17 +348,24 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           return serverCardIds.has(n.id);
         });
 
-        const existingCardIds = new Set(filtered.filter(n => n.type === 'mindmap').map(n => n.id));
+        const existingCardIds = new Set(filtered.filter(n => n.type === 'mindmap' || n.type === 'approvalnode').map(n => n.id));
         const existingTextIds = new Set(filtered.filter(n => n.type === 'textnode').map(n => n.id));
 
         const newCardNodes: Node[] = mapData.cards
           .filter(c => !existingCardIds.has(c.id))
-          .map(c => ({
-            id: c.id,
-            type: 'mindmap',
-            position: { x: c.positionX, y: c.positionY },
-            data: { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
-          }));
+          .map(c => {
+            const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
+            return {
+              id: c.id,
+              type: isApproval ? 'approvalnode' : 'mindmap',
+              position: { x: c.positionX, y: c.positionY },
+              data: isApproval
+                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title }
+                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
+              draggable: true,
+              deletable: !isApproval,
+            };
+          });
 
         const newTextNodes: Node[] = (mapDataWithText.textElements ?? [])
           .filter(el => !existingTextIds.has(el.id))
@@ -288,6 +386,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             }
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
+            const sApproval = s as ApprovalCardMeta;
+            if (sApproval.taskIsApprovalTask) {
+              return { ...n, data: { approverName: s.taskAssigneeName ?? null, approverAvatarUrl: s.taskAssigneeAvatarUrl ?? null, approvalStatus: s.statusVisual ?? null, approvalDecision: sApproval.taskApprovalDecision ?? null, dueDate: s.taskDueDate ?? null, taskTitle: s.title } };
+            }
             const hasPendingUpdate = pendingUpdatesRef.current.has(n.id);
             if (n.id === currentlyEditingId || hasPendingUpdate) {
               return { ...n, data: { ...n.data, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
@@ -316,7 +418,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           const animated = isEdgeAnimated(e.source, e.target, mapData.cards);
           return { ...e, animated, style: edgeStyle(animated) };
         });
-        return [...updatedFiltered, ...newEdges];
+        const freshApprovalEdges = buildApprovalEdges(mapData.cards as ApprovalCardMeta[]);
+        const freshApprovalIds = new Set(freshApprovalEdges.map(e => e.id));
+        const withoutStaleApproval = updatedFiltered.filter(e => !e.id.startsWith('approval-') || freshApprovalIds.has(e.id));
+        return [...withoutStaleApproval, ...newEdges, ...freshApprovalEdges];
       });
     }
   }, [mapData]);
@@ -355,8 +460,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      // Text nodes are excluded from edge insertion logic
-      if (node.type === 'textnode') return;
+      // Text nodes and approval nodes are excluded from edge insertion logic
+      if (node.type === 'textnode' || node.type === 'approvalnode') return;
 
       const currentEdges = edgesRef.current;
       const currentNodes = nodesRef.current;
@@ -373,13 +478,16 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         if (edge.source === node.id || edge.target === node.id) continue;
         // Skip temp edges
         if (edge.id.startsWith('temp-')) continue;
+        // Skip approval edges — they are auto-generated and cannot be inserted into
+        if (edge.type === 'approval') continue;
 
         const sourceNode = currentNodes.find(n => n.id === edge.source);
         const targetNode = currentNodes.find(n => n.id === edge.target);
         if (!sourceNode || !targetNode) continue;
 
-        // Skip edges involving text nodes
+        // Skip edges involving text or approval nodes
         if (sourceNode.type === 'textnode' || targetNode.type === 'textnode') continue;
+        if (sourceNode.type === 'approvalnode' || targetNode.type === 'approvalnode') continue;
 
         const srcW = sourceNode.width ?? 200;
         const srcH = sourceNode.height ?? 80;
@@ -426,6 +534,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         workspaceId, mapId, cardId: node.id,
         data: { positionX: node.position.x, positionY: node.position.y },
       });
+
+      // Approval nodes are not part of the edge-insertion flow
+      if (node.type === 'approvalnode') return;
 
       const currentHighlightedEdgeId = highlightedEdgeId;
 
@@ -542,11 +653,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (params: Connection) => {
       if (!params.source || !params.target) return;
 
-      // Reject connections involving text nodes
+      // Reject connections involving text or approval nodes
       const currentNodes = nodesRef.current;
       const sourceNode = currentNodes.find(n => n.id === params.source);
       const targetNode = currentNodes.find(n => n.id === params.target);
       if (sourceNode?.type === 'textnode' || targetNode?.type === 'textnode') return;
+      if (sourceNode?.type === 'approvalnode' || targetNode?.type === 'approvalnode') return;
 
       const srcHandle = params.sourceHandle ?? '';
       const tgtHandle = params.targetHandle ?? '';
@@ -622,11 +734,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (changes: EdgeChange[]) => {
       const removals = changes.filter(c => c.type === 'remove');
       removals.forEach(change => {
-        if (change.type === 'remove' && !change.id.startsWith('temp-')) {
+        if (change.type === 'remove' && !change.id.startsWith('temp-') && !change.id.startsWith('approval-')) {
           deleteConnMut.mutate({ workspaceId, mapId, connectionId: change.id });
         }
       });
-      onEdgesChange(changes);
+      const nonApprovalChanges = changes.filter(c => c.type !== 'remove' || !c.id.startsWith('approval-'));
+      onEdgesChange(nonApprovalChanges);
     },
     [onEdgesChange, deleteConnMut, workspaceId, mapId],
   );

@@ -51,7 +51,10 @@ artifacts/
         layout/AppLayout.tsx   # Sidebar + auth redirect via useEffect
         maps/MindMapNode.tsx   # Node customizado com cor por status
         maps/TextNode.tsx      # Node de texto livre com Tiptap, resize, menu de formatação
+        maps/ApprovalNode.tsx  # Node de aprovação (violeta) no canvas
+        maps/ApprovalEdge.tsx  # Edge tracejada não deletável (ligação de aprovação)
         tasks/TaskDetailModal.tsx  # Modal unificado para editar/criar tarefas (standalone ou workspace)
+        tasks/ApprovalTaskView.tsx # Tela específica para tarefas de aprovação (aprovar/reprovar)
 
 lib/
   api-spec/openapi.yaml  # Contrato de API completo
@@ -90,6 +93,13 @@ lib/
 | PUT | /api/workspaces/:wId/maps/:mId/text-elements/:id | Atualizar elemento de texto |
 | DELETE | /api/workspaces/:wId/maps/:mId/text-elements/:id | Remover elemento de texto |
 | GET | /api/my-tasks | Minhas tarefas (do usuário logado) |
+| GET | /api/workspaces/:wId/tasks/:tId/approvals | Aprovadores de uma tarefa |
+| POST | /api/workspaces/:wId/tasks/:tId/approvals | Adicionar aprovador (cria tarefa de aprovação) |
+| DELETE | /api/workspaces/:wId/tasks/:tId/approvals/:aId | Remover aprovador |
+| PUT | /api/workspaces/:wId/tasks/:tId/approvals/reorder | Reordenar aprovadores |
+| PATCH | /api/workspaces/:wId/tasks/:tId/approval-mode | Mudar modo (sequential/parallel) |
+| POST | /api/workspaces/:wId/tasks/:tId/approve | Aprovar tarefa de aprovação (status→completed, comment salvo) |
+| POST | /api/workspaces/:wId/tasks/:tId/reject | Reprovar tarefa de aprovação (status→pending, tarefa pai→in_progress) |
 
 ## Funcionalidades Implementadas
 

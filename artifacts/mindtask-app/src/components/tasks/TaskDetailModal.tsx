@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard } from "lucide-react";
+import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard, X, Plus, CheckSquare } from "lucide-react";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,7 @@ import {
 import type { WorkspaceMemberResponse, TaskPriority, TaskStatus, TaskResponse } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommentsSection } from "@/components/maps/CommentsSection";
+import { ApprovalTaskView } from "@/components/tasks/ApprovalTaskView";
 import {
   DndContext,
   closestCenter,
@@ -36,13 +37,287 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
+  horizontalListSortingStrategy,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+const MAX_APPROVERS = 3;
+
+interface ApprovalItem {
+  id: string;
+  title: string;
+  status: string;
+  approvalOrder: number | null;
+  approvalStatus: string | null;
+  dueDate: string | null;
+  assignedTo: string | null;
+  approverName: string | null;
+  approverAvatarUrl: string | null;
+}
+
+function SortableApproverAvatar({
+  approval,
+  onRemove,
+  selectedId,
+  onSelect,
+}: {
+  approval: ApprovalItem;
+  onRemove: (id: string) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: approval.id });
+  const [hovered, setHovered] = useState(false);
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const isSelected = selectedId === approval.id;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="relative flex-shrink-0"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onKeyDown={e => {
+        if (e.key === 'Delete' && isSelected) {
+          onRemove(approval.id);
+        }
+      }}
+      tabIndex={0}
+      onClick={() => onSelect(isSelected ? null : approval.id)}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className={`relative w-9 h-9 rounded-full cursor-grab active:cursor-grabbing ring-2 transition-all ${isSelected ? 'ring-primary' : 'ring-background'}`}
+        title={approval.approverName ?? ''}
+      >
+        {approval.approverAvatarUrl ? (
+          <img
+            src={approval.approverAvatarUrl}
+            alt={approval.approverName ?? ''}
+            className="w-full h-full rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+            {(approval.approverName ?? '?').charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+      {(hovered || isSelected) && (
+        <button
+          className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-white rounded-full flex items-center justify-center z-10 hover:scale-110 transition-transform"
+          onClick={e => { e.stopPropagation(); onRemove(approval.id); }}
+          title="Remover aprovador"
+        >
+          <X className="w-2.5 h-2.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ApprovalSection({
+  workspaceId,
+  taskId,
+  members,
+}: {
+  workspaceId: string;
+  taskId: string;
+  members: WorkspaceMemberResponse[] | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const approvalsKey = [`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals`];
+
+  const { data: approvalsData, isLoading } = useQuery<{ approvalMode: string; approvals: ApprovalItem[] }>({
+    queryKey: approvalsKey,
+    queryFn: () => customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals`),
+    enabled: !!workspaceId && !!taskId,
+  });
+
+  const approvals = approvalsData?.approvals ?? [];
+  const approvalMode = approvalsData?.approvalMode ?? "sequential";
+
+  const addApproverMut = useMutation({
+    mutationFn: (approverId: string) =>
+      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals`, {
+        method: "POST",
+        body: JSON.stringify({ approverId }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+    onError: () => toast({ title: "Erro ao adicionar aprovador", variant: "destructive" }),
+  });
+
+  const removeApproverMut = useMutation({
+    mutationFn: (approvalTaskId: string) =>
+      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals/${approvalTaskId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+    onError: () => toast({ title: "Erro ao remover aprovador", variant: "destructive" }),
+  });
+
+  const reorderMut = useMutation({
+    mutationFn: (orderedIds: string[]) =>
+      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals/reorder`, {
+        method: "PUT",
+        body: JSON.stringify({ orderedIds }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+  });
+
+  const patchModeMut = useMutation({
+    mutationFn: (mode: string) =>
+      customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/approval-mode`, {
+        method: "PATCH",
+        body: JSON.stringify({ approvalMode: mode }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = approvals.findIndex(a => a.id === active.id);
+      const newIndex = approvals.findIndex(a => a.id === over.id);
+      const reordered = arrayMove(approvals, oldIndex, newIndex);
+      reorderMut.mutate(reordered.map(a => a.id));
+    }
+  }, [approvals, reorderMut]);
+
+  const alreadySelectedUserIds = new Set(approvals.map(a => a.assignedTo).filter(Boolean));
+  const availableMembers = members?.filter(m => !alreadySelectedUserIds.has(m.userId)) ?? [];
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [showUserMenu]);
+
+  if (isLoading) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <label className="text-xs font-semibold text-muted-foreground tracking-wider lowercase flex items-center gap-1">
+          <CheckSquare className="w-3 h-3" /> aprovação
+        </label>
+        {approvals.length < MAX_APPROVERS && (
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowUserMenu(v => !v)}
+              className="w-6 h-6 rounded-full bg-muted hover:bg-primary/10 text-muted-foreground hover:text-primary flex items-center justify-center transition-all"
+              title="Adicionar aprovador"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            {showUserMenu && (
+              <div className="absolute top-8 left-0 z-50 bg-popover border border-border rounded-xl shadow-lg min-w-[200px] py-1.5 overflow-hidden">
+                {availableMembers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-3 py-2 lowercase">Sem membros disponíveis</p>
+                ) : (
+                  availableMembers.map(m => (
+                    <button
+                      key={m.userId}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/60 text-left transition-colors"
+                      onClick={() => {
+                        addApproverMut.mutate(m.userId);
+                        setShowUserMenu(false);
+                      }}
+                    >
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                        {m.user.avatarUrl ? (
+                          <img src={m.user.avatarUrl} alt={m.user.name} className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <span className="text-xs font-semibold text-primary">{m.user.name.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <span className="text-sm text-foreground">{m.user.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {approvals.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={approvals.map(a => a.id)} strategy={horizontalListSortingStrategy}>
+              <div className="flex items-center gap-2 flex-wrap">
+                {approvals.map(approval => (
+                  <SortableApproverAvatar
+                    key={approval.id}
+                    approval={approval}
+                    onRemove={(id) => removeApproverMut.mutate(id)}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+
+          {approvals.length >= 2 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground lowercase">modo:</span>
+              <button
+                onClick={() => patchModeMut.mutate("sequential")}
+                className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all lowercase ${
+                  approvalMode === "sequential"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                }`}
+              >
+                sequencial
+              </button>
+              <button
+                onClick={() => patchModeMut.mutate("parallel")}
+                className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all lowercase ${
+                  approvalMode === "parallel"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                }`}
+              >
+                paralelo
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface TaskResponseExtended extends TaskResponse {
   overdue?: boolean;
   previousStatus?: string | null;
+  isApprovalTask?: boolean;
+  parentTaskId?: string | null;
 }
 
 interface WorkspaceTask {
@@ -58,6 +333,8 @@ interface WorkspaceTask {
   status: string;
   previousStatus?: string | null;
   overdue?: boolean;
+  isApprovalTask?: boolean;
+  parentTaskId?: string | null;
 }
 
 interface SubtaskItem {
@@ -733,6 +1010,18 @@ export function TaskDetailModal({
             <div className="flex-1 flex items-center justify-center p-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
+          ) : isCardMode && card?.task?.isApprovalTask && card.task.id ? (
+            <ApprovalTaskView
+              taskId={card.task.id}
+              workspaceId={effectiveWorkspaceId}
+              onClose={onClose}
+            />
+          ) : !isCardMode && task?.isApprovalTask && resolvedTaskId ? (
+            <ApprovalTaskView
+              taskId={resolvedTaskId}
+              workspaceId={effectiveWorkspaceId}
+              onClose={onClose}
+            />
           ) : (
             <div className="p-5 space-y-4 flex-1">
 
@@ -1017,6 +1306,15 @@ export function TaskDetailModal({
                         }}
                       />
                     </div>
+
+                    {/* Approval section — only shown for workspace tasks */}
+                    {!!effectiveWorkspaceId && !!taskIdResolved && (
+                      <ApprovalSection
+                        workspaceId={effectiveWorkspaceId}
+                        taskId={taskIdResolved}
+                        members={members}
+                      />
+                    )}
 
                   </div>
                 )}

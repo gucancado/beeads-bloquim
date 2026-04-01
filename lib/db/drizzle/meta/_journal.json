@@ -71,6 +71,20 @@
       "when": 1774979038486,
       "tag": "0009_blue_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775015000000,
+      "tag": "0010_add_draft_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1775016000000,
+      "tag": "0011_add_approval_tasks",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,8 @@ import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions"
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 
+type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
+
 const router: IRouter = Router({ mergeParams: true });
 
 const createCardSchema = z.object({
@@ -45,7 +47,26 @@ const updateTaskDetailsSchema = z.object({
 
 function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft" | "no_task" {
   if (overdue && status !== "completed" && status !== "blocked" && status !== "draft") return "overdue";
-  return status as any;
+  const validStatuses = ["pending", "in_progress", "completed", "overdue", "blocked", "draft"] as const;
+  type ValidStatus = typeof validStatuses[number];
+  return validStatuses.includes(status as ValidStatus) ? (status as ValidStatus) : "pending";
+}
+
+function getApprovalTaskStatusForCards(parentStatus: string): TaskStatus {
+  switch (parentStatus) {
+    case "draft":
+      return "draft";
+    case "pending":
+      return "pending";
+    case "blocked":
+      return "blocked";
+    case "in_progress":
+      return "pending";
+    case "completed":
+      return "in_progress";
+    default:
+      return "pending";
+  }
 }
 
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
@@ -269,6 +290,36 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
         newStatus: status,
       },
     });
+
+    // Sync approval tasks and their cards if this task has any
+    const approvalNewStatus = getApprovalTaskStatusForCards(status);
+    const approvalChildTasks = await db
+      .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status })
+      .from(tasks)
+      .where(and(eq(tasks.parentTaskId, card.taskId!), eq(tasks.isApprovalTask, true)));
+
+    for (const child of approvalChildTasks) {
+      const childOverdue = computeOverdue(child.dueDate, approvalNewStatus);
+      const childVisual = toVisualStatus(approvalNewStatus, childOverdue);
+      await db.update(tasks)
+        .set({ status: approvalNewStatus, overdue: childOverdue, updatedAt: new Date() })
+        .where(eq(tasks.id, child.id));
+      await db.update(cards)
+        .set({ statusVisual: childVisual, updatedAt: new Date() })
+        .where(eq(cards.taskId, child.id));
+      if (child.status !== approvalNewStatus) {
+        await db.insert(taskActivities).values({
+          taskId: child.id,
+          actorId: userId,
+          type: "status_changed",
+          metadata: {
+            actorName: actorUser[0]?.name ?? null,
+            oldStatus: child.status,
+            newStatus: approvalNewStatus,
+          },
+        });
+      }
+    }
   }
 
   // Cascade: when completed, activate downstream cards connected via right handle

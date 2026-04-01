@@ -73,13 +73,18 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskOverdue: tasks.overdue,
       taskAssigneeAvatarUrl: users.avatarUrl,
       taskCompletedAt: tasks.completedAt,
+      taskIsApprovalTask: tasks.isApprovalTask,
+      taskParentTaskId: tasks.parentTaskId,
+      taskApprovalMode: tasks.approvalMode,
+      taskApprovalDecision: tasks.approvalStatus,
+      taskApprovalOrder: tasks.approvalOrder,
     })
     .from(cards)
     .leftJoin(tasks, eq(tasks.id, cards.taskId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
     .where(eq(cards.mapId, mapId));
 
-  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, ...c }) => ({
+  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, ...c }) => ({
     ...c,
     taskDueDate: taskDueDate ?? null,
     taskAssigneeName: taskAssigneeName ?? null,
@@ -87,6 +92,11 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     taskOverdue: taskOverdue ?? false,
     taskAssigneeAvatarUrl: taskAssigneeAvatarUrl ?? null,
     taskCompletedAt: taskCompletedAt ? taskCompletedAt.toISOString() : null,
+    taskIsApprovalTask: taskIsApprovalTask ?? false,
+    taskParentTaskId: taskParentTaskId ?? null,
+    taskApprovalMode: taskApprovalMode ?? null,
+    taskApprovalDecision: taskApprovalDecision ?? null,
+    taskApprovalOrder: taskApprovalOrder ?? null,
   }));
 
   const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));
