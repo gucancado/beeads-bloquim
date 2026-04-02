@@ -355,6 +355,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           {editingTitle ? (
             <input
               autoFocus
+              autoCapitalize="none"
               className="nodrag font-display font-bold text-foreground text-base leading-tight break-words pr-2 bg-transparent border-b border-primary outline-none w-full min-w-0"
               value={titleValue}
               onChange={e => setTitleValue(e.target.value)}

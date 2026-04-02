@@ -598,7 +598,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     const newX = parentNode ? parentNode.position.x + 280 : 200;
     const newY = parentNode ? parentNode.position.y : 200;
     createCardMut.mutate(
-      { workspaceId, mapId, data: { title: "Novo Nó", positionX: newX, positionY: newY } },
+      { workspaceId, mapId, data: { title: "nova tarefa", positionX: newX, positionY: newY } },
       {
         onSuccess: (newCard) => {
           createConnMut.mutate(
@@ -941,7 +941,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       } else if (!targetNodeId) {
         const flowPos = screenToFlowPosition({ x: clientX, y: clientY });
         createCardMut.mutate(
-          { workspaceId, mapId, data: { title: 'Novo Nó', positionX: flowPos.x, positionY: flowPos.y } },
+          { workspaceId, mapId, data: { title: 'nova tarefa', positionX: flowPos.x, positionY: flowPos.y } },
           {
             onSuccess: (newCard) => {
               createConnMut.mutate(
@@ -979,7 +979,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const createCardAt = useCallback((flowX: number, flowY: number) => {
     createCardMut.mutate(
-      { workspaceId, mapId, data: { title: "Novo Nó", positionX: flowX, positionY: flowY } },
+      { workspaceId, mapId, data: { title: "nova tarefa", positionX: flowX, positionY: flowY } },
       {
         onSuccess: (newCard) => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });

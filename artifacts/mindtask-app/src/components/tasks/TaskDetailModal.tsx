@@ -770,12 +770,12 @@ export function TaskDetailModal({
       if (propWorkspaceId) {
         return customFetch(`/api/workspaces/${propWorkspaceId}/tasks`, {
           method: "POST",
-          body: JSON.stringify({ title: "Nova tarefa", priority: "medium" }),
+          body: JSON.stringify({ title: "nova tarefa", priority: "medium" }),
         });
       }
       return customFetch("/api/my-tasks", {
         method: "POST",
-        body: JSON.stringify({ title: "Nova tarefa", priority: "medium" }),
+        body: JSON.stringify({ title: "nova tarefa", priority: "medium" }),
       });
     },
     onSuccess: (newTask: { id: string }) => {
@@ -790,7 +790,7 @@ export function TaskDetailModal({
       }
       setAutoCreatedTaskId(newTask.id);
 
-      setTitle("Nova tarefa");
+      setTitle("nova tarefa");
       if (wasStandalone) {
         setAssignedTo(currentUserId);
       }
@@ -1074,6 +1074,7 @@ export function TaskDetailModal({
                   <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Título</label>
                   <Input
                     value={title}
+                    autoCapitalize="none"
                     onChange={e => {
                       setTitle(e.target.value);
                       markDirty();
