@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { format } from 'date-fns';
-import { CheckSquare, Check, X } from 'lucide-react';
+import { CheckSquare, Check, X, Plus } from 'lucide-react';
 
 interface ApprovalNodeProps {
   id: string;
@@ -14,6 +14,8 @@ interface ApprovalNodeProps {
     taskTitle: string;
     cardId?: string;
     onOpen?: (cardId: string) => void;
+    onAddChild?: (cardId: string) => void;
+    terminalParentCardId?: string;
   };
   selected: boolean;
 }
@@ -53,6 +55,8 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
 
   const decision = decisionLabel(data.approvalDecision);
 
+  const isTerminal = !!(data.onAddChild && data.terminalParentCardId);
+
   return (
     <div
       className={`group/node relative min-w-[160px] max-w-[200px] bg-violet-50 dark:bg-violet-950/20 rounded-2xl border-2 transition-all duration-200 ${
@@ -62,12 +66,26 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
       }`}
       onDoubleClick={handleDoubleClick}
     >
+      {/* Add child button — visible on terminal approval nodes */}
+      {isTerminal && (
+        <button
+          className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
+          style={{ backgroundColor: '#7c3aed', color: '#fff' }}
+          title="Adicionar card filho"
+          onClick={(e) => { e.stopPropagation(); data.onAddChild!(data.cardId!); }}
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      )}
+
       <div className="absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
-        <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
+        {/* target-left is kept for floating approval-chain edges but not connectable by user drag */}
+        <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} isConnectable={false} />
       </div>
 
       <div className="absolute right-0 top-0 h-full w-3 z-10 rounded-r-2xl">
-        <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} />
+        {/* source-right is only connectable on the terminal node */}
+        <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} isConnectable={isTerminal} />
       </div>
 
       <div className="px-3 py-2.5 relative overflow-hidden rounded-xl">

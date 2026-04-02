@@ -7,6 +7,7 @@ import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
 import ApprovalNode from "@/components/maps/ApprovalNode";
+import ApprovalJoinNode from "@/components/maps/ApprovalJoinNode";
 import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement } from "@workspace/api-client-react";
@@ -21,7 +22,7 @@ interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   targetHandle?: string;
 }
 
-const nodeTypes = { mindmap: MindMapNode, textnode: TextNode, approvalnode: ApprovalNode };
+const nodeTypes = { mindmap: MindMapNode, textnode: TextNode, approvalnode: ApprovalNode, joinnode: ApprovalJoinNode };
 const edgeTypes = { deletable: DeletableEdge, approval: ApprovalEdge };
 
 const INACTIVE_STATUSES = new Set(['blocked', 'pending', 'draft']);
@@ -66,7 +67,53 @@ type ApprovalCardMeta = {
   taskAssigneeAvatarUrl?: string | null;
   taskDueDate?: string | null;
   title?: string;
+  positionX: number;
+  positionY: number;
 };
+
+/**
+ * Returns a Map<regularCardId, terminalCardId>.
+ * - If a regular card has no approval children → terminalCardId = regularCardId (it is its own terminal)
+ * - If a regular card has a single approval child → terminalCardId = that child's id
+ * - If sequential mode with 2+ children → terminalCardId = id of the child with highest approvalOrder
+ * - If parallel mode with 2+ children → terminalCardId = "join-${parentCardId}" (virtual join node)
+ */
+function buildTerminalNodeMap(cardList: ApprovalCardMeta[]): Map<string, string> {
+  const result = new Map<string, string>();
+
+  const approvalChildren = cardList.filter(c => !!c.taskIsApprovalTask && c.taskParentTaskId);
+  const parentGroups = new Map<string, ApprovalCardMeta[]>();
+  for (const c of approvalChildren) {
+    const parentTaskId = c.taskParentTaskId!;
+    if (!parentGroups.has(parentTaskId)) parentGroups.set(parentTaskId, []);
+    parentGroups.get(parentTaskId)!.push(c);
+  }
+
+  for (const c of cardList) {
+    if (c.taskIsApprovalTask) continue;
+    const taskId = c.taskId;
+    if (!taskId) {
+      result.set(c.id, c.id);
+      continue;
+    }
+    const children = parentGroups.get(taskId);
+    if (!children || children.length === 0) {
+      result.set(c.id, c.id);
+      continue;
+    }
+    const parentCard = cardList.find(x => x.id === c.id);
+    const approvalMode = parentCard?.taskApprovalMode ?? 'sequential';
+    if (children.length === 1) {
+      result.set(c.id, children[0].id);
+    } else if (approvalMode === 'sequential') {
+      const sorted = [...children].sort((a, b) => (a.taskApprovalOrder ?? 0) - (b.taskApprovalOrder ?? 0));
+      result.set(c.id, sorted[sorted.length - 1].id);
+    } else {
+      result.set(c.id, `join-${c.id}`);
+    }
+  }
+  return result;
+}
 
 function buildApprovalEdges(
   cardList: ApprovalCardMeta[],
@@ -114,7 +161,20 @@ function buildApprovalEdges(
           data: { isApprovalEdge: true },
         });
       });
+    } else if (sortedChildren.length === 1) {
+      edges.push({
+        id: `approval-${parentCardId}-${sortedChildren[0].id}`,
+        source: parentCardId,
+        target: sortedChildren[0].id,
+        sourceHandle: 'source-right',
+        targetHandle: 'target-left',
+        type: 'approval',
+        deletable: false,
+        selectable: false,
+        data: { isApprovalEdge: true },
+      });
     } else {
+      const joinNodeId = `join-${parentCardId}`;
       for (const child of sortedChildren) {
         edges.push({
           id: `approval-${parentCardId}-${child.id}`,
@@ -127,10 +187,62 @@ function buildApprovalEdges(
           selectable: false,
           data: { isApprovalEdge: true },
         });
+        edges.push({
+          id: `approval-${child.id}-${joinNodeId}`,
+          source: child.id,
+          target: joinNodeId,
+          sourceHandle: 'source-right',
+          targetHandle: 'target-left',
+          type: 'approval',
+          deletable: false,
+          selectable: false,
+          data: { isApprovalEdge: true },
+        });
       }
     }
   }
   return edges;
+}
+
+const APPROVAL_NODE_HEIGHT = 90;
+
+function buildJoinNodes(
+  cardList: ApprovalCardMeta[],
+  onAddChild: (cardId: string) => void,
+): Node[] {
+  const approvalCards = cardList.filter(c => c.taskIsApprovalTask && c.taskParentTaskId);
+  const parentGroups = new Map<string, ApprovalCardMeta[]>();
+  for (const c of approvalCards) {
+    const key = c.taskParentTaskId!;
+    if (!parentGroups.has(key)) parentGroups.set(key, []);
+    parentGroups.get(key)!.push(c);
+  }
+
+  const joinNodes: Node[] = [];
+  for (const [parentTaskId, children] of parentGroups) {
+    if (children.length < 2) continue;
+    const parentCard = cardList.find(c => c.taskId === parentTaskId);
+    if (!parentCard) continue;
+    const approvalMode = parentCard.taskApprovalMode ?? 'sequential';
+    if (approvalMode !== 'parallel') continue;
+
+    const joinNodeId = `join-${parentCard.id}`;
+    const maxX = Math.max(...children.map(c => c.positionX));
+    const avgCenterY =
+      children.reduce((sum, c) => sum + c.positionY + APPROVAL_NODE_HEIGHT / 2, 0) /
+      children.length;
+
+    joinNodes.push({
+      id: joinNodeId,
+      type: 'joinnode',
+      position: { x: maxX + 260, y: avgCenterY - 18 },
+      data: { parentCardId: parentCard.id, onAddChild },
+      draggable: false,
+      deletable: false,
+      selectable: false,
+    });
+  }
+  return joinNodes;
 }
 
 function buildEdgeFromConn(
@@ -217,6 +329,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   });
   const editingCardIdRef = useRef<string | null>(null);
   const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
+  const connectingJoinNodeRef = useRef<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -314,16 +427,30 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       color: string;
     }> };
 
+    const terminalNodeMap = buildTerminalNodeMap(mapData.cards as ApprovalCardMeta[]);
+    // terminalCardId → parentCardId (for approval nodes that are terminal)
+    const terminalApprovalParentMap = new Map<string, string>();
+    for (const [parentId, terminalId] of terminalNodeMap) {
+      if (terminalId !== parentId) terminalApprovalParentMap.set(terminalId, parentId);
+    }
+    // parentCardIds whose terminal is a virtual join node (parallel mode with 2+ approvals)
+    const parallelJoinParentIds = new Set<string>();
+    for (const [parentId, terminalId] of terminalNodeMap) {
+      if (terminalId.startsWith('join-')) parallelJoinParentIds.add(parentId);
+    }
+
     if (!initializedRef.current) {
       const initialNodes: Node[] = mapData.cards.map(c => {
         const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
+        const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
+        const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
         return {
           id: c.id,
           type: isApproval ? 'approvalnode' : 'mindmap',
           position: { x: c.positionX, y: c.positionY },
           data: isApproval
-            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel }
-            : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
+            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
+            : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
           draggable: true,
           deletable: !isApproval,
         };
@@ -333,9 +460,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         buildTextNode(el, handleDeleteTextNode)
       );
 
-      setNodes([...initialNodes, ...textNodes]);
+      const joinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
+      setNodes([...initialNodes, ...textNodes, ...joinNodes]);
 
-      const regularEdges: Edge[] = mapData.connections.map(c => buildEdgeFromConn(c, mapData.cards));
+      const regularEdges: Edge[] = mapData.connections.map(c => {
+        const src = parallelJoinParentIds.has(c.sourceCardId)
+          ? `join-${c.sourceCardId}`
+          : c.sourceCardId;
+        return { ...buildEdgeFromConn(c, mapData.cards), source: src };
+      });
       const approvalEdges: Edge[] = buildApprovalEdges(mapData.cards as ApprovalCardMeta[]);
       const initialEdges: Edge[] = [...regularEdges, ...approvalEdges];
       setEdges(initialEdges);
@@ -357,13 +490,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           .filter(c => !existingCardIds.has(c.id))
           .map(c => {
             const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
+            const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
+            const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
             return {
               id: c.id,
               type: isApproval ? 'approvalnode' : 'mindmap',
               position: { x: c.positionX, y: c.positionY },
               data: isApproval
-                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel }
-                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange },
+                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
+                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
               draggable: true,
               deletable: !isApproval,
             };
@@ -379,6 +514,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         pendingUpdatesRef.current.forEach((ts, id) => {
           if (now - ts > PENDING_GUARD_MS) pendingUpdatesRef.current.delete(id);
         });
+        const freshJoinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
         return [
           ...filtered.map(n => {
             if (n.type === 'textnode') {
@@ -390,16 +526,19 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             if (!s) return n;
             const sApproval = s as ApprovalCardMeta;
             if (sApproval.taskIsApprovalTask) {
-              return { ...n, data: { approverName: s.taskAssigneeName ?? null, approverAvatarUrl: s.taskAssigneeAvatarUrl ?? null, approvalStatus: s.statusVisual ?? null, approvalDecision: sApproval.taskApprovalDecision ?? null, dueDate: s.taskDueDate ?? null, taskTitle: s.title, cardId: s.id, onOpen: handleOpenPanel } };
+              const isTerminalApproval = terminalApprovalParentMap.has(s.id);
+              return { ...n, data: { approverName: s.taskAssigneeName ?? null, approverAvatarUrl: s.taskAssigneeAvatarUrl ?? null, approvalStatus: s.statusVisual ?? null, approvalDecision: sApproval.taskApprovalDecision ?? null, dueDate: s.taskDueDate ?? null, taskTitle: s.title, cardId: s.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(s.id) } : { onAddChild: undefined, terminalParentCardId: undefined }) } };
             }
+            const isTerminalNode = terminalNodeMap.get(n.id) === n.id;
             const hasPendingUpdate = pendingUpdatesRef.current.has(n.id);
             if (n.id === currentlyEditingId || hasPendingUpdate) {
-              return { ...n, data: { ...n.data, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
+              return { ...n, data: { ...n.data, isTerminalNode, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
             }
-            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode } };
           }),
           ...newCardNodes,
           ...newTextNodes,
+          ...freshJoinNodes,
         ];
       });
 
@@ -412,13 +551,29 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             .filter(e => e.id.startsWith('temp-'))
             .map(e => `${e.source}__${e.target}`),
         );
+        const connById = new Map(mapData.connections.map(c => [c.id, c]));
         const newEdges: Edge[] = mapData.connections
-          .filter(c => !existingIds.has(c.id) && !tempPairs.has(`${c.sourceCardId}__${c.targetCardId}`))
-          .map(c => buildEdgeFromConn(c, mapData.cards));
+          .filter(c => {
+            if (existingIds.has(c.id)) return false;
+            const src = parallelJoinParentIds.has(c.sourceCardId)
+              ? `join-${c.sourceCardId}`
+              : c.sourceCardId;
+            return !tempPairs.has(`${src}__${c.targetCardId}`);
+          })
+          .map(c => {
+            const src = parallelJoinParentIds.has(c.sourceCardId)
+              ? `join-${c.sourceCardId}`
+              : c.sourceCardId;
+            return { ...buildEdgeFromConn(c, mapData.cards), source: src };
+          });
         const updatedFiltered = filtered.map(e => {
           if (e.id.startsWith('temp-')) return e;
-          const animated = isEdgeAnimated(e.source, e.target, mapData.cards);
-          return { ...e, animated, style: edgeStyle(animated) };
+          const serverConn = connById.get(e.id);
+          const rawSrc = serverConn ? serverConn.sourceCardId : e.source;
+          const src = parallelJoinParentIds.has(rawSrc) ? `join-${rawSrc}` : rawSrc;
+          const tgt = serverConn ? serverConn.targetCardId : e.target;
+          const animated = isEdgeAnimated(src, tgt, mapData.cards);
+          return { ...e, source: src, target: tgt, animated, style: edgeStyle(animated) };
         });
         const freshApprovalEdges = buildApprovalEdges(mapData.cards as ApprovalCardMeta[]);
         const freshApprovalIds = new Set(freshApprovalEdges.map(e => e.id));
@@ -437,8 +592,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const deleteTextMut = useDeleteTextElement();
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
-    const parentNode = nodesRef.current.find(n => n.id === parentCardId);
-    const newX = parentNode ? parentNode.position.x + 350 : 200;
+    // For parallel mode, prefer the join node position (to the right of the join circle)
+    const joinNode = nodesRef.current.find(n => n.id === `join-${parentCardId}`);
+    const parentNode = joinNode ?? nodesRef.current.find(n => n.id === parentCardId);
+    const newX = parentNode ? parentNode.position.x + 280 : 200;
     const newY = parentNode ? parentNode.position.y : 200;
     createCardMut.mutate(
       { workspaceId, mapId, data: { title: "Novo Nó", positionX: newX, positionY: newY } },
@@ -462,8 +619,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      // Text nodes and approval nodes are excluded from edge insertion logic
-      if (node.type === 'textnode' || node.type === 'approvalnode') return;
+      // Text nodes, approval nodes, and join nodes are excluded from edge insertion logic
+      if (node.type === 'textnode' || node.type === 'approvalnode' || node.type === 'joinnode') return;
 
       const currentEdges = edgesRef.current;
       const currentNodes = nodesRef.current;
@@ -487,9 +644,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const targetNode = currentNodes.find(n => n.id === edge.target);
         if (!sourceNode || !targetNode) continue;
 
-        // Skip edges involving text or approval nodes
+        // Skip edges involving text, approval, or join nodes
         if (sourceNode.type === 'textnode' || targetNode.type === 'textnode') continue;
         if (sourceNode.type === 'approvalnode' || targetNode.type === 'approvalnode') continue;
+        if (sourceNode.type === 'joinnode' || targetNode.type === 'joinnode') continue;
 
         const srcW = sourceNode.width ?? 200;
         const srcH = sourceNode.height ?? 80;
@@ -537,8 +695,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         data: { positionX: node.position.x, positionY: node.position.y },
       });
 
-      // Approval nodes are not part of the edge-insertion flow
-      if (node.type === 'approvalnode') return;
+      // Approval nodes and join nodes are not part of the edge-insertion flow
+      if (node.type === 'approvalnode' || node.type === 'joinnode') return;
 
       const currentHighlightedEdgeId = highlightedEdgeId;
 
@@ -655,12 +813,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (params: Connection) => {
       if (!params.source || !params.target) return;
 
-      // Reject connections involving text or approval nodes
+      // Reject connections involving text or approval nodes; join nodes can be source but not target
       const currentNodes = nodesRef.current;
       const sourceNode = currentNodes.find(n => n.id === params.source);
       const targetNode = currentNodes.find(n => n.id === params.target);
       if (sourceNode?.type === 'textnode' || targetNode?.type === 'textnode') return;
       if (sourceNode?.type === 'approvalnode' || targetNode?.type === 'approvalnode') return;
+      if (targetNode?.type === 'joinnode') return;
 
       const srcHandle = params.sourceHandle ?? '';
       const tgtHandle = params.targetHandle ?? '';
@@ -710,10 +869,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       };
       setEdges((eds) => addEdge(newEdge, eds));
 
+      // If source is a join node, store the actual parent card ID in the DB
+      const dbSourceId = sourceNodeId.startsWith('join-')
+        ? sourceNodeId.slice('join-'.length)
+        : sourceNodeId;
+
       createConnMut.mutate(
         {
           workspaceId, mapId,
-          data: { sourceCardId: sourceNodeId, targetCardId: targetNodeId, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles,
+          data: { sourceCardId: dbSourceId, targetCardId: targetNodeId, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles,
         },
         {
           onSuccess: (conn) => {
@@ -730,6 +894,73 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       );
     },
     [setEdges, createConnMut, workspaceId, mapId, queryClient, mapData, edges],
+  );
+
+  const onConnectStart = useCallback(
+    (_event: React.MouseEvent | React.TouchEvent, params: { nodeId?: string | null; handleId?: string | null }) => {
+      const nodeId = params.nodeId ?? '';
+      const handleId = params.handleId ?? '';
+      const isPlusSource = nodeId.startsWith('join-') || handleId === 'plus-right';
+      connectingJoinNodeRef.current = isPlusSource ? nodeId : null;
+    },
+    [],
+  );
+
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const fromNodeId = connectingJoinNodeRef.current;
+      connectingJoinNodeRef.current = null;
+      if (!fromNodeId) return;
+
+      const eventTarget = event.target as Element | null;
+      const onHandle = eventTarget?.closest('.react-flow__handle') !== null;
+      if (onHandle) return;
+
+      const clientX = 'clientX' in event ? event.clientX : (event as TouchEvent).changedTouches[0]?.clientX ?? 0;
+      const clientY = 'clientY' in event ? event.clientY : (event as TouchEvent).changedTouches[0]?.clientY ?? 0;
+
+      const dbSourceId = fromNodeId.startsWith('join-') ? fromNodeId.slice('join-'.length) : fromNodeId;
+
+      const nodeEl = eventTarget?.closest('[data-id]');
+      const targetNodeId = nodeEl?.getAttribute('data-id') ?? null;
+
+      if (targetNodeId && targetNodeId !== fromNodeId) {
+        const targetNode = nodesRef.current.find(n => n.id === targetNodeId);
+        if (!targetNode || targetNode.type === 'approvalnode' || targetNode.type === 'joinnode') return;
+        const alreadyConnected = edgesRef.current.some(e => e.source === dbSourceId && e.target === targetNodeId);
+        if (alreadyConnected) return;
+        createConnMut.mutate(
+          {
+            workspaceId, mapId,
+            data: { sourceCardId: dbSourceId, targetCardId: targetNodeId, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles,
+          },
+          {
+            onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }),
+          },
+        );
+      } else if (!targetNodeId) {
+        const flowPos = screenToFlowPosition({ x: clientX, y: clientY });
+        createCardMut.mutate(
+          { workspaceId, mapId, data: { title: 'Novo Nó', positionX: flowPos.x, positionY: flowPos.y } },
+          {
+            onSuccess: (newCard) => {
+              createConnMut.mutate(
+                {
+                  workspaceId, mapId,
+                  data: { sourceCardId: dbSourceId, targetCardId: newCard.id, sourceHandle: 'source-right', targetHandle: 'target-left' } as CreateConnectionRequestWithHandles,
+                },
+                {
+                  onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] }),
+                },
+              );
+              queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+              setSelectedCardId(newCard.id);
+            },
+          },
+        );
+      }
+    },
+    [workspaceId, mapId, screenToFlowPosition, createCardMut, createConnMut, queryClient],
   );
 
   const onEdgesChangeWithDelete = useCallback(
@@ -1011,6 +1242,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChangeWithDelete}
             onConnect={onConnect}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onPaneClick={onPaneClick}

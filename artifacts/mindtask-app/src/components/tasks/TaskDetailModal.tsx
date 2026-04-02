@@ -127,10 +127,12 @@ function SortableApproverAvatar({
 function ApprovalSection({
   workspaceId,
   taskId,
+  mapId,
   members,
 }: {
   workspaceId: string;
   taskId: string;
+  mapId?: string | null;
   members: WorkspaceMemberResponse[] | undefined;
 }) {
   const queryClient = useQueryClient();
@@ -140,6 +142,9 @@ function ApprovalSection({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const approvalsKey = [`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals`];
+  const invalidateMap = () => {
+    if (mapId) queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+  };
 
   const { data: approvalsData, isLoading } = useQuery<{ approvalMode: string; approvals: ApprovalItem[] }>({
     queryKey: approvalsKey,
@@ -156,7 +161,7 @@ function ApprovalSection({
         method: "POST",
         body: JSON.stringify({ approverId }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: approvalsKey }); invalidateMap(); },
     onError: () => toast({ title: "Erro ao adicionar aprovador", variant: "destructive" }),
   });
 
@@ -165,7 +170,7 @@ function ApprovalSection({
       customFetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/approvals/${approvalTaskId}`, {
         method: "DELETE",
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: approvalsKey }); invalidateMap(); },
     onError: () => toast({ title: "Erro ao remover aprovador", variant: "destructive" }),
   });
 
@@ -175,7 +180,7 @@ function ApprovalSection({
         method: "PUT",
         body: JSON.stringify({ orderedIds }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: approvalsKey }); invalidateMap(); },
   });
 
   const patchModeMut = useMutation({
@@ -184,7 +189,7 @@ function ApprovalSection({
         method: "PATCH",
         body: JSON.stringify({ approvalMode: mode }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: approvalsKey }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: approvalsKey }); invalidateMap(); },
   });
 
   const sensors = useSensors(
@@ -1317,6 +1322,7 @@ export function TaskDetailModal({
                       <ApprovalSection
                         workspaceId={effectiveWorkspaceId}
                         taskId={taskIdResolved}
+                        mapId={mapId || taskMapId}
                         members={members}
                       />
                     )}

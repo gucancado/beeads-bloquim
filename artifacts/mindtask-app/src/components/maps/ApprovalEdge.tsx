@@ -1,24 +1,46 @@
 import { memo } from 'react';
-import { EdgeProps, getBezierPath } from 'reactflow';
+import { EdgeProps, getBezierPath, useStore, Position } from 'reactflow';
+
+function getNodeCenter(node: { positionAbsolute?: { x: number; y: number } | null; width?: number | null; height?: number | null } | undefined) {
+  if (!node?.positionAbsolute) return null;
+  return {
+    x: node.positionAbsolute.x + (node.width ?? 0),
+    y: node.positionAbsolute.y + (node.height ?? 0) / 2,
+  };
+}
+
+function getNodeLeftCenter(node: { positionAbsolute?: { x: number; y: number } | null; width?: number | null; height?: number | null } | undefined) {
+  if (!node?.positionAbsolute) return null;
+  return {
+    x: node.positionAbsolute.x,
+    y: node.positionAbsolute.y + (node.height ?? 0) / 2,
+  };
+}
 
 function ApprovalEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   markerEnd,
   style,
 }: EdgeProps) {
+  const sourceNode = useStore(s => s.nodeInternals.get(source));
+  const targetNode = useStore(s => s.nodeInternals.get(target));
+
+  const src = getNodeCenter(sourceNode) ?? { x: sourceX, y: sourceY };
+  const tgt = getNodeLeftCenter(targetNode) ?? { x: targetX, y: targetY };
+
   const [edgePath] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+    sourceX: src.x,
+    sourceY: src.y,
+    sourcePosition: Position.Right,
+    targetX: tgt.x,
+    targetY: tgt.y,
+    targetPosition: Position.Left,
   });
 
   const effectiveStyle = {

@@ -37,6 +37,7 @@ interface MindMapNodeProps {
       taskDueDate: string | null;
     }>) => void;
     onEditingChange?: (cardId: string, isEditing: boolean) => void;
+    isTerminalNode?: boolean;
   };
   selected: boolean;
 }
@@ -49,11 +50,6 @@ function statusLabel(s: string) {
   return getStatusLabelCentralized(s);
 }
 
-const STRIP_HANDLE_CLS = [
-  '!absolute !inset-0 !w-full !h-full',
-  '!border-none !bg-transparent !rounded-none !transform-none',
-  '!opacity-100 !cursor-crosshair',
-].join(' ');
 
 function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
@@ -61,6 +57,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const hasTask = !!data.taskId;
   const workspaceId = data.workspaceId ?? '';
   const mapId = data.mapId ?? '';
+  const isTerminalNode = data.isTerminalNode !== false;
 
   const descRef = useRef<HTMLParagraphElement>(null);
   const [isTruncated, setIsTruncated] = useState(false);
@@ -238,27 +235,34 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         }}
         onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
       >
-        {/* Add child button — floats to the right, outside the card */}
-        <button
-          className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
-          style={{ backgroundColor: '#9ca3af', color: '#fff' }}
-          title="Adicionar card filho"
-          onClick={(e) => { e.stopPropagation(); data.onAddChild?.(id); }}
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        {/* Add child button — floats outside card to the right */}
+        {isTerminalNode && (
+          <div
+            className="nodrag nopan absolute hover:scale-110 transition-transform duration-150"
+            style={{ right: '-4rem', top: 'calc(50% - 24px)' }}
+          >
+            {/* Visual circle — pointer-events-none so the Handle underneath captures events */}
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity duration-150 shadow-lg pointer-events-none"
+              style={{ backgroundColor: '#7c3aed', color: '#fff' }}
+            >
+              <Plus className="w-6 h-6" />
+            </div>
+            {/* Transparent source Handle covering the full button area */}
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="plus-right"
+              className="!absolute !inset-0 !w-full !h-full !rounded-full !border-none !bg-transparent !transform-none !opacity-0 !cursor-pointer"
+              isConnectable
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); data.onAddChild?.(id); }}
+            />
+          </div>
+        )}
 
-        {/* Left connection strip */}
-        <div className="group/strip-l absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
-          <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
-          <Handle type="source" position={Position.Left} id="source-left" className={STRIP_HANDLE_CLS} />
-        </div>
-
-        {/* Right connection strip */}
-        <div className="group/strip-r absolute right-0 top-0 h-full w-3 z-10 rounded-r-2xl">
-          <Handle type="target" position={Position.Right} id="target-right" className={STRIP_HANDLE_CLS} />
-          <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} />
-        </div>
+        {/* Invisible handles for edge anchoring only — no interaction */}
+        <Handle type="target" position={Position.Left} id="target-left" className="!opacity-0 !pointer-events-none !border-none !bg-transparent !w-1 !h-1" />
+        <Handle type="source" position={Position.Right} id="source-right" className="!opacity-0 !pointer-events-none !border-none !bg-transparent !w-1 !h-1" />
 
         {/* Card content */}
         <div className="px-4 py-3 relative overflow-hidden rounded-xl">
@@ -311,35 +315,34 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       }}
       onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
     >
-      {/* Add child button — floats to the right, outside the card */}
-      <button
-        className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
-        style={{ backgroundColor: color, color: '#fff' }}
-        title="Adicionar card filho"
-        onClick={(e) => { e.stopPropagation(); data.onAddChild?.(id); }}
-      >
-        <Plus className="w-4 h-4" />
-      </button>
-
-      {/* Left connection strip */}
-      <div className="group/strip-l absolute left-0 top-0 h-full w-3 z-10 rounded-l-2xl">
+      {/* Add child button — floats outside card to the right */}
+      {isTerminalNode && (
         <div
-          className="absolute inset-0 rounded-l-2xl opacity-0 group-hover/strip-l:opacity-30 transition-opacity duration-150 pointer-events-none"
-          style={{ backgroundColor: color }}
-        />
-        <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} />
-        <Handle type="source" position={Position.Left} id="source-left" className={STRIP_HANDLE_CLS} />
-      </div>
+          className="nodrag nopan absolute hover:scale-110 transition-transform duration-150"
+          style={{ right: '-4rem', top: 'calc(50% - 24px)' }}
+        >
+          {/* Visual circle — pointer-events-none so the Handle underneath captures events */}
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity duration-150 shadow-lg pointer-events-none"
+            style={{ backgroundColor: '#7c3aed', color: '#fff' }}
+          >
+            <Plus className="w-6 h-6" />
+          </div>
+          {/* Transparent source Handle covering the full button area */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="plus-right"
+            className="!absolute !inset-0 !w-full !h-full !rounded-full !border-none !bg-transparent !transform-none !opacity-0 !cursor-pointer"
+            isConnectable
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); data.onAddChild?.(id); }}
+          />
+        </div>
+      )}
 
-      {/* Right connection strip */}
-      <div className="group/strip-r absolute right-0 top-0 h-full w-3 z-10 rounded-r-2xl">
-        <div
-          className="absolute inset-0 rounded-r-2xl opacity-0 group-hover/strip-r:opacity-30 transition-opacity duration-150 pointer-events-none"
-          style={{ backgroundColor: color }}
-        />
-        <Handle type="target" position={Position.Right} id="target-right" className={STRIP_HANDLE_CLS} />
-        <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} />
-      </div>
+      {/* Invisible handles for edge anchoring only — no interaction */}
+      <Handle type="target" position={Position.Left} id="target-left" className="!opacity-0 !pointer-events-none !border-none !bg-transparent !w-1 !h-1" />
+      <Handle type="source" position={Position.Right} id="source-right" className="!opacity-0 !pointer-events-none !border-none !bg-transparent !w-1 !h-1" />
 
       {/* Card content */}
       <div className="px-5 py-4 relative overflow-hidden rounded-xl">
