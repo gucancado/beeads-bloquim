@@ -2,26 +2,30 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-window.addEventListener("unhandledrejection", (event) => {
-  if (!(event.reason instanceof Error)) {
-    console.error("[mindtask] unhandled non-Error rejection:", JSON.stringify(event.reason), typeof event.reason);
-    event.preventDefault();
-  }
-});
+// Capture phase — runs before the Replit runtime-error-modal plugin's bubble listeners.
+// Suppress the error overlay for any non-Error thrown value (null, undefined, string,
+// plain object, etc.) that Tiptap, ReactFlow, or browser internals occasionally emit.
+// We still log these to the console so they remain diagnosable.
 
 window.addEventListener("error", (event) => {
-  if (event.error === null || event.error === undefined) {
-    event.stopImmediatePropagation();
-    event.preventDefault();
+  if (!(event.error instanceof Error)) {
     if (
       event.message &&
       event.message !== "Script error." &&
       !event.message.includes("ResizeObserver loop")
     ) {
-      console.error("[mindtask] uncaught null-error exception:", event.message, event.filename, event.lineno);
+      console.warn("[mindtask] suppressed non-Error exception:", event.message, event.error);
     }
-  } else if (!(event.error instanceof Error)) {
-    console.error("[mindtask] uncaught non-Error exception:", JSON.stringify(event.error), typeof event.error);
+    event.stopImmediatePropagation();
+    event.preventDefault();
+  }
+}, true);
+
+window.addEventListener("unhandledrejection", (event) => {
+  if (!(event.reason instanceof Error)) {
+    console.warn("[mindtask] suppressed non-Error rejection:", event.reason);
+    event.stopImmediatePropagation();
+    event.preventDefault();
   }
 }, true);
 
