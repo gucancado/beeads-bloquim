@@ -25,6 +25,7 @@ interface MindMapNodeProps {
     taskAssigneeAvatarUrl?: string | null;
     taskDescription?: string | null;
     taskCompletedAt?: string | null;
+    taskParentApprovalStatus?: string | null;
     workspaceId?: string;
     mapId?: string;
     onOpen?: (id: string) => void;
@@ -524,24 +525,43 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
         {/* Status badge */}
         <div className="mt-3 pt-3 border-t flex items-center gap-2 nodrag">
-          <div
-            className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
-            title={hasTask ? 'Clique para alterar status' : undefined}
-            onDoubleClick={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              if (!hasTask) return;
-              e.stopPropagation();
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
-              const left = Math.max(4, Math.min(rect.left, window.innerWidth - 180));
-              setStatusDropdownPos({ top, left });
-              setEditingStatus(v => !v);
-            }}
-          >
-            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-            <span className="text-[10px] font-semibold tracking-wider text-muted-foreground lowercase">
-              {statusLabel(data.statusVisual)}
-            </span>
+          <div className="flex flex-col gap-1">
+            <div
+              className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
+              title={hasTask ? 'Clique para alterar status' : undefined}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                if (!hasTask) return;
+                e.stopPropagation();
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
+                const left = Math.max(4, Math.min(rect.left, window.innerWidth - 180));
+                setStatusDropdownPos({ top, left });
+                setEditingStatus(v => !v);
+              }}
+            >
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+              <span className="text-[10px] font-semibold tracking-wider text-muted-foreground lowercase">
+                {statusLabel(data.statusVisual)}
+              </span>
+            </div>
+            {data.taskParentApprovalStatus && (
+              <div className={`flex items-center gap-1.5 px-1 ${
+                data.taskParentApprovalStatus === 'approved' ? 'text-emerald-600 dark:text-emerald-400' :
+                data.taskParentApprovalStatus === 'rejected' ? 'text-red-500 dark:text-red-400' :
+                'text-amber-500 dark:text-amber-400'
+              }`}>
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  data.taskParentApprovalStatus === 'approved' ? 'bg-emerald-500' :
+                  data.taskParentApprovalStatus === 'rejected' ? 'bg-red-500' :
+                  'bg-amber-500'
+                }`} />
+                <span className="text-[9px] font-semibold tracking-wider lowercase">
+                  {data.taskParentApprovalStatus === 'in_approval' ? 'em aprovação' :
+                   data.taskParentApprovalStatus === 'approved' ? 'aprovada' : 'reprovada'}
+                </span>
+              </div>
+            )}
           </div>
           {editingStatus && createPortal(
             <>

@@ -66,6 +66,7 @@ type ApprovalCardMeta = {
   taskAssigneeName?: string | null;
   taskAssigneeAvatarUrl?: string | null;
   taskDueDate?: string | null;
+  taskParentApprovalStatus?: string | null;
   title?: string;
   positionX: number;
   positionY: number;
@@ -454,7 +455,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           position: { x: c.positionX, y: c.positionY },
           data: isApproval
             ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
-            : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
+            : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
           draggable: true,
           deletable: !isApproval,
         };
@@ -502,7 +503,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               position: { x: c.positionX, y: c.positionY },
               data: isApproval
                 ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
-                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
+                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
               draggable: true,
               deletable: !isApproval,
             };
@@ -538,7 +539,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             if (n.id === currentlyEditingId || hasPendingUpdate) {
               return { ...n, data: { ...n.data, isTerminalNode, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
             }
-            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode } };
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, taskParentApprovalStatus: (s as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode } };
           }),
           ...newCardNodes,
           ...newTextNodes,

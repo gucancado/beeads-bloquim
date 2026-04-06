@@ -324,6 +324,7 @@ interface TaskResponseExtended extends TaskResponse {
   previousStatus?: string | null;
   isApprovalTask?: boolean;
   parentTaskId?: string | null;
+  parentApprovalStatus?: string | null;
 }
 
 interface WorkspaceTask {
@@ -341,6 +342,7 @@ interface WorkspaceTask {
   overdue?: boolean;
   isApprovalTask?: boolean;
   parentTaskId?: string | null;
+  parentApprovalStatus?: string | null;
 }
 
 interface SubtaskItem {
@@ -969,6 +971,10 @@ export function TaskDetailModal({
     ? (card?.task?.overdue === true) && status !== "completed"
     : (task?.overdue === true) && status !== "completed";
 
+  const parentApprovalStatus = isCardMode
+    ? (card?.task as TaskResponseExtended | null | undefined)?.parentApprovalStatus ?? null
+    : task?.parentApprovalStatus ?? null;
+
   const isTaskReady = isCardMode ? !!card?.task : true;
   const isAutoCreating = !autoCreateError && (autoCreateMutation.isPending || (!isCardMode && !taskId && !autoCreatedTaskId));
   const isLoading = isCardMode ? isCardLoading : (isAutoCreating || isTaskLoading);
@@ -1042,6 +1048,22 @@ export function TaskDetailModal({
                   {isOverdue && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-1 rounded-full lowercase">
                       🔴 Atrasada
+                    </span>
+                  )}
+                  {parentApprovalStatus && (
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full lowercase border ${
+                      parentApprovalStatus === 'approved'
+                        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+                        : parentApprovalStatus === 'rejected'
+                        ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
+                        : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        parentApprovalStatus === 'approved' ? 'bg-emerald-500' :
+                        parentApprovalStatus === 'rejected' ? 'bg-red-500' : 'bg-amber-500'
+                      }`} />
+                      {parentApprovalStatus === 'in_approval' ? 'em aprovação' :
+                       parentApprovalStatus === 'approved' ? 'aprovada' : 'reprovada'}
                     </span>
                   )}
                   <div className="flex items-center gap-1.5 ml-auto flex-wrap justify-end">

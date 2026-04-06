@@ -85,6 +85,13 @@
       "when": 1775016000000,
       "tag": "0011_add_approval_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1775100000000,
+      "tag": "0012_add_parent_approval_status",
+      "breakpoints": true
     }
   ]
 }

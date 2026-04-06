@@ -42,6 +42,12 @@ export const approvalModeEnum = pgEnum("approval_mode", [
   "parallel",
 ]);
 
+export const parentApprovalStatusEnum = pgEnum("parent_approval_status", [
+  "in_approval",
+  "approved",
+  "rejected",
+]);
+
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   mapId: uuid("map_id")
@@ -65,6 +71,7 @@ export const tasks = pgTable("tasks", {
   approvalStatus: approvalStatusEnum("approval_status"),
   approvalComment: text("approval_comment"),
   approvalMode: approvalModeEnum("approval_mode"),
+  parentApprovalStatus: parentApprovalStatusEnum("parent_approval_status"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

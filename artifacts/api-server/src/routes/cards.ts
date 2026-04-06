@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { cards, tasks, cardConnections, taskActivities, users } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -267,9 +267,16 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
   // Only update previousStatus when the status actually changes
   const previousStatus = task.status !== status ? task.status : task.previousStatus;
 
+  const taskUpdateSet: Record<string, any> = { status, previousStatus, overdue, completedAt, updatedAt: new Date() };
+
+  // Reset parentApprovalStatus when task goes back to in_progress/draft/pending from approved
+  if (["in_progress", "draft", "pending"].includes(status) && task.parentApprovalStatus === "approved") {
+    taskUpdateSet.parentApprovalStatus = null;
+  }
+
   const [updatedTask] = await db
     .update(tasks)
-    .set({ status, previousStatus, overdue, completedAt, updatedAt: new Date() })
+    .set(taskUpdateSet)
     .where(eq(tasks.id, card.taskId))
     .returning();
 
@@ -292,17 +299,35 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
     });
 
     // Sync approval tasks and their cards if this task has any
-    const approvalNewStatus = getApprovalTaskStatusForCards(status);
     const approvalChildTasks = await db
-      .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status })
+      .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status, approvalOrder: tasks.approvalOrder })
       .from(tasks)
-      .where(and(eq(tasks.parentTaskId, card.taskId!), eq(tasks.isApprovalTask, true)));
+      .where(and(eq(tasks.parentTaskId, card.taskId!), eq(tasks.isApprovalTask, true)))
+      .orderBy(asc(tasks.approvalOrder));
 
-    for (const child of approvalChildTasks) {
+    // When resetting parent to a non-completed state, clear approval decisions so children
+    // start fresh in the next cycle.
+    const clearApprovalDecisions = ["in_progress", "draft", "pending", "blocked"].includes(status);
+
+    // In sequential mode, when parent completes, only the first approval task activates;
+    // the rest stay pending until each predecessor approves.
+    const isSequential = (task.approvalMode ?? "sequential") === "sequential";
+
+    for (let i = 0; i < approvalChildTasks.length; i++) {
+      const child = approvalChildTasks[i];
+      const approvalNewStatus: string =
+        status === "completed" && isSequential && i > 0
+          ? "pending"
+          : getApprovalTaskStatusForCards(status);
       const childOverdue = computeOverdue(child.dueDate, approvalNewStatus);
       const childVisual = toVisualStatus(approvalNewStatus, childOverdue);
+      const childUpdateSet: Record<string, any> = { status: approvalNewStatus, overdue: childOverdue, updatedAt: new Date() };
+      if (clearApprovalDecisions) {
+        childUpdateSet.approvalStatus = null;
+        childUpdateSet.approvalComment = null;
+      }
       await db.update(tasks)
-        .set({ status: approvalNewStatus, overdue: childOverdue, updatedAt: new Date() })
+        .set(childUpdateSet)
         .where(eq(tasks.id, child.id));
       await db.update(cards)
         .set({ statusVisual: childVisual, updatedAt: new Date() })
@@ -320,13 +345,25 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
         });
       }
     }
+
+    // When completing with any approval children, set parentApprovalStatus to in_approval.
+    // Children are transitioned to in_progress regardless of their prior state,
+    // so any completion with approval children enters the approval cycle.
+    if (status === "completed" && approvalChildTasks.length > 0) {
+      await db.update(tasks)
+        .set({ parentApprovalStatus: "in_approval", updatedAt: new Date() })
+        .where(eq(tasks.id, card.taskId!));
+      updatedTask.parentApprovalStatus = "in_approval";
+    }
   }
 
   // Cascade: when completed, activate downstream cards connected via right handle
   // A downstream card only advances to "in_progress" if:
   //   1. Its task is currently "pending"
   //   2. ALL cards connected to its left handle (prerequisites) are "completed" or "blocked"
-  if (status === "completed") {
+  // Skip cascade if this task is pending approval (parentApprovalStatus='in_approval'):
+  // downstream activation will happen once all approvals are resolved via the approve endpoint.
+  if (status === "completed" && updatedTask.parentApprovalStatus !== "in_approval") {
     // Find all connections leaving from this card's right handle
     const outgoingConnections = await db
       .select()
