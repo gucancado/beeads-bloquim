@@ -17,6 +17,7 @@ interface ApprovalNodeProps {
     onOpen?: (cardId: string) => void;
     onAddChild?: (cardId: string) => void;
     terminalParentCardId?: string;
+    allSiblingsApproved?: boolean;
   };
   selected: boolean;
 }
@@ -151,6 +152,52 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
   const decision = decisionLabel(data.approvalDecision);
 
   const isTerminal = !!(data.onAddChild && data.terminalParentCardId);
+
+  if (data.allSiblingsApproved) {
+    return (
+      <div
+        className={`group/node relative rounded-full border-2 transition-all duration-200 bg-neutral-100 dark:bg-neutral-800 overflow-hidden ${
+          selected
+            ? 'border-emerald-500 shadow-lg shadow-emerald-500/20'
+            : 'border-emerald-400 dark:border-emerald-600 shadow-md'
+        }`}
+        style={{ width: 48, height: 48 }}
+        onDoubleClick={handleDoubleClick}
+      >
+        {isTerminal && (
+          <button
+            className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
+            style={{ backgroundColor: '#10b981', color: '#fff' }}
+            title="Adicionar card filho"
+            onClick={(e) => { e.stopPropagation(); data.onAddChild!(data.cardId!); }}
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+
+        <div className="absolute left-0 top-0 h-full w-3 z-10">
+          <Handle type="target" position={Position.Left} id="target-left" className={STRIP_HANDLE_CLS} isConnectable={false} />
+        </div>
+
+        <div className="absolute right-0 top-0 h-full w-3 z-10">
+          <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} isConnectable={isTerminal} />
+        </div>
+
+        <div className="w-full h-full flex items-center justify-center">
+          {data.approverAvatarUrl ? (
+            <img
+              src={data.approverAvatarUrl}
+              alt={data.approverName ?? ''}
+              className="w-full h-full object-cover"
+              style={{ filter: 'grayscale(100%)' }}
+            />
+          ) : (
+            <CheckSquare className="w-5 h-5 text-neutral-400" style={{ filter: 'grayscale(100%)' }} />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

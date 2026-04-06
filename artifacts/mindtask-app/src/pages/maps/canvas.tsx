@@ -445,6 +445,22 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     }> };
 
     const terminalNodeMap = buildTerminalNodeMap(mapData.cards as ApprovalCardMeta[]);
+
+    // Build set of parent task IDs where ALL approval children are approved
+    const approvalCards = (mapData.cards as ApprovalCardMeta[]).filter(c => c.taskIsApprovalTask && c.taskParentTaskId);
+    const approvalByParent = new Map<string, ApprovalCardMeta[]>();
+    for (const c of approvalCards) {
+      const pid = c.taskParentTaskId!;
+      if (!approvalByParent.has(pid)) approvalByParent.set(pid, []);
+      approvalByParent.get(pid)!.push(c);
+    }
+    const fullyApprovedParentTaskIds = new Set<string>();
+    for (const [pid, children] of approvalByParent) {
+      if (children.length > 0 && children.every(c => c.taskApprovalDecision === 'approved')) {
+        fullyApprovedParentTaskIds.add(pid);
+      }
+    }
+
     // terminalCardId → parentCardId (for approval nodes that are terminal)
     const terminalApprovalParentMap = new Map<string, string>();
     for (const [parentId, terminalId] of terminalNodeMap) {
@@ -461,12 +477,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
         const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
         const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
+        const allSiblingsApproved = isApproval ? fullyApprovedParentTaskIds.has((c as ApprovalCardMeta).taskParentTaskId ?? '') : false;
         return {
           id: c.id,
           type: isApproval ? 'approvalnode' : 'mindmap',
           position: { x: c.positionX, y: c.positionY },
           data: isApproval
-            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
+            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
             : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
           draggable: true,
           deletable: !isApproval,
@@ -509,12 +526,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
             const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
             const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
+            const allSiblingsApproved = isApproval ? fullyApprovedParentTaskIds.has((c as ApprovalCardMeta).taskParentTaskId ?? '') : false;
             return {
               id: c.id,
               type: isApproval ? 'approvalnode' : 'mindmap',
               position: { x: c.positionX, y: c.positionY },
               data: isApproval
-                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
+                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
                 : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
               draggable: true,
               deletable: !isApproval,
@@ -544,7 +562,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             const sApproval = s as ApprovalCardMeta;
             if (sApproval.taskIsApprovalTask) {
               const isTerminalApproval = terminalApprovalParentMap.has(s.id);
-              return { ...n, data: { approverName: s.taskAssigneeName ?? null, approverAvatarUrl: s.taskAssigneeAvatarUrl ?? null, approvalStatus: s.statusVisual ?? null, approvalDecision: sApproval.taskApprovalDecision ?? null, dueDate: s.taskDueDate ?? null, taskTitle: s.title, cardId: s.id, onOpen: handleOpenPanel, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(s.id) } : { onAddChild: undefined, terminalParentCardId: undefined }) } };
+              const allSiblingsApproved = fullyApprovedParentTaskIds.has(sApproval.taskParentTaskId ?? '');
+              return { ...n, data: { approverName: s.taskAssigneeName ?? null, approverAvatarUrl: s.taskAssigneeAvatarUrl ?? null, approvalStatus: s.statusVisual ?? null, approvalDecision: sApproval.taskApprovalDecision ?? null, dueDate: s.taskDueDate ?? null, taskTitle: s.title, cardId: s.id, onOpen: handleOpenPanel, allSiblingsApproved, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(s.id) } : { onAddChild: undefined, terminalParentCardId: undefined }) } };
             }
             const isTerminalNode = terminalNodeMap.get(n.id) === n.id;
             const hasPendingUpdate = pendingUpdatesRef.current.has(n.id);
