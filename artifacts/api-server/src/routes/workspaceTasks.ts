@@ -472,65 +472,65 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
     });
   }
 
-  const approvalChildTasks = await db
-    .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status, approvalOrder: tasks.approvalOrder })
-    .from(tasks)
-    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
-    .orderBy(asc(tasks.approvalOrder));
+  if (previousStatus !== status) {
+    const approvalChildTasks = await db
+      .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status, approvalOrder: tasks.approvalOrder })
+      .from(tasks)
+      .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
+      .orderBy(asc(tasks.approvalOrder));
 
-  const actorUserForCascade = previousStatus !== status
-    ? (await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1))[0]
-    : null;
+    const actorUserForCascade = (await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1))[0];
 
-  // When resetting parent to a non-completed state, clear approval decisions so children
-  // start fresh in the next cycle.
-  const clearApprovalDecisions = ["in_progress", "draft", "pending", "blocked"].includes(status);
+    // When resetting parent to a non-completed state, clear approval decisions so children
+    // start fresh in the next cycle.
+    const clearApprovalDecisions = ["in_progress", "draft", "pending", "blocked"].includes(status);
 
-  // In sequential mode, when parent completes, only the first approval task activates;
-  // the rest stay pending until each predecessor approves.
-  const isSequential = (existing.approvalMode ?? "sequential") === "sequential";
+    // In sequential mode, when parent completes, only the first approval task activates;
+    // the rest stay pending until each predecessor approves.
+    const isSequential = (existing.approvalMode ?? "sequential") === "sequential";
 
-  for (let i = 0; i < approvalChildTasks.length; i++) {
-    const child = approvalChildTasks[i];
-    const approvalTaskNewStatus =
-      status === "completed" && isSequential && i > 0
-        ? "pending"
-        : getApprovalTaskStatus(status);
-    const childOverdue = computeOverdue(child.dueDate, approvalTaskNewStatus);
-    const childVisual = toVisualStatus(approvalTaskNewStatus, childOverdue);
-    const childUpdateSet: Record<string, any> = { status: approvalTaskNewStatus, overdue: childOverdue, updatedAt: new Date() };
-    if (clearApprovalDecisions) {
-      childUpdateSet.approvalStatus = null;
-      childUpdateSet.approvalComment = null;
+    for (let i = 0; i < approvalChildTasks.length; i++) {
+      const child = approvalChildTasks[i];
+      const approvalTaskNewStatus =
+        status === "completed" && isSequential && i > 0
+          ? "pending"
+          : getApprovalTaskStatus(status);
+      const childOverdue = computeOverdue(child.dueDate, approvalTaskNewStatus);
+      const childVisual = toVisualStatus(approvalTaskNewStatus, childOverdue);
+      const childUpdateSet: Record<string, any> = { status: approvalTaskNewStatus, overdue: childOverdue, updatedAt: new Date() };
+      if (clearApprovalDecisions) {
+        childUpdateSet.approvalStatus = null;
+        childUpdateSet.approvalComment = null;
+      }
+      await db.update(tasks)
+        .set(childUpdateSet)
+        .where(eq(tasks.id, child.id));
+      await db.update(cards)
+        .set({ statusVisual: childVisual, updatedAt: new Date() })
+        .where(eq(cards.taskId, child.id));
+      if (child.status !== approvalTaskNewStatus) {
+        await db.insert(taskActivities).values({
+          taskId: child.id,
+          actorId,
+          type: "status_changed",
+          metadata: {
+            actorName: actorUserForCascade?.name ?? null,
+            oldStatus: child.status,
+            newStatus: approvalTaskNewStatus,
+          },
+        });
+      }
     }
-    await db.update(tasks)
-      .set(childUpdateSet)
-      .where(eq(tasks.id, child.id));
-    await db.update(cards)
-      .set({ statusVisual: childVisual, updatedAt: new Date() })
-      .where(eq(cards.taskId, child.id));
-    if (child.status !== approvalTaskNewStatus) {
-      await db.insert(taskActivities).values({
-        taskId: child.id,
-        actorId,
-        type: "status_changed",
-        metadata: {
-          actorName: actorUserForCascade?.name ?? null,
-          oldStatus: child.status,
-          newStatus: approvalTaskNewStatus,
-        },
-      });
-    }
-  }
 
-  // When completing with any approval children, set parentApprovalStatus to in_approval.
-  // Children are transitioned to in_progress regardless of their prior state,
-  // so any completion with approval children enters the approval cycle.
-  if (status === "completed" && approvalChildTasks.length > 0) {
-    await db.update(tasks)
-      .set({ parentApprovalStatus: "in_approval", updatedAt: new Date() })
-      .where(eq(tasks.id, taskId));
-    updated.parentApprovalStatus = "in_approval";
+    // When completing with any approval children, set parentApprovalStatus to in_approval.
+    // Children are transitioned to in_progress regardless of their prior state,
+    // so any completion with approval children enters the approval cycle.
+    if (status === "completed" && approvalChildTasks.length > 0) {
+      await db.update(tasks)
+        .set({ parentApprovalStatus: "in_approval", updatedAt: new Date() })
+        .where(eq(tasks.id, taskId));
+      updated.parentApprovalStatus = "in_approval";
+    }
   }
 
   res.json(updated);
