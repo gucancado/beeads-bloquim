@@ -80,7 +80,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
   const TEXT_COLORS = useMemo(() => isDark ? TEXT_COLORS_DARK : TEXT_COLORS_LIGHT, [isDark]);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [fontSize, setFontSize] = useState(data.fontSize ?? 14);
+  const [fontSize, setFontSize] = useState(data.fontSize ?? 32);
   const [color, setColor] = useState(data.color ?? '#111827');
 
   const displayColor = resolveDisplayColor(color, isDark);
