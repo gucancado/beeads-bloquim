@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { cards, tasks, cardConnections, taskActivities, users } from "@workspace/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -153,6 +153,14 @@ router.delete("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"])
   await db.transaction(async (tx) => {
     const [card] = await tx.select().from(cards).where(eq(cards.id, cardId)).limit(1);
     if (card?.taskId) {
+      const approvalTasks = await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.parentTaskId, card.taskId), eq(tasks.isApprovalTask, true)));
+      if (approvalTasks.length > 0) {
+        const approvalTaskIds = approvalTasks.map((t) => t.id);
+        await tx.delete(cards).where(inArray(cards.taskId, approvalTaskIds));
+      }
       await tx.delete(tasks).where(eq(tasks.id, card.taskId));
     }
     await tx.delete(cards).where(eq(cards.id, cardId));
