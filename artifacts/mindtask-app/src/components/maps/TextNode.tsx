@@ -10,17 +10,22 @@ import EditingEditor, { TextNodeEditorHandle } from './TextNodeEditor';
 
 const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48];
 const TEXT_COLORS_LIGHT = [
-  { label: 'Preto', value: '#111827' },
-  { label: 'Vermelho', value: '#dc2626' },
-  { label: 'Azul', value: '#2563eb' },
-  { label: 'Verde', value: '#16a34a' },
+  { label: 'Preto',    value: '#111827', display: '#111827' },
+  { label: 'Vermelho', value: '#dc2626', display: '#dc2626' },
+  { label: 'Azul',     value: '#2563eb', display: '#2563eb' },
+  { label: 'Verde',    value: '#16a34a', display: '#16a34a' },
 ];
 const TEXT_COLORS_DARK = [
-  { label: 'Branco', value: '#ffffff' },
-  { label: 'Vermelho', value: '#dc2626' },
-  { label: 'Azul', value: '#2563eb' },
-  { label: 'Verde', value: '#16a34a' },
+  { label: 'Branco',   value: '#111827', display: '#ffffff' },
+  { label: 'Vermelho', value: '#dc2626', display: '#dc2626' },
+  { label: 'Azul',     value: '#2563eb', display: '#2563eb' },
+  { label: 'Verde',    value: '#16a34a', display: '#16a34a' },
 ];
+
+function resolveDisplayColor(stored: string, dark: boolean): string {
+  if (stored === '#111827') return dark ? '#ffffff' : '#111827';
+  return stored;
+}
 
 const EMPTY_TIPTAP_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
 
@@ -77,6 +82,8 @@ function TextNode({ id, data, selected }: TextNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [fontSize, setFontSize] = useState(data.fontSize ?? 14);
   const [color, setColor] = useState(data.color ?? '#374151');
+
+  const displayColor = resolveDisplayColor(color, isDark);
   const [content, setContent] = useState(data.content);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
@@ -143,16 +150,20 @@ function TextNode({ id, data, selected }: TextNodeProps) {
     });
   }, [data, id, updateMut]);
 
-  const handleColorChange = useCallback((newColor: string) => {
-    setColor(newColor);
-    if (fontWrapperRef.current) fontWrapperRef.current.style.color = newColor;
+  const handleColorChange = useCallback((canonicalColor: string) => {
+    setColor(canonicalColor);
+    if (fontWrapperRef.current) fontWrapperRef.current.style.color = resolveDisplayColor(canonicalColor, isDark);
     updateMut.mutate({
       workspaceId: data.workspaceId,
       mapId: data.mapId,
       elementId: id,
-      data: { color: newColor },
+      data: { color: canonicalColor },
     });
-  }, [data, id, updateMut]);
+  }, [data, id, updateMut, isDark]);
+
+  useEffect(() => {
+    if (fontWrapperRef.current) fontWrapperRef.current.style.color = displayColor;
+  }, [displayColor]);
 
   const floatingMenu = isEditing ? createPortal(
     <div
@@ -183,7 +194,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
             key={c.value}
             title={c.label}
             className={`w-4 h-4 rounded-full border-2 transition-transform hover:scale-110 ${color === c.value ? 'border-gray-800 dark:border-white scale-110' : 'border-transparent'}`}
-            style={{ backgroundColor: c.value }}
+            style={{ backgroundColor: c.display }}
             onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleColorChange(c.value); }}
           />
         ))}
@@ -225,7 +236,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
         <div
           ref={fontWrapperRef}
           className="px-1"
-          style={{ fontSize: `${fontSize}px`, color, lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
+          style={{ fontSize: `${fontSize}px`, color: displayColor, lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
         >
           {isEditing ? (
             <EditingEditor
