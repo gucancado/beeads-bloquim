@@ -13,6 +13,7 @@ import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
@@ -354,12 +355,30 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [autoFocusCardId, setAutoFocusCardId] = useState<string | null>(null);
   const autoFocusCardIdRef = useRef<string | null>(null);
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
+  const [pendingDeleteNodeIds, setPendingDeleteNodeIds] = useState<string[] | null>(null);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
+  const mapDataRef = useRef<typeof mapData>(undefined);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { mapDataRef.current = mapData; }, [mapData]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete') return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const selectedNodes = nodesRef.current.filter(n => n.selected && n.type === 'mindmap' && n.deletable !== false);
+      if (selectedNodes.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingDeleteNodeIds(selectedNodes.map(n => n.id));
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
 
   useEffect(() => {
     if (!workspaceId || !mapId) return;
@@ -479,18 +498,25 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       if (terminalId.startsWith('join-')) parallelJoinParentIds.add(parentId);
     }
 
+    // taskId → cardId map, used to resolve approvalParentCardId for approval nodes
+    const taskIdToCardId = new Map<string, string>();
+    for (const c of mapData.cards) {
+      if (c.taskId) taskIdToCardId.set(c.taskId, c.id);
+    }
+
     if (!initializedRef.current) {
       const initialNodes: Node[] = mapData.cards.map(c => {
         const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
         const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
         const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
         const allSiblingsApproved = isApproval ? fullyApprovedParentTaskIds.has((c as ApprovalCardMeta).taskParentTaskId ?? '') : false;
+        const approvalParentCardId = isApproval ? (taskIdToCardId.get((c as ApprovalCardMeta).taskParentTaskId ?? '') ?? null) : null;
         return {
           id: c.id,
           type: isApproval ? 'approvalnode' : 'mindmap',
           position: { x: c.positionX, y: c.positionY },
           data: isApproval
-            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
+            ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, approvalParentCardId, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
             : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
           draggable: true,
           deletable: !isApproval,
@@ -535,12 +561,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
             const allSiblingsApproved = isApproval ? fullyApprovedParentTaskIds.has((c as ApprovalCardMeta).taskParentTaskId ?? '') : false;
             const shouldAutoFocus = !isApproval && c.id === autoFocusCardIdRef.current;
+            const approvalParentCardId = isApproval ? (taskIdToCardId.get((c as ApprovalCardMeta).taskParentTaskId ?? '') ?? null) : null;
             return {
               id: c.id,
               type: isApproval ? 'approvalnode' : 'mindmap',
               position: { x: c.positionX, y: c.positionY },
               data: isApproval
-                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
+                ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, approvalParentCardId, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
                 : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, onAutoFocusDone: handleAutoFocusDone, isTerminalNode, autoFocusTitle: shouldAutoFocus },
               draggable: true,
               deletable: !isApproval,
@@ -1202,8 +1229,19 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const deleteCardMut = useDeleteCard();
   const handleDeleteCard = useCallback((cardId: string) => {
-    setNodes(prev => prev.filter(n => n.id !== cardId));
-    setEdges(prev => prev.filter(e => e.source !== cardId && e.target !== cardId));
+    const toRemove = new Set<string>([cardId, `join-${cardId}`]);
+    const allCards = (mapDataRef.current?.cards ?? []) as ApprovalCardMeta[];
+    const deletedCard = allCards.find(c => c.id === cardId);
+    if (deletedCard?.taskId) {
+      for (const c of allCards) {
+        if (c.taskIsApprovalTask && c.taskParentTaskId === deletedCard.taskId) {
+          toRemove.add(c.id);
+          toRemove.add(`join-${c.id}`);
+        }
+      }
+    }
+    setNodes(prev => prev.filter(n => !toRemove.has(n.id)));
+    setEdges(prev => prev.filter(e => !toRemove.has(e.source) && !toRemove.has(e.target)));
     deleteCardMut.mutate(
       { workspaceId, mapId, cardId },
       {
@@ -1323,6 +1361,33 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         onClose={() => setSelectedCardId(null)}
         onDeleteCard={handleDeleteCard}
       />
+
+      <AlertDialog open={!!pendingDeleteNodeIds} onOpenChange={(open) => { if (!open) setPendingDeleteNodeIds(null); }}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 lowercase">
+              excluir {pendingDeleteNodeIds && pendingDeleteNodeIds.length > 1 ? `${pendingDeleteNodeIds.length} tarefas` : 'tarefa'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="lowercase">
+              essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl lowercase" onClick={() => setPendingDeleteNodeIds(null)}>cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 lowercase"
+              onClick={() => {
+                if (pendingDeleteNodeIds) {
+                  pendingDeleteNodeIds.forEach(id => handleDeleteCard(id));
+                }
+                setPendingDeleteNodeIds(null);
+              }}
+            >
+              excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
