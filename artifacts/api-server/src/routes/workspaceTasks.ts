@@ -1101,6 +1101,32 @@ router.post("/:taskId/reject", requireAuth, requireWorkspaceRole(["admin", "edit
 
   await syncCardVisual(taskId, updated.status, !!updated.overdue);
 
+  if (approvalTask.parentTaskId) {
+    const siblingApprovalTasks = await db
+      .select({ id: tasks.id, overdue: tasks.overdue })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.parentTaskId, approvalTask.parentTaskId),
+          eq(tasks.isApprovalTask, true),
+          not(eq(tasks.id, taskId)),
+          not(eq(tasks.status, "pending")),
+        )
+      );
+
+    if (siblingApprovalTasks.length > 0) {
+      const siblingIds = siblingApprovalTasks.map((t) => t.id);
+      await db
+        .update(tasks)
+        .set({ status: "pending", approvalStatus: "rejected", completedAt: null, updatedAt: new Date() })
+        .where(inArray(tasks.id, siblingIds));
+
+      for (const sibling of siblingApprovalTasks) {
+        await syncCardVisual(sibling.id, "pending", !!sibling.overdue);
+      }
+    }
+  }
+
   const [actorUserReject] = await db.select({ name: users.name }).from(users).where(eq(users.id, req.user!.userId)).limit(1);
 
   await db.insert(taskActivities).values({
