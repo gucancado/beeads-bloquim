@@ -81,7 +81,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [fontSize, setFontSize] = useState(data.fontSize ?? 14);
-  const [color, setColor] = useState(data.color ?? '#374151');
+  const [color, setColor] = useState(data.color ?? '#111827');
 
   const displayColor = resolveDisplayColor(color, isDark);
   const [content, setContent] = useState(data.content);

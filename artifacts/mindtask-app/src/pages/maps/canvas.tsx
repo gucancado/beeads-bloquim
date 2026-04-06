@@ -1127,7 +1127,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           width: 200,
           height: 80,
           fontSize: 14,
-          color: '#374151',
+          color: '#111827',
           content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] }),
         },
       },
