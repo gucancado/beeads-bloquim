@@ -406,12 +406,15 @@ export function TaskListItem({
           )}
 
           {/* Due date — inline editable */}
-          <label className="inline-flex items-center gap-1.5 cursor-pointer" onClick={e => e.stopPropagation()}>
-            <CalendarIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground pointer-events-none" />
+          <label
+            className={`inline-flex items-center gap-1.5 cursor-pointer ${isOverdue ? "rounded-full px-2.5 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <CalendarIcon className={`w-3.5 h-3.5 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
             <input
               ref={dueDateInputRef}
               type="date"
-              className={`bg-transparent border-none outline-none text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors w-[110px] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer ${savingField === "dueDate" ? "opacity-60" : ""}`}
+              className={`bg-transparent border-none outline-none text-sm cursor-pointer transition-colors w-[110px] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer ${isOverdue ? "text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300" : "text-muted-foreground hover:text-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
               style={{ position: "relative" }}
               value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
               onChange={handleDueDateChange}
