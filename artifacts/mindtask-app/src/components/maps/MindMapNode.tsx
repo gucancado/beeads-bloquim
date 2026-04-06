@@ -223,16 +223,21 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   const titleInputRef = useRef<HTMLInputElement>(null);
 
+  const shouldSelectOnEdit = useRef(false);
+
   useEffect(() => {
     if (!data.autoFocusTitle) return;
+    shouldSelectOnEdit.current = true;
     setEditingTitle(true);
     data.onEditingChange?.(id, true);
     data.onAutoFocusDone?.(id);
   }, [data.autoFocusTitle]);
 
-  useEffect(() => {
-    if (editingTitle && data.autoFocusTitle && titleInputRef.current) {
+  useLayoutEffect(() => {
+    if (editingTitle && shouldSelectOnEdit.current && titleInputRef.current) {
+      titleInputRef.current.focus();
       titleInputRef.current.select();
+      shouldSelectOnEdit.current = false;
     }
   }, [editingTitle]);
 
