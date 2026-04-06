@@ -230,15 +230,22 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     shouldSelectOnEdit.current = true;
     setEditingTitle(true);
     data.onEditingChange?.(id, true);
-    data.onAutoFocusDone?.(id);
   }, [data.autoFocusTitle]);
 
-  useLayoutEffect(() => {
-    if (editingTitle && shouldSelectOnEdit.current && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-      shouldSelectOnEdit.current = false;
-    }
+  useEffect(() => {
+    if (!editingTitle || !shouldSelectOnEdit.current) return;
+    shouldSelectOnEdit.current = false;
+    const capturedId = id;
+    const capturedOnDone = data.onAutoFocusDone;
+    const raf = requestAnimationFrame(() => {
+      const el = titleInputRef.current;
+      if (el) {
+        el.focus();
+        el.select();
+      }
+      capturedOnDone?.(capturedId);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [editingTitle]);
 
   const handleTitleBlur = () => {
