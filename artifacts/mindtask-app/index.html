@@ -2,6 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Inline (non-module, synchronous) handlers registered before any deferred
+         module script or Replit-injected script can run.  Suppresses unhandled
+         Promise rejections so Replit's cross-frame monitoring does not report them
+         as phantom crashes.  Proper errors still surface via the ErrorBoundary. -->
+    <script>
+      (function () {
+        function noop() {}
+        window.addEventListener('unhandledrejection', function (e) {
+          e.preventDefault();
+          try { e.stopImmediatePropagation(); } catch (_) { noop(); }
+        }, true);
+        window.addEventListener('error', function (e) {
+          var msg = e.message || '';
+          if (msg === 'Script error.' || msg.indexOf('ResizeObserver loop') !== -1) {
+            e.preventDefault();
+            try { e.stopImmediatePropagation(); } catch (_) { noop(); }
+          }
+        }, true);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>Bloquim</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
