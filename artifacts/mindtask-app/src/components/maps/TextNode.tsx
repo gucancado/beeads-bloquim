@@ -1,15 +1,22 @@
-import { memo, useEffect, useRef, useState, useCallback } from 'react';
+import { memo, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useUpdateTextElement, useDeleteTextElement } from '@workspace/api-client-react';
 import { createPortal } from 'react-dom';
 import { generateHTML } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { useTheme } from 'next-themes';
 
 // Tiptap only mounts inside EditingEditor — never during view-only mode
 import EditingEditor, { TextNodeEditorHandle } from './TextNodeEditor';
 
 const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48];
-const TEXT_COLORS = [
+const TEXT_COLORS_LIGHT = [
   { label: 'Preto', value: '#111827' },
+  { label: 'Vermelho', value: '#dc2626' },
+  { label: 'Azul', value: '#2563eb' },
+  { label: 'Verde', value: '#16a34a' },
+];
+const TEXT_COLORS_DARK = [
+  { label: 'Branco', value: '#ffffff' },
   { label: 'Vermelho', value: '#dc2626' },
   { label: 'Azul', value: '#2563eb' },
   { label: 'Verde', value: '#16a34a' },
@@ -63,6 +70,10 @@ interface TextNodeProps {
 }
 
 function TextNode({ id, data, selected }: TextNodeProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const TEXT_COLORS = useMemo(() => isDark ? TEXT_COLORS_DARK : TEXT_COLORS_LIGHT, [isDark]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [fontSize, setFontSize] = useState(data.fontSize ?? 14);
   const [color, setColor] = useState(data.color ?? '#374151');
