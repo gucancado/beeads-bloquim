@@ -5,11 +5,14 @@ import "./index.css";
 window.addEventListener("unhandledrejection", (event) => {
   if (!(event.reason instanceof Error)) {
     console.error("[mindtask] unhandled non-Error rejection:", JSON.stringify(event.reason), typeof event.reason);
+    event.preventDefault();
   }
 });
 
 window.addEventListener("error", (event) => {
   if (event.error === null || event.error === undefined) {
+    event.stopImmediatePropagation();
+    event.preventDefault();
     if (
       event.message &&
       event.message !== "Script error." &&
@@ -20,6 +23,6 @@ window.addEventListener("error", (event) => {
   } else if (!(event.error instanceof Error)) {
     console.error("[mindtask] uncaught non-Error exception:", JSON.stringify(event.error), typeof event.error);
   }
-});
+}, true);
 
 createRoot(document.getElementById("root")!).render(<App />);
