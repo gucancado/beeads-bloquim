@@ -1254,7 +1254,17 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           />
         )}
 
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+          <Button
+            onMouseDown={handleCardButtonMouseDown}
+            disabled={createCardMut.isPending}
+            variant="outline"
+            title="Clique para adicionar tarefa no centro • Arraste para posicionar"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none"
+          >
+            {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+            <span className="lowercase">Tarefa</span>
+          </Button>
           <Button
             onMouseDown={handleTextButtonMouseDown}
             disabled={createTextMut.isPending}
@@ -1265,21 +1275,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             {createTextMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Type className="w-4 h-4 mr-2" />}
             <span className="lowercase">Texto</span>
           </Button>
-          <Button
-            onMouseDown={handleCardButtonMouseDown}
-            disabled={createCardMut.isPending}
-            title="Clique para adicionar tarefa no centro • Arraste para posicionar"
-            className="rounded-xl h-10 px-5 shadow-lg shadow-primary/20 select-none"
-          >
-            {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-            <span className="lowercase">Tarefa</span>
-          </Button>
-        </div>
-
-        <div className="absolute bottom-4 left-4 z-10">
-          <p className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-border/40 shadow-sm">
-            <span className="lowercase">Passe o mouse e clique no lápis para editar • Arraste para conectar • Clique na ligação para removê-la</span>
-          </p>
         </div>
 
         <div ref={reactFlowRef} className="flex-1 w-full h-full">
