@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { format } from 'date-fns';
 import { CheckSquare, Check, X, Plus } from 'lucide-react';
+import { getStatusColorHex } from '@/lib/utils';
 
 interface ApprovalNodeProps {
   id: string;
@@ -33,7 +34,101 @@ function decisionLabel(decision: string | null): { label: string; cls: string } 
   return null;
 }
 
+interface ApprovalColors {
+  hex: string;
+  bgLight: string;
+  borderLight: string;
+  borderSelected: string;
+  ringLight: string;
+  textColor: string;
+  stripBg: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  avatarInitialColor: string;
+}
+
+function getApprovalStatusColors(status: string | null): ApprovalColors {
+  const s = status ?? 'draft';
+
+  switch (s) {
+    case 'pending':
+      return {
+        hex: getStatusColorHex('pending'),
+        bgLight: 'bg-blue-50 dark:bg-blue-950/20',
+        borderLight: 'border-blue-200 dark:border-blue-800',
+        borderSelected: 'border-blue-500 shadow-lg shadow-blue-500/20',
+        ringLight: 'ring-blue-300 dark:ring-blue-700',
+        textColor: 'text-blue-800 dark:text-blue-200',
+        stripBg: 'bg-blue-400 dark:bg-blue-600',
+        badgeBg: 'bg-blue-100 dark:bg-blue-900/50',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        badgeText: 'text-blue-600 dark:text-blue-400',
+        avatarInitialColor: 'text-blue-600 dark:text-blue-400',
+      };
+    case 'in_progress':
+      return {
+        hex: getStatusColorHex('in_progress'),
+        bgLight: 'bg-amber-50 dark:bg-amber-950/20',
+        borderLight: 'border-amber-200 dark:border-amber-800',
+        borderSelected: 'border-amber-500 shadow-lg shadow-amber-500/20',
+        ringLight: 'ring-amber-300 dark:ring-amber-700',
+        textColor: 'text-amber-800 dark:text-amber-200',
+        stripBg: 'bg-amber-400 dark:bg-amber-600',
+        badgeBg: 'bg-amber-100 dark:bg-amber-900/50',
+        badgeBorder: 'border-amber-200 dark:border-amber-800',
+        badgeText: 'text-amber-600 dark:text-amber-400',
+        avatarInitialColor: 'text-amber-600 dark:text-amber-400',
+      };
+    case 'completed':
+      return {
+        hex: getStatusColorHex('completed'),
+        bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
+        borderLight: 'border-emerald-200 dark:border-emerald-800',
+        borderSelected: 'border-emerald-500 shadow-lg shadow-emerald-500/20',
+        ringLight: 'ring-emerald-300 dark:ring-emerald-700',
+        textColor: 'text-emerald-800 dark:text-emerald-200',
+        stripBg: 'bg-emerald-400 dark:bg-emerald-600',
+        badgeBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        badgeText: 'text-emerald-600 dark:text-emerald-400',
+        avatarInitialColor: 'text-emerald-600 dark:text-emerald-400',
+      };
+    case 'cancelled':
+      return {
+        hex: getStatusColorHex('blocked'),
+        bgLight: 'bg-slate-50 dark:bg-slate-950/20',
+        borderLight: 'border-slate-200 dark:border-slate-800',
+        borderSelected: 'border-slate-500 shadow-lg shadow-slate-500/20',
+        ringLight: 'ring-slate-300 dark:ring-slate-700',
+        textColor: 'text-slate-700 dark:text-slate-300',
+        stripBg: 'bg-slate-400 dark:bg-slate-600',
+        badgeBg: 'bg-slate-100 dark:bg-slate-900/50',
+        badgeBorder: 'border-slate-200 dark:border-slate-800',
+        badgeText: 'text-slate-500 dark:text-slate-400',
+        avatarInitialColor: 'text-slate-500 dark:text-slate-400',
+      };
+    case 'draft':
+    default:
+      return {
+        hex: getStatusColorHex('draft'),
+        bgLight: 'bg-violet-50 dark:bg-violet-950/20',
+        borderLight: 'border-violet-200 dark:border-violet-800',
+        borderSelected: 'border-violet-500 shadow-lg shadow-violet-500/20',
+        ringLight: 'ring-violet-300 dark:ring-violet-700',
+        textColor: 'text-violet-800 dark:text-violet-200',
+        stripBg: 'bg-violet-400 dark:bg-violet-600',
+        badgeBg: 'bg-violet-100 dark:bg-violet-900/50',
+        badgeBorder: 'border-violet-200 dark:border-violet-800',
+        badgeText: 'text-violet-600 dark:text-violet-400',
+        avatarInitialColor: 'text-violet-600 dark:text-violet-400',
+      };
+  }
+}
+
 function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
+  const colors = getApprovalStatusColors(data.approvalStatus);
+
   const handleDoubleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
     if (data.onOpen && data.cardId) {
@@ -59,10 +154,10 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
 
   return (
     <div
-      className={`group/node relative min-w-[160px] max-w-[200px] bg-violet-50 dark:bg-violet-950/20 rounded-2xl border-2 transition-all duration-200 ${
+      className={`group/node relative min-w-[160px] max-w-[200px] rounded-2xl border-2 transition-all duration-200 ${colors.bgLight} ${
         selected
-          ? 'border-violet-500 shadow-lg shadow-violet-500/20'
-          : 'border-violet-200 dark:border-violet-800 shadow-md'
+          ? colors.borderSelected
+          : `${colors.borderLight} shadow-md`
       }`}
       onDoubleClick={handleDoubleClick}
     >
@@ -70,7 +165,7 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
       {isTerminal && (
         <button
           className="nodrag nopan absolute -right-11 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 shadow-lg"
-          style={{ backgroundColor: '#7c3aed', color: '#fff' }}
+          style={{ backgroundColor: colors.hex, color: '#fff' }}
           title="Adicionar card filho"
           onClick={(e) => { e.stopPropagation(); data.onAddChild!(data.cardId!); }}
         >
@@ -89,10 +184,10 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
       </div>
 
       <div className="px-3 py-2.5 relative overflow-hidden rounded-xl">
-        <div className="absolute top-0 left-0 w-full h-1 rounded-t-xl bg-violet-400 dark:bg-violet-600" />
+        <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${colors.stripBg}`} />
 
         <div className="mt-1 flex items-center gap-2">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center overflow-hidden ring-2 ring-violet-300 dark:ring-violet-700">
+          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center overflow-hidden ring-2 ${colors.bgLight} ${colors.ringLight}`}>
             {data.approverAvatarUrl ? (
               <img
                 src={data.approverAvatarUrl}
@@ -100,16 +195,16 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
                 className="w-full h-full object-cover rounded-full"
               />
             ) : data.approverName ? (
-              <span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+              <span className={`text-xs font-bold ${colors.avatarInitialColor}`}>
                 {data.approverName.charAt(0).toUpperCase()}
               </span>
             ) : (
-              <CheckSquare className="w-4 h-4 text-violet-500" />
+              <CheckSquare className={`w-4 h-4 ${colors.avatarInitialColor}`} />
             )}
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-violet-800 dark:text-violet-200 truncate">
+            <p className={`text-xs font-semibold truncate ${colors.textColor}`}>
               {data.approverName ?? 'Aprovador'}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -119,7 +214,7 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
                   {decision.label}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/50 border border-violet-200 dark:border-violet-800 px-1.5 py-0.5 rounded-full lowercase">
+                <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold border px-1.5 py-0.5 rounded-full lowercase ${colors.badgeText} ${colors.badgeBg} ${colors.badgeBorder}`}>
                   aprovação
                 </span>
               )}

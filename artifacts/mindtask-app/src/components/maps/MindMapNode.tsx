@@ -14,6 +14,83 @@ function stripHtml(html: string): string {
   return doc.body.textContent?.trim() || '';
 }
 
+interface NodeColors {
+  hex: string;
+  bgLight: string;
+  borderNormal: string;
+  borderSelected: string;
+  shadowSelected: string;
+  hoverBorder: string;
+}
+
+function getNodeColors(status: string): NodeColors {
+  switch (status) {
+    case 'pending':
+      return {
+        hex: getStatusColorHex('pending'),
+        bgLight: 'bg-blue-50 dark:bg-blue-950/20',
+        borderNormal: 'border-blue-200 dark:border-blue-800',
+        borderSelected: 'border-blue-500',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('pending').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-700',
+      };
+    case 'in_progress':
+      return {
+        hex: getStatusColorHex('in_progress'),
+        bgLight: 'bg-amber-50 dark:bg-amber-950/20',
+        borderNormal: 'border-amber-200 dark:border-amber-800',
+        borderSelected: 'border-amber-500',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('in_progress').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-amber-300 dark:hover:border-amber-700',
+      };
+    case 'completed':
+      return {
+        hex: getStatusColorHex('completed'),
+        bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
+        borderNormal: 'border-emerald-200 dark:border-emerald-800',
+        borderSelected: 'border-emerald-500',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('completed').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-700',
+      };
+    case 'blocked':
+      return {
+        hex: getStatusColorHex('blocked'),
+        bgLight: 'bg-slate-50 dark:bg-slate-950/20',
+        borderNormal: 'border-slate-200 dark:border-slate-700',
+        borderSelected: 'border-slate-400',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('blocked').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-slate-400 dark:hover:border-slate-500',
+      };
+    case 'overdue':
+      return {
+        hex: getStatusColorHex('overdue'),
+        bgLight: 'bg-red-50 dark:bg-red-950/20',
+        borderNormal: 'border-red-200 dark:border-red-800',
+        borderSelected: 'border-red-500',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('overdue').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-red-300 dark:hover:border-red-700',
+      };
+    case 'draft':
+      return {
+        hex: getStatusColorHex('draft'),
+        bgLight: 'bg-purple-50 dark:bg-purple-950/20',
+        borderNormal: 'border-purple-200 dark:border-purple-800',
+        borderSelected: 'border-purple-500',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('draft').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-purple-300 dark:hover:border-purple-700',
+      };
+    default:
+      return {
+        hex: getStatusColorHex('no_task'),
+        bgLight: 'bg-slate-50 dark:bg-slate-950/20',
+        borderNormal: 'border-slate-200 dark:border-slate-700',
+        borderSelected: 'border-slate-400',
+        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('no_task').replace(')', ' / 0.3)')}`,
+        hoverBorder: 'hover:border-slate-300 dark:hover:border-slate-600',
+      };
+  }
+}
+
 interface MindMapNodeProps {
   id: string;
   data: {
@@ -54,6 +131,7 @@ function statusLabel(s: string) {
 
 function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const color = getStatusColorHex(data.statusVisual);
+  const nodeColors = getNodeColors(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
   const hasTask = !!data.taskId;
   const workspaceId = data.workspaceId ?? '';
@@ -221,7 +299,6 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         completedDateStr = null;
       }
     }
-    const mutedHoverBorder = isCompleted ? 'hover:border-emerald-300' : 'hover:border-slate-400';
     const mutedIconColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
     const mutedTextColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
     const statusText = isCompleted
@@ -229,11 +306,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       : getStatusLabelCentralized('blocked');
     return (
       <div
-        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md ${mutedHoverBorder} ${selected ? 'shadow-md scale-[1.02]' : 'shadow-sm'}`}
-        style={{
-          backgroundColor: '#f3f4f6',
-          borderColor: selected ? '#9ca3af' : undefined,
-        }}
+        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md ${nodeColors.hoverBorder} ${nodeColors.bgLight} ${selected ? `shadow-md scale-[1.02] ${nodeColors.borderSelected}` : nodeColors.borderNormal}`}
         onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
       >
         {/* Add child button — floats outside card to the right */}
@@ -245,7 +318,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             {/* Visual circle — pointer-events-none so the Handle underneath captures events */}
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity duration-150 shadow-lg pointer-events-none"
-              style={{ backgroundColor: '#7c3aed', color: '#fff' }}
+              style={{ backgroundColor: nodeColors.hex, color: '#fff' }}
             >
               <Plus className="w-6 h-6" />
             </div>
@@ -307,12 +380,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   return (
     <div
-      className={`group/node relative min-w-[220px] max-w-[280px] bg-card rounded-2xl shadow-lg border-2 transition-all duration-200 ${selected ? 'shadow-xl scale-[1.02]' : ''}`}
+      className={`group/node relative min-w-[220px] max-w-[280px] rounded-2xl shadow-lg border-2 transition-all duration-200 ${nodeColors.bgLight} ${selected ? `shadow-xl scale-[1.02] ${nodeColors.borderSelected}` : nodeColors.borderNormal}`}
       style={{
-        borderColor: selected ? color : 'hsl(var(--border))',
-        boxShadow: selected
-          ? `0 10px 25px -5px ${color.replace(')', ' / 0.3)')}`
-          : undefined,
+        boxShadow: selected ? nodeColors.shadowSelected : undefined,
       }}
       onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
     >
@@ -325,7 +395,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           {/* Visual circle — pointer-events-none so the Handle underneath captures events */}
           <div
             className="w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity duration-150 shadow-lg pointer-events-none"
-            style={{ backgroundColor: '#7c3aed', color: '#fff' }}
+            style={{ backgroundColor: nodeColors.hex, color: '#fff' }}
           >
             <Plus className="w-6 h-6" />
           </div>
