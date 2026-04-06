@@ -366,7 +366,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               />
             ) : data.taskAssigneeName ? (
               <div className="completed-avatar-placeholder rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0 transition-all duration-300">
-                <User className={`w-3 h-3 text-gray-400 transition-colors duration-300 ${mutedIconColor}`} />
+                <span className={`text-[10px] font-bold text-gray-500 transition-colors duration-300 ${mutedTextColor}`}>
+                  {data.taskAssigneeName.charAt(0).toUpperCase()}
+                </span>
               </div>
             ) : null}
             <span className={`text-[10px] text-gray-400 transition-colors duration-300 ${mutedTextColor}`}>
@@ -417,10 +419,12 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
       {/* Card content */}
       <div className="px-5 py-4 relative overflow-hidden rounded-xl">
-        <div
-          className="absolute top-0 left-0 w-full h-1.5 rounded-t-xl"
-          style={{ backgroundColor: color, opacity: isMuted ? 0.3 : 1 }}
-        />
+        {data.statusVisual !== 'pending' && (
+          <div
+            className="absolute top-0 left-0 w-full h-1.5 rounded-t-xl"
+            style={{ backgroundColor: color, opacity: isMuted ? 0.3 : 1 }}
+          />
+        )}
 
         <div className="flex items-start justify-between gap-3 mt-2">
           {editingTitle ? (
@@ -540,7 +544,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                          <User className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-sm font-bold text-muted-foreground">
+                            {data.taskAssigneeName!.charAt(0).toUpperCase()}
+                          </span>
                         </div>
                       )}
                     </div>

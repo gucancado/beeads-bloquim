@@ -183,16 +183,17 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
           <Handle type="source" position={Position.Right} id="source-right" className={STRIP_HANDLE_CLS} isConnectable={isTerminal} />
         </div>
 
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex items-center justify-center" style={{ filter: 'grayscale(100%)' }}>
           {data.approverAvatarUrl ? (
             <img
               src={data.approverAvatarUrl}
               alt={data.approverName ?? ''}
               className="w-full h-full object-cover"
-              style={{ filter: 'grayscale(100%)' }}
             />
           ) : (
-            <CheckSquare className="w-5 h-5 text-neutral-400" style={{ filter: 'grayscale(100%)' }} />
+            <span className={`text-xs font-bold ${colors.avatarInitialColor}`}>
+              {data.approverName ? data.approverName.charAt(0).toUpperCase() : '?'}
+            </span>
           )}
         </div>
       </div>
@@ -231,7 +232,9 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
       </div>
 
       <div className="px-3 py-2.5 relative overflow-hidden rounded-xl">
-        <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${colors.stripBg}`} />
+        {data.approvalStatus !== 'pending' && (
+          <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${colors.stripBg}`} />
+        )}
 
         <div className="mt-1 flex items-center gap-2">
           <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center overflow-hidden ring-2 ${colors.bgLight} ${colors.ringLight}`}>

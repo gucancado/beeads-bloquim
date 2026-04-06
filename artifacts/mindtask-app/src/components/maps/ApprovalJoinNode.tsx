@@ -15,9 +15,9 @@ function ApprovalJoinNode({ data }: ApprovalJoinNodeProps) {
       className={[
         'group/join relative flex items-center justify-center',
         'w-9 h-9 rounded-full border-2 transition-all duration-200',
-        'bg-violet-100 dark:bg-violet-900/60',
-        'border-violet-300 dark:border-violet-700',
-        'hover:border-violet-500 dark:hover:border-violet-400',
+        'bg-gray-100 dark:bg-gray-800',
+        'border-gray-300 dark:border-gray-600',
+        'hover:border-gray-500 dark:hover:border-gray-400',
         'shadow-md hover:shadow-lg',
         'cursor-pointer',
       ].join(' ')}
@@ -47,7 +47,7 @@ function ApprovalJoinNode({ data }: ApprovalJoinNodeProps) {
 
       {/* "+" icon — appears on hover, pointer-events none so Handle receives mouse events */}
       <Plus
-        className="w-4 h-4 text-violet-500 dark:text-violet-400 opacity-0 group-hover/join:opacity-100 transition-opacity duration-150 pointer-events-none relative z-10"
+        className="w-4 h-4 text-gray-500 dark:text-gray-400 opacity-0 group-hover/join:opacity-100 transition-opacity duration-150 pointer-events-none relative z-10"
       />
     </div>
   );
