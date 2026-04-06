@@ -107,7 +107,11 @@ function buildTerminalNodeMap(cardList: ApprovalCardMeta[]): Map<string, string>
       result.set(c.id, children[0].id);
     } else if (approvalMode === 'sequential') {
       const sorted = [...children].sort((a, b) => (a.taskApprovalOrder ?? 0) - (b.taskApprovalOrder ?? 0));
-      result.set(c.id, sorted[sorted.length - 1].id);
+      if (sorted.length > 0) {
+        result.set(c.id, sorted[sorted.length - 1].id);
+      } else {
+        result.set(c.id, c.id);
+      }
     } else {
       result.set(c.id, `join-${c.id}`);
     }

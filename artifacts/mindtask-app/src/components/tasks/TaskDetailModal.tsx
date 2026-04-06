@@ -202,6 +202,7 @@ function ApprovalSection({
     if (over && active.id !== over.id) {
       const oldIndex = approvals.findIndex(a => a.id === active.id);
       const newIndex = approvals.findIndex(a => a.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
       const reordered = arrayMove(approvals, oldIndex, newIndex);
       reorderMut.mutate(reordered.map(a => a.id));
     }
@@ -579,7 +580,7 @@ export function TaskDetailModal({
 
   useEffect(() => {
     if (!isCardMode) {
-      if (task && isEditing) {
+      if (task && isEditing && task.id === resolvedTaskId) {
         if (initializedForTaskRef.current !== resolvedTaskId) {
           initializedForTaskRef.current = resolvedTaskId;
           setTitle(task.title ?? "");
