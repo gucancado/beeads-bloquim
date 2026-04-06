@@ -13,7 +13,24 @@ import WorkspaceDetailPage from "@/pages/workspaces/detail";
 import CanvasPage from "@/pages/maps/canvas";
 import MyTasksPage from "@/pages/my-tasks";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { throwOnError: false, retry: false },
+    mutations: { throwOnError: false },
+  },
+});
+
+// Patch invalidateQueries so that any refetch-failure it triggers never
+// produces an unhandled Promise rejection.  Without this the proxy frame's
+// cross-frame unhandledrejection listener intercepts the rejection before our
+// own preventDefault() handler and reports a spurious "not an error object"
+// crash every time a background refetch fails (e.g. right after card creation).
+{
+  const _orig = queryClient.invalidateQueries.bind(queryClient);
+  (queryClient as unknown as Record<string, unknown>).invalidateQueries = (
+    ...args: Parameters<typeof queryClient.invalidateQueries>
+  ) => _orig(...args).catch(() => undefined);
+}
 
 interface ErrorBoundaryState {
   hasError: boolean;
