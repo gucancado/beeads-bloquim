@@ -45,10 +45,6 @@ function ApprovalEdge({
 
   const effectiveStyle = {
     ...style,
-    strokeDasharray: '6 3',
-    stroke: '#8b5cf6',
-    strokeWidth: 2,
-    opacity: 0.7,
   };
 
   return (

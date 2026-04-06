@@ -154,6 +154,7 @@ function buildApprovalEdges(
       const sourceCardIds = [parentCardId, ...sortedChildren.slice(0, -1).map(c => c.id)];
       const targetCardIds = sortedChildren.map(c => c.id);
       sourceCardIds.forEach((sourceId, i) => {
+        const animated = isEdgeAnimated(sourceId, targetCardIds[i], cardList);
         edges.push({
           id: `approval-${sourceId}-${targetCardIds[i]}`,
           source: sourceId,
@@ -161,12 +162,15 @@ function buildApprovalEdges(
           sourceHandle: 'source-right',
           targetHandle: 'target-left',
           type: 'approval',
+          animated,
+          style: edgeStyle(animated),
           deletable: false,
           selectable: false,
           data: { isApprovalEdge: true },
         });
       });
     } else if (sortedChildren.length === 1) {
+      const animated = isEdgeAnimated(parentCardId, sortedChildren[0].id, cardList);
       edges.push({
         id: `approval-${parentCardId}-${sortedChildren[0].id}`,
         source: parentCardId,
@@ -174,6 +178,8 @@ function buildApprovalEdges(
         sourceHandle: 'source-right',
         targetHandle: 'target-left',
         type: 'approval',
+        animated,
+        style: edgeStyle(animated),
         deletable: false,
         selectable: false,
         data: { isApprovalEdge: true },
@@ -181,6 +187,7 @@ function buildApprovalEdges(
     } else {
       const joinNodeId = `join-${parentCardId}`;
       for (const child of sortedChildren) {
+        const animatedParentToChild = isEdgeAnimated(parentCardId, child.id, cardList);
         edges.push({
           id: `approval-${parentCardId}-${child.id}`,
           source: parentCardId,
@@ -188,10 +195,13 @@ function buildApprovalEdges(
           sourceHandle: 'source-right',
           targetHandle: 'target-left',
           type: 'approval',
+          animated: animatedParentToChild,
+          style: edgeStyle(animatedParentToChild),
           deletable: false,
           selectable: false,
           data: { isApprovalEdge: true },
         });
+        const animatedChildToJoin = isEdgeAnimated(child.id, joinNodeId, cardList);
         edges.push({
           id: `approval-${child.id}-${joinNodeId}`,
           source: child.id,
@@ -199,6 +209,8 @@ function buildApprovalEdges(
           sourceHandle: 'source-right',
           targetHandle: 'target-left',
           type: 'approval',
+          animated: animatedChildToJoin,
+          style: edgeStyle(animatedChildToJoin),
           deletable: false,
           selectable: false,
           data: { isApprovalEdge: true },
