@@ -115,7 +115,9 @@ interface MindMapNodeProps {
       taskDueDate: string | null;
     }>) => void;
     onEditingChange?: (cardId: string, isEditing: boolean) => void;
+    onAutoFocusDone?: (cardId: string) => void;
     isTerminalNode?: boolean;
+    autoFocusTitle?: boolean;
   };
   selected: boolean;
 }
@@ -218,6 +220,21 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   useEffect(() => {
     setDueDateValue(data.taskDueDate ? data.taskDueDate.split('T')[0] : '');
   }, [data.taskDueDate]);
+
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!data.autoFocusTitle) return;
+    setEditingTitle(true);
+    data.onEditingChange?.(id, true);
+    data.onAutoFocusDone?.(id);
+  }, [data.autoFocusTitle]);
+
+  useEffect(() => {
+    if (editingTitle && data.autoFocusTitle && titleInputRef.current) {
+      titleInputRef.current.select();
+    }
+  }, [editingTitle]);
 
   const handleTitleBlur = () => {
     setEditingTitle(false);
@@ -429,6 +446,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         <div className="flex items-start justify-between gap-3 mt-2">
           {editingTitle ? (
             <input
+              ref={titleInputRef}
               autoFocus
               autoCapitalize="none"
               className="nodrag font-display font-bold text-foreground text-base leading-tight break-words pr-2 bg-transparent border-b border-primary outline-none w-full min-w-0"

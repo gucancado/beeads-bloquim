@@ -351,6 +351,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [autoFocusCardId, setAutoFocusCardId] = useState<string | null>(null);
+  const autoFocusCardIdRef = useRef<string | null>(null);
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
@@ -398,6 +400,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const handleEditingChange = useCallback((cardId: string, isEditing: boolean) => {
     editingCardIdRef.current = isEditing ? cardId : null;
+  }, []);
+
+  const handleAutoFocusDone = useCallback((cardId: string) => {
+    autoFocusCardIdRef.current = null;
+    setAutoFocusCardId(prev => (prev === cardId ? null : prev));
   }, []);
 
   const buildTextNode = useCallback((el: {
@@ -527,13 +534,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
             const isTerminalApproval = isApproval ? terminalApprovalParentMap.has(c.id) : false;
             const allSiblingsApproved = isApproval ? fullyApprovedParentTaskIds.has((c as ApprovalCardMeta).taskParentTaskId ?? '') : false;
+            const shouldAutoFocus = !isApproval && c.id === autoFocusCardIdRef.current;
             return {
               id: c.id,
               type: isApproval ? 'approvalnode' : 'mindmap',
               position: { x: c.positionX, y: c.positionY },
               data: isApproval
                 ? { approverName: c.taskAssigneeName ?? null, approverAvatarUrl: c.taskAssigneeAvatarUrl ?? null, approvalStatus: c.statusVisual ?? null, approvalDecision: (c as ApprovalCardMeta).taskApprovalDecision ?? null, dueDate: c.taskDueDate ?? null, taskTitle: c.title, cardId: c.id, onOpen: handleOpenPanel, allSiblingsApproved, ...(isTerminalApproval ? { onAddChild: handleAddChildCard, terminalParentCardId: terminalApprovalParentMap.get(c.id) } : {}) }
-                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
+                : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, onAutoFocusDone: handleAutoFocusDone, isTerminalNode, autoFocusTitle: shouldAutoFocus },
               draggable: true,
               deletable: !isApproval,
             };
@@ -568,9 +576,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             const isTerminalNode = terminalNodeMap.get(n.id) === n.id;
             const hasPendingUpdate = pendingUpdatesRef.current.has(n.id);
             if (n.id === currentlyEditingId || hasPendingUpdate) {
-              return { ...n, data: { ...n.data, isTerminalNode, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange } };
+              return { ...n, data: { ...n.data, isTerminalNode, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, onAutoFocusDone: handleAutoFocusDone } };
             }
-            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, taskParentApprovalStatus: (s as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode } };
+            return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, taskParentApprovalStatus: (s as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, onAutoFocusDone: handleAutoFocusDone, isTerminalNode } };
           }),
           ...newCardNodes,
           ...newTextNodes,
@@ -647,7 +655,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             }
           );
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          setSelectedCardId(newCard.id);
+          autoFocusCardIdRef.current = newCard.id;
+          setAutoFocusCardId(newCard.id);
         },
       }
     );
@@ -990,7 +999,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
                 },
               );
               queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-              setSelectedCardId(newCard.id);
+              autoFocusCardIdRef.current = newCard.id;
+              setAutoFocusCardId(newCard.id);
             },
           },
         );
@@ -1019,7 +1029,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       {
         onSuccess: (newCard) => {
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
-          setSelectedCardId(newCard.id);
+          autoFocusCardIdRef.current = newCard.id;
+          setAutoFocusCardId(newCard.id);
         },
       },
     );
