@@ -23,11 +23,11 @@ interface StandaloneTask {
 }
 
 const STATUS_OPTIONS = [
-  { value: "draft",       label: "rascunho",       labelPlural: "rascunhos",      activeClass: "bg-purple-500 text-white border-purple-500 hover:bg-purple-600"   },
-  { value: "pending",     label: "pendente",       labelPlural: "pendentes",      activeClass: "bg-blue-500 text-white border-blue-500 hover:bg-blue-600"         },
-  { value: "in_progress", label: "em andamento",  labelPlural: "em andamento",   activeClass: "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"       },
-  { value: "completed",   label: "concluída",      labelPlural: "concluídas",     activeClass: "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"},
-  { value: "blocked",     label: "cancelada",      labelPlural: "canceladas",     activeClass: "bg-slate-500 text-white border-slate-500 hover:bg-slate-600"      },
+  { value: "draft",       label: "rascunho",       labelPlural: "rascunhos",      activeClass: "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-950/60"   },
+  { value: "pending",     label: "pendente",       labelPlural: "pendentes",      activeClass: "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/60"             },
+  { value: "in_progress", label: "em andamento",  labelPlural: "em andamento",   activeClass: "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-950/60"     },
+  { value: "completed",   label: "concluída",      labelPlural: "concluídas",     activeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950/60" },
+  { value: "blocked",     label: "cancelada",      labelPlural: "canceladas",     activeClass: "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-800/60"      },
 ];
 
 export default function MyTasksPage() {

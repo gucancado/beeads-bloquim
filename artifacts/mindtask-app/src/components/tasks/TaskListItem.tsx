@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
+import { TASK_STATUS_ORDER, getStatusActiveClass } from "@/lib/taskStatusConstants";
 
 function getInitials(name: string) {
   return name
@@ -55,10 +55,6 @@ interface Props {
 }
 
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
-
-function getStatusColor(s: string) {
-  return STATUS_OPTIONS.find(o => o.value === s)?.color ?? "";
-}
 
 function getStatusLabel(s: string) {
   return STATUS_OPTIONS.find(o => o.value === s)?.label ?? s.replace("_", " ");
@@ -295,17 +291,7 @@ export function TaskListItem({
 
   return (
     <div
-      className="p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer relative"
-      style={{
-        backgroundColor: isOverdue ? "rgba(254, 202, 202, 0.55)" : undefined,
-      }}
-      onMouseEnter={e => {
-        if (isOverdue) (e.currentTarget as HTMLDivElement).style.backgroundColor = "rgba(254, 202, 202, 0.75)";
-        else (e.currentTarget as HTMLDivElement).style.backgroundColor = "rgb(248 250 252)";
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.backgroundColor = isOverdue ? "rgba(254, 202, 202, 0.55)" : "";
-      }}
+      className={`p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer relative ${isOverdue ? "bg-red-100/55 hover:bg-red-100/75 dark:bg-red-950/30 dark:hover:bg-red-950/50" : "hover:bg-muted/50"}`}
       onClick={handleRowClick}
     >
       <div className="flex-1 min-w-0">
@@ -333,7 +319,8 @@ export function TaskListItem({
           {/* Status badge — inline editable */}
           <div ref={statusRef} onClick={e => e.stopPropagation()}>
             <Badge
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity ${getStatusColor(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+              variant="outline"
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
               onClick={handleStatusClick}
               title="Clique para alterar status"
             >
