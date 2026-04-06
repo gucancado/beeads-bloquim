@@ -89,7 +89,7 @@ export default function LoginPage() {
 
             <Button 
               type="submit" 
-              className="w-full h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/25 hover:-translate-y-0.5 transition-all"
+              className="w-full h-12 text-base font-semibold rounded-xl border bg-primary/10 text-primary border-primary hover:bg-primary/15 dark:bg-primary/15 dark:hover:bg-primary/20 hover:-translate-y-0.5 transition-all"
               disabled={loginMutation.isPending}
             >
               {loginMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "entrar"}
