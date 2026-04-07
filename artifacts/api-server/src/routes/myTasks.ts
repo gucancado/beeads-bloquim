@@ -406,6 +406,40 @@ router.patch("/:taskId/association", requireAuth, async (req: AuthRequest, res) 
   }
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+
+  const effectiveNewMapId = updateData.mapId !== undefined ? (updateData.mapId as string | null) : existing.mapId;
+  const previousMapId = existing.mapId;
+  const mapChanged = effectiveNewMapId !== previousMapId;
+
+  if (mapChanged) {
+    if (previousMapId) {
+      await db.delete(cards).where(and(eq(cards.mapId, previousMapId), eq(cards.taskId, taskId)));
+    }
+
+    if (effectiveNewMapId !== null) {
+      const [existingCard] = await db
+        .select({ id: cards.id })
+        .from(cards)
+        .where(and(eq(cards.mapId, effectiveNewMapId), eq(cards.taskId, taskId)));
+
+      if (!existingCard) {
+        const overdue = computeOverdue(existing.dueDate, existing.status ?? "pending");
+        const statusVisual = overdue && existing.status !== "completed" && existing.status !== "blocked" && existing.status !== "draft"
+          ? "overdue"
+          : (existing.status as "pending" | "in_progress" | "completed" | "blocked" | "draft") ?? "pending";
+
+        await db.insert(cards).values({
+          mapId: effectiveNewMapId,
+          taskId,
+          title: existing.title,
+          statusVisual,
+          positionX: 0,
+          positionY: 0,
+        });
+      }
+    }
+  }
+
   return res.json(updated);
 });
 
