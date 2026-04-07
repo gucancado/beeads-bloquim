@@ -377,7 +377,7 @@ export default function WorkspacesPage() {
 
   return (
     <AppLayout>
-      <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
+      <div className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto p-8 lg:p-12">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>

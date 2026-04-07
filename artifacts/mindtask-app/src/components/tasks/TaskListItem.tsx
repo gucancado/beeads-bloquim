@@ -291,7 +291,7 @@ export function TaskListItem({
 
   return (
     <div
-      className={`p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer relative ${isOverdue ? "bg-red-100/55 hover:bg-red-100/75 dark:bg-red-950/30 dark:hover:bg-red-950/50" : "hover:bg-muted/50"}`}
+      className={`p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer relative hover:bg-muted/50 dark:hover:bg-[#404040]`}
       onClick={handleRowClick}
     >
       <div className="flex-1 min-w-0">

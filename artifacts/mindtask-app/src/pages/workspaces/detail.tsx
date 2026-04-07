@@ -500,8 +500,8 @@ export default function WorkspaceDetailPage() {
 
   return (
     <AppLayout>
-      <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
-        <div className="bg-card border-b border-border pt-12 px-8 lg:px-12 pb-0">
+      <div className="flex-1 overflow-auto">
+        <div className="pt-12 px-8 lg:px-12 pb-0">
           <div className="max-w-6xl mx-auto">
             <div className="flex items-center gap-3 text-muted-foreground mb-4 text-sm">
               <Link href="/workspaces"><span className="hover:text-foreground cursor-pointer transition-colors lowercase">Espaços de Trabalho</span></Link>
