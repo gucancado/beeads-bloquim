@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
-import { LogOut, CheckSquare, Compass, Folders, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, CheckSquare, NotebookPen, Folders, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
@@ -66,9 +66,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-2 p-4 pr-3 border-b border-sidebar-border/50 min-h-[65px]">
           {!collapsed && (
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
-                <Compass className="w-5 h-5 text-white" />
-              </div>
+              <NotebookPen className="w-6 h-6 shrink-0 text-primary" />
               <span className="font-display font-bold text-xl tracking-tight truncate lowercase">Bloquim</span>
             </div>
           )}

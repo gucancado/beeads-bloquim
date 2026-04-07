@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useLogin } from "@workspace/api-client-react";
-import { Compass, Loader2, Mail, Lock } from "lucide-react";
+import { NotebookPen, Loader2, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,9 +46,7 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
-            <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-primary/25">
-              <Compass className="w-8 h-8 text-primary-foreground" />
-            </div>
+            <NotebookPen className="w-14 h-14 text-primary mx-auto mb-6" />
             <p className="text-muted-foreground mt-2">oi! quer ver o que tem no seu bloquim?<br/>então entra aí =)</p>
           </div>
 
