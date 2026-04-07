@@ -490,12 +490,6 @@ export function TaskListItem({
           </span>
         )}
 
-        {/* Standalone badge — shown in all contexts when task has no plan */}
-        {!task.mapId && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase shrink-0">
-            Avulsa
-          </span>
-        )}
 
         {/* Status badge — inline editable, fixed to right */}
         <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
