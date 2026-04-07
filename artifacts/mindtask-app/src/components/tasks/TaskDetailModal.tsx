@@ -968,8 +968,8 @@ export function TaskDetailModal({
   };
 
   const isOverdue = isCardMode
-    ? (card?.task?.overdue === true) && status !== "completed"
-    : (task?.overdue === true) && status !== "completed";
+    ? (card?.task?.overdue === true) && status !== "completed" && status !== "blocked"
+    : (task?.overdue === true) && status !== "completed" && status !== "blocked";
 
   const parentApprovalStatus = isCardMode
     ? (card?.task as TaskResponseExtended | null | undefined)?.parentApprovalStatus ?? null

@@ -137,7 +137,7 @@ export function TaskListItem({
     }
   }, [task, editingTitle]);
 
-  const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked" && localTask.status !== "draft";
+  const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked";
   const isLinkedToCard = !!(task.cardId && task.mapId);
 
   const isStandaloneTask = !task.workspaceId;
