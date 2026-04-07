@@ -57,6 +57,8 @@ interface Props {
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 function getStatusLabel(s: string) {
+  if (s === "completed") return "concluída";
+  if (s === "blocked") return "cancelada";
   return STATUS_OPTIONS.find(o => o.value === s)?.label ?? s.replace("_", " ");
 }
 
@@ -294,38 +296,8 @@ export function TaskListItem({
       className="px-4 py-3 transition-colors flex flex-col gap-1.5 group cursor-pointer relative hover:bg-muted/50 dark:hover:bg-[#404040]"
       onClick={handleRowClick}
     >
-      {/* Line 1: status badge + title (left), priority badge (right) */}
+      {/* Line 1: title (left), status badge (right) */}
       <div className="flex items-center gap-2 min-w-0">
-        {/* Status badge — inline editable */}
-        <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0">
-          <Badge
-            variant="outline"
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
-            onClick={handleStatusClick}
-            title="Clique para alterar status"
-          >
-            {getStatusLabel(localTask.status)}
-          </Badge>
-          {statusOpen && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {STATUS_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                  >
-                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </>,
-            document.body
-          )}
-        </div>
-
         {/* Title — inline editable, takes remaining space */}
         <div className="flex-1 min-w-0">
           {editingTitle ? (
@@ -349,32 +321,27 @@ export function TaskListItem({
           )}
         </div>
 
-        {/* Priority badge — inline editable, fixed to right */}
-        <div onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
+        {/* Status badge — inline editable, fixed to right */}
+        <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
           <Badge
             variant="outline"
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border cursor-pointer select-none transition-opacity ${getPriorityColor(localTask.priority)} ${savingField === "priority" ? "opacity-60" : ""}`}
-            onClick={handlePriorityClick}
-            title="Clique para alterar prioridade"
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+            onClick={handleStatusClick}
+            title="Clique para alterar status"
           >
-            <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
+            {getStatusLabel(localTask.status)}
           </Badge>
-          {priorityOpen && createPortal(
+          {statusOpen && createPortal(
             <>
               <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {[
-                  { value: "critical", label: "máxima" },
-                  { value: "high",     label: "alta" },
-                  { value: "medium",   label: "média" },
-                  { value: "low",      label: "baixa" },
-                ].map(opt => (
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {STATUS_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handlePrioritySelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.priority === opt.value ? "opacity-60" : ""}`}
+                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
                   >
-                    <Flag className={`w-3 h-3 ${getPriorityColor(opt.value).split(" ")[0]}`} />
+                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
                     {opt.label}
                   </button>
                 ))}
@@ -514,6 +481,41 @@ export function TaskListItem({
             Avulsa
           </span>
         )}
+
+        {/* Priority badge — inline editable, fixed to right */}
+        <div onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
+          <Badge
+            variant="outline"
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border cursor-pointer select-none transition-opacity ${getPriorityColor(localTask.priority)} ${savingField === "priority" ? "opacity-60" : ""}`}
+            onClick={handlePriorityClick}
+            title="Clique para alterar prioridade"
+          >
+            <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
+          </Badge>
+          {priorityOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {[
+                  { value: "critical", label: "máxima" },
+                  { value: "high",     label: "alta" },
+                  { value: "medium",   label: "média" },
+                  { value: "low",      label: "baixa" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handlePrioritySelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.priority === opt.value ? "opacity-60" : ""}`}
+                  >
+                    <Flag className={`w-3 h-3 ${getPriorityColor(opt.value).split(" ")[0]}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
+          )}
+        </div>
       </div>
     </div>
   );

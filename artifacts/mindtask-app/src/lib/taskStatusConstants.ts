@@ -23,6 +23,7 @@ export const TASK_STATUS_ORDER = [
   {
     value: 'completed',
     label: 'concluir',
+    badgeLabel: 'concluída',
     dot: 'bg-emerald-500',
     color: 'bg-emerald-500 text-white border-transparent',
     activeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
@@ -30,6 +31,7 @@ export const TASK_STATUS_ORDER = [
   {
     value: 'blocked',
     label: 'cancelar',
+    badgeLabel: 'cancelada',
     dot: 'bg-slate-500',
     color: 'bg-slate-500 text-white border-transparent',
     activeClass: 'bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700',
@@ -44,6 +46,12 @@ export function getStatusOrderEntry(value: string) {
 
 export function getStatusLabel(value: string): string {
   return getStatusOrderEntry(value)?.label ?? value.replace('_', ' ');
+}
+
+export function getStatusBadgeLabel(value: string): string {
+  const entry = getStatusOrderEntry(value);
+  if (entry && 'badgeLabel' in entry) return (entry as typeof entry & { badgeLabel: string }).badgeLabel;
+  return entry?.label ?? value.replace('_', ' ');
 }
 
 export function getStatusDotClass(value: string): string {
