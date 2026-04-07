@@ -336,11 +336,11 @@ export function TaskListItem({
               onBlur={handleTitleSave}
               onKeyDown={handleTitleKeyDown}
               onClick={e => e.stopPropagation()}
-              className="text-sm font-semibold text-foreground w-full bg-transparent border-b border-primary outline-none"
+              className="text-base font-semibold text-foreground w-full bg-transparent border-b border-primary outline-none"
             />
           ) : (
             <h3
-              className="text-sm font-semibold text-foreground truncate cursor-text hover:underline decoration-dotted"
+              className="text-base font-semibold text-foreground truncate cursor-text hover:underline decoration-dotted"
               onClick={handleTitleClick}
               title="Clique para editar o título"
             >
