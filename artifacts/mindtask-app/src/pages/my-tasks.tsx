@@ -31,7 +31,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function MyTasksPage() {
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress", "draft"]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
   const [openCard, setOpenCard] = useState<OpenCard | null>(null);
   const [standaloneTask, setStandaloneTask] = useState<StandaloneTask | null>(null);
