@@ -7,6 +7,7 @@ import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { groupTasksByDeadline } from "@/lib/groupTasksByDeadline";
 
 interface OpenCard {
   workspaceId: string;
@@ -198,61 +199,48 @@ export default function MyTasksPage() {
               <p className="text-muted-foreground mt-2 max-w-md mx-auto lowercase">Não há tarefas com os filtros selecionados.</p>
             </div>
           ) : (() => {
-            const today = new Date();
-            today.setHours(23, 59, 59, 999);
-            const todayTasks = (tasks ?? []).filter(task => {
-              if (task.dueDate) return new Date(task.dueDate) <= today;
-              return !!(task as any).overdue;
-            });
-            const upcomingTasks = (tasks ?? []).filter(task => {
-              if (task.dueDate) return new Date(task.dueDate) > today;
-              return !(task as any).overdue;
-            });
+            const now = new Date();
+            const isFriday = now.getDay() === 5;
+            const { today: todayTasks, untilFriday: untilFridayTasks, upcoming: upcomingTasks, noDueDate: noDueDateTasks } = groupTasksByDeadline(tasks ?? [], now);
+
+            type TaskItem = NonNullable<typeof tasks>[number];
+            const renderSection = (label: string, sectionTasks: TaskItem[]) => (
+              <div>
+                <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">{label}</p>
+                <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+                  <div className="divide-y divide-border/50">
+                    {sectionTasks.map(task => (
+                      <TaskListItem
+                        key={task.id}
+                        task={task}
+                        members={membersByWorkspace[task.workspaceId] ?? []}
+                        invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
+                        countsQueryKeys={[countsQueryKey]}
+                        onOpenDetail={openTaskItem}
+                        showWorkspaceName
+                        showMapName
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+
+            const showNadaAteSexta = !isFriday && todayTasks.length === 0 && untilFridayTasks.length === 0;
+            const showNadaHoje = !showNadaAteSexta && todayTasks.length === 0;
 
             return (
               <div className="flex flex-col gap-6">
-                {todayTasks.length > 0 && (
-                  <div>
-                    <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Pra hoje</p>
-                    <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-border/50">
-                        {todayTasks.map(task => (
-                          <TaskListItem
-                            key={task.id}
-                            task={task}
-                            members={membersByWorkspace[task.workspaceId] ?? []}
-                            invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
-                            countsQueryKeys={[countsQueryKey]}
-                            onOpenDetail={openTaskItem}
-                            showWorkspaceName
-                            showMapName
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                {showNadaAteSexta && (
+                  <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada até sexta</p>
                 )}
-                {upcomingTasks.length > 0 && (
-                  <div>
-                    <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Próximas</p>
-                    <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-border/50">
-                        {upcomingTasks.map(task => (
-                          <TaskListItem
-                            key={task.id}
-                            task={task}
-                            members={membersByWorkspace[task.workspaceId] ?? []}
-                            invalidateQueryKeys={[["/api/my-tasks"], countsQueryKey]}
-                            countsQueryKeys={[countsQueryKey]}
-                            onOpenDetail={openTaskItem}
-                            showWorkspaceName
-                            showMapName
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                {showNadaHoje && (
+                  <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada pra hoje</p>
                 )}
+                {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
+                {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}
+                {upcomingTasks.length > 0 && renderSection("próximas", upcomingTasks)}
+                {noDueDateTasks.length > 0 && renderSection("sem prazo", noDueDateTasks)}
               </div>
             );
           })()}

@@ -21,6 +21,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
+import { groupTasksByDeadline } from "@/lib/groupTasksByDeadline";
 
 function getInitials(name: string) {
   return name
@@ -800,64 +801,52 @@ export default function WorkspaceDetailPage() {
                       </Button>
                     </div>
                   ) : (() => {
-                    const today = new Date();
-                    today.setHours(23, 59, 59, 999);
-                    const todayTasks = (workspaceTasks ?? []).filter(task => {
-                      if (task.dueDate) return new Date(task.dueDate) <= today;
-                      return !!task.overdue;
-                    });
-                    const upcomingTasks = (workspaceTasks ?? []).filter(task => {
-                      if (task.dueDate) return new Date(task.dueDate) > today;
-                      return !task.overdue;
-                    });
+                    const now = new Date();
+                    const isFriday = now.getDay() === 5;
+                    const { today: todayTasks, untilFriday: untilFridayTasks, upcoming: upcomingTasks, noDueDate: noDueDateTasks } = groupTasksByDeadline(workspaceTasks ?? [], now);
 
                     const detailMembers: TaskListItemMember[] = (workspaceMembers ?? []).map(m => ({
                       userId: m.userId,
                       name: m.user.name,
                     }));
 
+                    type WorkspaceTaskItem = NonNullable<typeof workspaceTasks>[number];
+                    const renderSection = (label: string, sectionTasks: WorkspaceTaskItem[]) => (
+                      <div>
+                        <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">{label}</p>
+                        <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+                          <div className="divide-y divide-border/50">
+                            {sectionTasks.map(task => (
+                              <TaskListItem
+                                key={task.id}
+                                task={task}
+                                members={detailMembers}
+                                invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
+                                countsQueryKeys={[countsQueryKey]}
+                                onOpenDetail={openTaskItem}
+                                showMapName
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+
+                    const showNadaAteSexta = !isFriday && todayTasks.length === 0 && untilFridayTasks.length === 0;
+                    const showNadaHoje = !showNadaAteSexta && todayTasks.length === 0;
+
                     return (
                       <div className="flex flex-col gap-6">
-                        {todayTasks.length > 0 && (
-                          <div>
-                            <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Pra hoje</p>
-                            <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
-                              <div className="divide-y divide-border/50">
-                                {todayTasks.map(task => (
-                                  <TaskListItem
-                                    key={task.id}
-                                    task={task}
-                                    members={detailMembers}
-                                    invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
-                                    countsQueryKeys={[countsQueryKey]}
-                                    onOpenDetail={openTaskItem}
-                                    showMapName
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </div>
+                        {showNadaAteSexta && (
+                          <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada até sexta</p>
                         )}
-                        {upcomingTasks.length > 0 && (
-                          <div>
-                            <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">Próximas</p>
-                            <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
-                              <div className="divide-y divide-border/50">
-                                {upcomingTasks.map(task => (
-                                  <TaskListItem
-                                    key={task.id}
-                                    task={task}
-                                    members={detailMembers}
-                                    invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
-                                    countsQueryKeys={[countsQueryKey]}
-                                    onOpenDetail={openTaskItem}
-                                    showMapName
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </div>
+                        {showNadaHoje && (
+                          <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada pra hoje</p>
                         )}
+                        {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
+                        {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}
+                        {upcomingTasks.length > 0 && renderSection("próximas", upcomingTasks)}
+                        {noDueDateTasks.length > 0 && renderSection("sem prazo", noDueDateTasks)}
                       </div>
                     );
                   })()}
