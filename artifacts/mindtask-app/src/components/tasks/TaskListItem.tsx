@@ -449,28 +449,32 @@ export function TaskListItem({
 
         {/* Due date — inline editable */}
         <label
-          className={`inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
+          className={`relative inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
           onClick={e => e.stopPropagation()}
         >
           <CalendarIcon className={`w-3 h-3 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-          <span className="relative inline-block">
-            {localTask.dueDate ? (
-              <span
-                className={`pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-              >
-                {formatDueDate(localTask.dueDate)}
-              </span>
-            ) : null}
-            <input
-              ref={dueDateInputRef}
-              type="date"
-              className={`border-none outline-none cursor-pointer transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer ${localTask.dueDate ? "absolute inset-0 opacity-0 w-full h-full" : "bg-transparent text-xs w-[100px]"} ${isOverdue ? "text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300" : "text-muted-foreground hover:text-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-              onChange={handleDueDateChange}
-              onClick={e => e.stopPropagation()}
-              title="Alterar prazo"
-            />
-          </span>
+          {localTask.dueDate ? (
+            <span
+              className={`pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+            >
+              {formatDueDate(localTask.dueDate)}
+            </span>
+          ) : (
+            <span
+              className={`pointer-events-none select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
+            >
+              sem prazo
+            </span>
+          )}
+          <input
+            ref={dueDateInputRef}
+            type="date"
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+            value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+            onChange={handleDueDateChange}
+            onClick={e => e.stopPropagation()}
+            title="Alterar prazo"
+          />
         </label>
 
         {/* Workspace name (my-tasks page) */}
