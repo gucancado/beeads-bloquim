@@ -291,219 +291,224 @@ export function TaskListItem({
 
   return (
     <div
-      className={`p-6 transition-colors flex flex-col md:flex-row gap-6 md:items-center justify-between group cursor-pointer relative hover:bg-muted/50 dark:hover:bg-[#404040]`}
+      className="px-4 py-3 transition-colors flex flex-col gap-1.5 group cursor-pointer relative hover:bg-muted/50 dark:hover:bg-[#404040]"
       onClick={handleRowClick}
     >
-      <div className="flex-1 min-w-0">
-        {editingTitle ? (
-          <input
-            ref={titleInputRef}
-            value={titleValue}
-            onChange={e => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={handleTitleKeyDown}
-            onClick={e => e.stopPropagation()}
-            className="text-xl font-bold text-foreground w-full bg-transparent border-b-2 border-primary outline-none mb-1 pr-2"
-          />
-        ) : (
-          <h3
-            className="text-xl font-bold text-foreground mb-1 cursor-text hover:underline decoration-dotted"
-            onClick={handleTitleClick}
-            title="Clique para editar o título"
+      {/* Line 1: status badge + title (left), priority badge (right) */}
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Status badge — inline editable */}
+        <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0">
+          <Badge
+            variant="outline"
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+            onClick={handleStatusClick}
+            title="Clique para alterar status"
           >
-            {localTask.cardTitle || localTask.title}
-          </h3>
-        )}
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 text-sm text-muted-foreground">
-          {/* Status badge — inline editable */}
-          <div ref={statusRef} onClick={e => e.stopPropagation()}>
-            <Badge
-              variant="outline"
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
-              onClick={handleStatusClick}
-              title="Clique para alterar status"
-            >
-              {getStatusLabel(localTask.status)}
-            </Badge>
-            {statusOpen && createPortal(
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-                <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                  {STATUS_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                    >
-                      <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </>,
-              document.body
-            )}
-          </div>
-
-          {/* Priority badge — inline editable */}
-          <div onClick={e => e.stopPropagation()}>
-            <Badge
-              variant="outline"
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border cursor-pointer select-none transition-opacity ${getPriorityColor(localTask.priority)} ${savingField === "priority" ? "opacity-60" : ""}`}
-              onClick={handlePriorityClick}
-              title="Clique para alterar prioridade"
-            >
-              <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
-            </Badge>
-            {priorityOpen && createPortal(
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-                <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                  {[
-                    { value: "critical", label: "máxima" },
-                    { value: "high",     label: "alta" },
-                    { value: "medium",   label: "média" },
-                    { value: "low",      label: "baixa" },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={(e) => { e.stopPropagation(); handlePrioritySelect(opt.value); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.priority === opt.value ? "opacity-60" : ""}`}
-                    >
-                      <Flag className={`w-3 h-3 ${getPriorityColor(opt.value).split(" ")[0]}`} />
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </>,
-              document.body
-            )}
-          </div>
-
-          {/* Workspace name (my-tasks page) */}
-          {showWorkspaceName && localTask.workspaceName && (
-            <Link
-              href={`/workspaces/${localTask.workspaceId}`}
-              onClick={e => e.stopPropagation()}
-              className="flex items-center gap-1.5 hover:underline decoration-dotted"
-            >
-              <Building2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
-            </Link>
+            {getStatusLabel(localTask.status)}
+          </Badge>
+          {statusOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {STATUS_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
+                  >
+                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
           )}
+        </div>
 
-          {/* Map name */}
-          {showMapName && localTask.mapName && (
-            <Link
-              href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
+        {/* Title — inline editable, takes remaining space */}
+        <div className="flex-1 min-w-0">
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              value={titleValue}
+              onChange={e => setTitleValue(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={handleTitleKeyDown}
               onClick={e => e.stopPropagation()}
-              className="flex items-center gap-1.5 hover:underline decoration-dotted"
+              className="text-sm font-semibold text-foreground w-full bg-transparent border-b border-primary outline-none"
+            />
+          ) : (
+            <h3
+              className="text-sm font-semibold text-foreground truncate cursor-text hover:underline decoration-dotted"
+              onClick={handleTitleClick}
+              title="Clique para editar o título"
             >
-              <MapIcon className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate max-w-[180px]">{localTask.mapName}</span>
-            </Link>
+              {localTask.cardTitle || localTask.title}
+            </h3>
           )}
+        </div>
 
-          {/* Due date — inline editable */}
-          <label
-            className={`inline-flex items-center gap-1.5 cursor-pointer ${isOverdue ? "rounded-full px-2.5 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
-            onClick={e => e.stopPropagation()}
+        {/* Priority badge — inline editable, fixed to right */}
+        <div onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
+          <Badge
+            variant="outline"
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border cursor-pointer select-none transition-opacity ${getPriorityColor(localTask.priority)} ${savingField === "priority" ? "opacity-60" : ""}`}
+            onClick={handlePriorityClick}
+            title="Clique para alterar prioridade"
           >
-            <CalendarIcon className={`w-3.5 h-3.5 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-            <span className="relative inline-block">
-              {localTask.dueDate ? (
-                <span
-                  className={`text-sm pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                >
-                  {formatDueDate(localTask.dueDate)}
-                </span>
-              ) : null}
-              <input
-                ref={dueDateInputRef}
-                type="date"
-                className={`border-none outline-none cursor-pointer transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer ${localTask.dueDate ? "absolute inset-0 opacity-0 w-full h-full" : "bg-transparent text-sm w-[110px]"} ${isOverdue ? "text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300" : "text-muted-foreground hover:text-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-                onChange={handleDueDateChange}
-                onClick={e => e.stopPropagation()}
-                title="Alterar prazo"
-              />
-            </span>
-          </label>
-
-          {/* Approval task badge */}
-          {task.isApprovalTask && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-2 py-0.5 rounded-full tracking-wide lowercase">
-              aprovação
-            </span>
-          )}
-
-          {/* Standalone badge — shown in all contexts when task has no plan */}
-          {!task.mapId && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase">
-              Avulsa
-            </span>
+            <Flag className="w-3 h-3 mr-1 inline-block" /> {translatePriority(localTask.priority)}
+          </Badge>
+          {priorityOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {[
+                  { value: "critical", label: "máxima" },
+                  { value: "high",     label: "alta" },
+                  { value: "medium",   label: "média" },
+                  { value: "low",      label: "baixa" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handlePrioritySelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.priority === opt.value ? "opacity-60" : ""}`}
+                  >
+                    <Flag className={`w-3 h-3 ${getPriorityColor(opt.value).split(" ")[0]}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
           )}
         </div>
       </div>
 
-      {/* Right side: always show large avatar with tooltip */}
-      <div className="flex flex-col items-center gap-2 shrink-0" onClick={e => e.stopPropagation()} ref={assigneeRef}>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
-                onClick={handleAssigneeClick}
-                title={members.length > 0 ? "Clique para alterar responsável" : undefined}
-              >
-                {localTask.assigneeName ? (
-                  <Avatar className="w-8 h-8 shrink-0">
-                    {localTask.assigneeAvatarUrl ? (
-                      <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
-                    ) : null}
-                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                      {getInitials(localTask.assigneeName)}
-                    </AvatarFallback>
-                  </Avatar>
-                ) : (
-                  <User className="w-6 h-6 shrink-0" />
-                )}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              {localTask.assigneeName ?? "Sem responsável"}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        {assigneeOpen && members.length > 0 && createPortal(
-          <>
-            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-            <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-              >
-                <User className="w-3 h-3" /> Sem responsável
-              </button>
-              {members.map(m => (
-                <button
-                  key={m.userId}
-                  onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+      {/* Line 2: avatar + date + workspace + map + badges */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {/* Assignee avatar — inline editable */}
+        <div onClick={e => e.stopPropagation()} ref={assigneeRef} className="shrink-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
+                  onClick={handleAssigneeClick}
+                  title={members.length > 0 ? "Clique para alterar responsável" : undefined}
                 >
-                  {m.avatarUrl ? (
-                    <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                  {localTask.assigneeName ? (
+                    <Avatar className="w-[26px] h-[26px] shrink-0">
+                      {localTask.assigneeAvatarUrl ? (
+                        <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
+                      ) : null}
+                      <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
+                        {getInitials(localTask.assigneeName)}
+                      </AvatarFallback>
+                    </Avatar>
                   ) : (
-                    <User className="w-3 h-3" />
+                    <User className="w-[21px] h-[21px] shrink-0 text-muted-foreground" />
                   )}
-                  {m.name}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                {localTask.assigneeName ?? "Sem responsável"}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {assigneeOpen && members.length > 0 && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
+                >
+                  <User className="w-3 h-3" /> Sem responsável
                 </button>
-              ))}
-            </div>
-          </>,
-          document.body
+                {members.map(m => (
+                  <button
+                    key={m.userId}
+                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                  >
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                    ) : (
+                      <User className="w-3 h-3" />
+                    )}
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
+          )}
+        </div>
+
+        {/* Due date — inline editable */}
+        <label
+          className={`inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
+          onClick={e => e.stopPropagation()}
+        >
+          <CalendarIcon className={`w-3 h-3 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
+          <span className="relative inline-block">
+            {localTask.dueDate ? (
+              <span
+                className={`pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+              >
+                {formatDueDate(localTask.dueDate)}
+              </span>
+            ) : null}
+            <input
+              ref={dueDateInputRef}
+              type="date"
+              className={`border-none outline-none cursor-pointer transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer ${localTask.dueDate ? "absolute inset-0 opacity-0 w-full h-full" : "bg-transparent text-xs w-[100px]"} ${isOverdue ? "text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300" : "text-muted-foreground hover:text-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+              onChange={handleDueDateChange}
+              onClick={e => e.stopPropagation()}
+              title="Alterar prazo"
+            />
+          </span>
+        </label>
+
+        {/* Workspace name (my-tasks page) */}
+        {showWorkspaceName && localTask.workspaceName && (
+          <Link
+            href={`/workspaces/${localTask.workspaceId}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
+          >
+            <Building2 className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
+          </Link>
+        )}
+
+        {/* Map name */}
+        {showMapName && localTask.mapName && (
+          <Link
+            href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
+          >
+            <MapIcon className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[180px]">{localTask.mapName}</span>
+          </Link>
+        )}
+
+        {/* Approval task badge */}
+        {task.isApprovalTask && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-2 py-0.5 rounded-full tracking-wide lowercase shrink-0">
+            aprovação
+          </span>
+        )}
+
+        {/* Standalone badge — shown in all contexts when task has no plan */}
+        {!task.mapId && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full tracking-wide lowercase shrink-0">
+            Avulsa
+          </span>
         )}
       </div>
     </div>
