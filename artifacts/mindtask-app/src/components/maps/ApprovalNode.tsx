@@ -1,8 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { format } from 'date-fns';
 import { CheckSquare, Check, X, Plus } from 'lucide-react';
-import { getStatusColorHex } from '@/lib/utils';
+import { getStatusColorHex, formatDueDate } from '@/lib/utils';
 
 interface ApprovalNodeProps {
   id: string;
@@ -139,7 +138,7 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
   let dueDateStr: string | null = null;
   if (data.dueDate) {
     try {
-      dueDateStr = format(new Date(data.dueDate.slice(0, 10) + 'T00:00:00'), 'dd/MM/yy');
+      dueDateStr = formatDueDate(data.dueDate);
     } catch {
       dueDateStr = null;
     }

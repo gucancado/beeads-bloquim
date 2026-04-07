@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { format } from "date-fns";
 import { Flag, Calendar as CalendarIcon, Map as MapIcon, Building2, User } from "lucide-react";
+import { formatDueDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -411,16 +411,24 @@ export function TaskListItem({
             onClick={e => e.stopPropagation()}
           >
             <CalendarIcon className={`w-3.5 h-3.5 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-            <input
-              ref={dueDateInputRef}
-              type="date"
-              className={`bg-transparent border-none outline-none text-sm cursor-pointer transition-colors w-[110px] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer ${isOverdue ? "text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300" : "text-muted-foreground hover:text-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-              style={{ position: "relative" }}
-              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-              onChange={handleDueDateChange}
-              onClick={e => e.stopPropagation()}
-              title="Alterar prazo"
-            />
+            <span className="relative inline-block">
+              {localTask.dueDate ? (
+                <span
+                  className={`text-sm pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                >
+                  {formatDueDate(localTask.dueDate)}
+                </span>
+              ) : null}
+              <input
+                ref={dueDateInputRef}
+                type="date"
+                className={`border-none outline-none cursor-pointer transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer ${localTask.dueDate ? "absolute inset-0 opacity-0 w-full h-full" : "bg-transparent text-sm w-[110px]"} ${isOverdue ? "text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300" : "text-muted-foreground hover:text-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+                onChange={handleDueDateChange}
+                onClick={e => e.stopPropagation()}
+                title="Alterar prazo"
+              />
+            </span>
           </label>
 
           {/* Approval task badge */}

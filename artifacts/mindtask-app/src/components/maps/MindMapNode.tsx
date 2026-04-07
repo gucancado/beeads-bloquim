@@ -1,7 +1,7 @@
 import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
-import { getStatusColorHex } from '@/lib/utils';
+import { getStatusColorHex, formatDueDate } from '@/lib/utils';
 import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized } from '@/lib/taskStatusConstants';
 import { Maximize2, Calendar, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
@@ -158,7 +158,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   let dueDateStr: string | null = null;
   if (data.taskDueDate) {
     try {
-      dueDateStr = format(new Date(data.taskDueDate.slice(0, 10) + 'T00:00:00'), 'dd/MM/yy');
+      dueDateStr = formatDueDate(data.taskDueDate);
     } catch {
       dueDateStr = null;
     }
