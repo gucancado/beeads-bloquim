@@ -1266,7 +1266,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   return (
     <AppLayout>
-      <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 relative overflow-hidden">
+      <div className="flex-1 flex flex-col bg-slate-100 dark:bg-background relative overflow-hidden">
         <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
           <Link href={`/workspaces/${workspaceId}`}>
             <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 bg-background shadow-md border-border/60">
