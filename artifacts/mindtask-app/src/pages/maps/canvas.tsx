@@ -11,7 +11,7 @@ import ApprovalJoinNode from "@/components/maps/ApprovalJoinNode";
 import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement } from "@workspace/api-client-react";
-import { Loader2, ArrowLeft, Plus, Type } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Type, CheckSquare, Users, Image, Shapes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
@@ -1304,6 +1304,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             <span className="lowercase">Tarefa</span>
           </Button>
           <Button
+            disabled
+            variant="outline"
+            title="funcionalidade vindoura"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
+          >
+            <CheckSquare className="w-4 h-4 mr-2" />
+            <span className="lowercase">Aprovação</span>
+          </Button>
+          <Button
             onMouseDown={handleTextButtonMouseDown}
             disabled={createTextMut.isPending}
             variant="outline"
@@ -1312,6 +1321,33 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           >
             {createTextMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Type className="w-4 h-4 mr-2" />}
             <span className="lowercase">Texto</span>
+          </Button>
+          <Button
+            disabled
+            variant="outline"
+            title="funcionalidade vindoura"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
+          >
+            <Users className="w-4 h-4 mr-2" />
+            <span className="lowercase">Reunião</span>
+          </Button>
+          <Button
+            disabled
+            variant="outline"
+            title="funcionalidade vindoura"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
+          >
+            <Image className="w-4 h-4 mr-2" />
+            <span className="lowercase">Imagem</span>
+          </Button>
+          <Button
+            disabled
+            variant="outline"
+            title="funcionalidade vindoura"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
+          >
+            <Shapes className="w-4 h-4 mr-2" />
+            <span className="lowercase">Forma</span>
           </Button>
         </div>
 
