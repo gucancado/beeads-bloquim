@@ -9,6 +9,7 @@ import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TASK_STATUS_ORDER, getStatusActiveClass } from "@/lib/taskStatusConstants";
+import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 
 function getInitials(name: string) {
   return name
@@ -62,35 +63,6 @@ function getStatusLabel(s: string) {
   return STATUS_OPTIONS.find(o => o.value === s)?.label ?? s.replace("_", " ");
 }
 
-function getPriorityColor(p: string) {
-  switch (p) {
-    case "critical": return "text-slate-900 dark:text-white";
-    case "high":     return "text-slate-600 dark:text-slate-300";
-    case "medium":   return "text-slate-500 dark:text-slate-400";
-    case "low":      return "text-slate-400 dark:text-slate-500";
-    default: return "";
-  }
-}
-
-function translatePriority(p: string) {
-  switch (p) {
-    case "critical": return "máxima";
-    case "high":     return "alta";
-    case "medium":   return "média";
-    case "low":      return "baixa";
-    default: return p;
-  }
-}
-
-function getPriorityStars(p: string) {
-  switch (p) {
-    case "critical": return 4;
-    case "high":     return 3;
-    case "medium":   return 2;
-    case "low":      return 1;
-    default: return 1;
-  }
-}
 
 export function TaskListItem({
   task,
@@ -107,7 +79,6 @@ export function TaskListItem({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(task.cardTitle || task.title);
   const [statusOpen, setStatusOpen] = useState(false);
-  const [priorityOpen, setPriorityOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
@@ -118,11 +89,10 @@ export function TaskListItem({
 
   const closeAllDropdowns = useCallback(() => {
     setStatusOpen(false);
-    setPriorityOpen(false);
     setAssigneeOpen(false);
   }, []);
 
-  const anyDropdownOpen = statusOpen || priorityOpen || assigneeOpen;
+  const anyDropdownOpen = statusOpen || assigneeOpen;
 
   useEffect(() => {
     if (!anyDropdownOpen) return;
@@ -242,19 +212,9 @@ export function TaskListItem({
     openDropdownAt(e);
     setStatusOpen(v => !v);
     setAssigneeOpen(false);
-    setPriorityOpen(false);
-  };
-
-  const handlePriorityClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    openDropdownAt(e);
-    setPriorityOpen(v => !v);
-    setStatusOpen(false);
-    setAssigneeOpen(false);
   };
 
   const handlePrioritySelect = (val: string) => {
-    setPriorityOpen(false);
     setLocalTask(prev => ({ ...prev, priority: val }));
     setSavingField("priority");
     patchTask({ priority: val }).finally(() => setSavingField(null));
@@ -273,7 +233,6 @@ export function TaskListItem({
     openDropdownAt(e);
     setAssigneeOpen(v => !v);
     setStatusOpen(false);
-    setPriorityOpen(false);
   };
 
   const handleAssigneeSelect = (memberId: string | null) => {
@@ -297,7 +256,7 @@ export function TaskListItem({
   };
 
   const handleRowClick = () => {
-    if (editingTitle || statusOpen || priorityOpen || assigneeOpen) return;
+    if (editingTitle || statusOpen || assigneeOpen) return;
     onOpenDetail?.(localTask);
   };
 
@@ -333,37 +292,11 @@ export function TaskListItem({
 
         {/* Priority badge — inline editable, fixed to right */}
         <div onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
-          <Badge
-            variant="outline"
-            className={`px-1 py-0 text-sm border-0 bg-transparent shadow-none cursor-pointer select-none transition-opacity leading-none ${getPriorityColor(localTask.priority)} ${savingField === "priority" ? "opacity-60" : ""}`}
-            onClick={handlePriorityClick}
-            title={`prioridade ${translatePriority(localTask.priority)}`}
-          >
-            {"★".repeat(getPriorityStars(localTask.priority))}
-          </Badge>
-          {priorityOpen && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {[
-                  { value: "critical", label: "máxima" },
-                  { value: "high",     label: "alta" },
-                  { value: "medium",   label: "média" },
-                  { value: "low",      label: "baixa" },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handlePrioritySelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.priority === opt.value ? "opacity-60" : ""}`}
-                  >
-                    <span className={`inline-block w-[4em] shrink-0 text-right text-xs leading-none ${getPriorityColor(opt.value)}`}>{"★".repeat(getPriorityStars(opt.value))}</span>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </>,
-            document.body
-          )}
+          <PriorityBadge
+            value={localTask.priority}
+            onChange={handlePrioritySelect}
+            disabled={savingField === "priority"}
+          />
         </div>
       </div>
 

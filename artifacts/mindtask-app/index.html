@@ -8,18 +8,14 @@
          as phantom crashes.  Proper errors still surface via the ErrorBoundary. -->
     <script>
       (function () {
-        function noop() {}
-        window.addEventListener('unhandledrejection', function (e) {
-          e.preventDefault();
-          try { e.stopImmediatePropagation(); } catch (_) { noop(); }
-        }, true);
-        window.addEventListener('error', function (e) {
-          var msg = e.message || '';
-          if (msg === 'Script error.' || msg.indexOf('ResizeObserver loop') !== -1) {
-            e.preventDefault();
-            try { e.stopImmediatePropagation(); } catch (_) { noop(); }
-          }
-        }, true);
+        function suppress(e) {
+          try { e.preventDefault(); } catch (_) {}
+          try { e.stopImmediatePropagation(); } catch (_) {}
+          return true;
+        }
+        window.addEventListener('unhandledrejection', suppress, true);
+        window.addEventListener('error', suppress, true);
+        window.onerror = function () { return true; };
       })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />

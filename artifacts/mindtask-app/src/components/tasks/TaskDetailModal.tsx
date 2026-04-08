@@ -23,6 +23,7 @@ import type { WorkspaceMemberResponse, TaskPriority, TaskStatus, TaskResponse } 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { ApprovalTaskView } from "@/components/tasks/ApprovalTaskView";
+import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import {
   DndContext,
   closestCenter,
@@ -1254,25 +1255,17 @@ export function TaskDetailModal({
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                           <Flag className="w-3 h-3" /> Prioridade
                         </label>
-                        <Select
-                          value={priority}
-                          onValueChange={v => {
-                            setPriority(v);
-                            markDirty();
-                            if (isCardMode) saveCardTaskDetails({ priority: v });
-                            else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { priority: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                          }}
-                        >
-                          <SelectTrigger className="bg-background rounded-xl h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low"><span className="lowercase">Baixa</span></SelectItem>
-                            <SelectItem value="medium"><span className="lowercase">Média</span></SelectItem>
-                            <SelectItem value="high"><span className="lowercase">Alta</span></SelectItem>
-                            <SelectItem value="critical"><span className="lowercase">Máxima</span></SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="flex items-center h-10 px-2">
+                          <PriorityBadge
+                            value={priority}
+                            onChange={v => {
+                              setPriority(v);
+                              markDirty();
+                              if (isCardMode) saveCardTaskDetails({ priority: v });
+                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { priority: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                            }}
+                          />
+                        </div>
                       </div>
 
                       {/* Due Date */}
