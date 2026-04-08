@@ -7,9 +7,10 @@ interface PriorityBadgeProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  portalContainer?: HTMLElement | null;
 }
 
-export function PriorityBadge({ value, onChange, disabled }: PriorityBadgeProps) {
+export function PriorityBadge({ value, onChange, disabled, portalContainer }: PriorityBadgeProps) {
   const [open, setOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const [hoveredOpt, setHoveredOpt] = useState<string | null>(null);
@@ -19,13 +20,23 @@ export function PriorityBadge({ value, onChange, disabled }: PriorityBadgeProps)
   const handleBadgeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const top = rect.bottom + 4;
-    const left = Math.min(rect.left, window.innerWidth - 180);
-    setDropdownPos({
-      top: Math.min(top, window.innerHeight - 200),
-      left: Math.max(4, left),
-    });
+    const badgeRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (portalContainer) {
+      const containerRect = portalContainer.getBoundingClientRect();
+      const top = badgeRect.bottom - containerRect.top + portalContainer.scrollTop + 4;
+      const left = Math.max(0, Math.min(
+        badgeRect.left - containerRect.left + portalContainer.scrollLeft,
+        portalContainer.clientWidth - 180
+      ));
+      setDropdownPos({ top, left });
+    } else {
+      const top = badgeRect.bottom + 4;
+      const left = Math.min(badgeRect.left, window.innerWidth - 180);
+      setDropdownPos({
+        top: Math.min(top, window.innerHeight - 200),
+        left: Math.max(4, left),
+      });
+    }
     setOpen(v => !v);
   };
 
@@ -93,7 +104,7 @@ export function PriorityBadge({ value, onChange, disabled }: PriorityBadgeProps)
             </button>
           ))}
         </div>,
-        document.body
+        portalContainer ?? document.body
       )}
     </>
   );

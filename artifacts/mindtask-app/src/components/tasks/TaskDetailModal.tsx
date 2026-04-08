@@ -482,6 +482,8 @@ export function TaskDetailModal({
   const [autoCreateDirty, setAutoCreateDirty] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const initializedForTaskRef = useRef<string | null>(null);
+  const [dialogContentEl, setDialogContentEl] = useState<HTMLDivElement | null>(null);
+  const dialogContentCallbackRef = useCallback((el: HTMLDivElement | null) => setDialogContentEl(el), []);
 
   const effectiveWorkspaceId = propWorkspaceId || taskWorkspaceId || "";
   const isStandalone = !effectiveWorkspaceId;
@@ -994,6 +996,7 @@ export function TaskDetailModal({
         }}
       >
         <DialogContent
+          ref={dialogContentCallbackRef}
           hideClose
           className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl"
           onInteractOutside={(e) => {
@@ -1264,6 +1267,7 @@ export function TaskDetailModal({
                               if (isCardMode) saveCardTaskDetails({ priority: v });
                               else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { priority: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                             }}
+                            portalContainer={dialogContentEl}
                           />
                         </div>
                       </div>
