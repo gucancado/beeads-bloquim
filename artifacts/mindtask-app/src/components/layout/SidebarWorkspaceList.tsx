@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
-import { Loader2, ListTodo, GripVertical, ChevronRight, ChevronDown } from "lucide-react";
+import { Loader2, ListTodo, GripVertical, ChevronLeft, ChevronDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -103,21 +103,6 @@ function SortableWorkspaceItem({
           <GripVertical className="w-3.5 h-3.5" />
         </button>
         {workspace.colorIndex && <WorkspaceColorDot colorIndex={workspace.colorIndex} size={10} />}
-        {hasMaps ? (
-          <button
-            onClick={() => onToggleExpanded(workspace.id, !workspace.expanded)}
-            className="shrink-0 w-4 h-4 flex items-center justify-center text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors"
-            tabIndex={-1}
-          >
-            {workspace.expanded ? (
-              <ChevronDown className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronRight className="w-3.5 h-3.5" />
-            )}
-          </button>
-        ) : (
-          <span className="shrink-0 w-4 h-4" />
-        )}
         <Link href={`/workspaces/${workspace.id}`} className="flex-1 min-w-0">
           <span
             className={`flex items-center gap-2 text-sm font-medium truncate cursor-pointer transition-colors ${
@@ -129,6 +114,19 @@ function SortableWorkspaceItem({
             <span className="truncate">{workspace.name}</span>
           </span>
         </Link>
+        {hasMaps && (
+          <button
+            onClick={() => onToggleExpanded(workspace.id, !workspace.expanded)}
+            className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-sidebar-foreground/30 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all opacity-0 group-hover/ws:opacity-100"
+            tabIndex={-1}
+          >
+            {workspace.expanded ? (
+              <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronLeft className="w-3.5 h-3.5" />
+            )}
+          </button>
+        )}
         <Link href={`/workspaces/${workspace.id}?tab=tasks`}>
           <span
             title={`tarefas de ${workspace.name}`}
