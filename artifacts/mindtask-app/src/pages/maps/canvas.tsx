@@ -1298,7 +1298,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             disabled={createCardMut.isPending}
             variant="outline"
             title="Clique para adicionar tarefa no centro • Arraste para posicionar"
-            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer"
           >
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
             <span className="lowercase">Tarefa</span>
@@ -1317,7 +1317,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             disabled={createTextMut.isPending}
             variant="outline"
             title="Clique para adicionar texto no centro • Arraste para posicionar"
-            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer"
           >
             {createTextMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Type className="w-4 h-4 mr-2" />}
             <span className="lowercase">Texto</span>

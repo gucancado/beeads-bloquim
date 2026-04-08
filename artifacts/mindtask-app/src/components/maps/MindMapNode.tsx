@@ -377,7 +377,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               {data.title}
             </h3>
             <button
-              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag"
+              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer"
               style={{ backgroundColor: '#e5e7eb', color: '#9ca3af' }}
               title="Expandir card"
               onClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
@@ -480,7 +480,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             </h3>
           )}
           <button
-            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag"
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer"
             style={{
               backgroundColor: `${color.replace(')', ' / 0.12)')}`,
               color,
