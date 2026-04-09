@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard, X, Plus, CheckSquare, Repeat } from "lucide-react";
 import { RecurrencePanel } from "@/components/tasks/RecurrencePanel";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
@@ -299,8 +301,8 @@ function ApprovalSection({
                 onClick={() => patchModeMut.mutate("sequential")}
                 className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all lowercase ${
                   approvalMode === "sequential"
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/40"
                 }`}
               >
                 sequencial
@@ -309,8 +311,8 @@ function ApprovalSection({
                 onClick={() => patchModeMut.mutate("parallel")}
                 className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all lowercase ${
                   approvalMode === "parallel"
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border hover:border-primary/40"
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-background text-muted-foreground border-border hover:border-foreground/40"
                 }`}
               >
                 paralelo
@@ -393,6 +395,15 @@ function generateLocalId() {
   return `local-${Math.random().toString(36).slice(2)}`;
 }
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0].toUpperCase())
+    .join("");
+}
+
 function SortableSubtask({
   subtask,
   onChange,
@@ -452,6 +463,80 @@ function SortableSubtask({
         placeholder="Subtarefa..."
       />
     </div>
+  );
+}
+
+function AssigneeAvatarPicker({
+  assignedTo,
+  members,
+  onSelect,
+}: {
+  assignedTo: string;
+  members: WorkspaceMemberResponse[] | undefined;
+  onSelect: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedMember = members?.find(m => m.userId === assignedTo) ?? null;
+  const assigneeName = selectedMember?.user.name ?? null;
+  const assigneeAvatarUrl = selectedMember?.user.avatarUrl ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-background hover:bg-muted/60 transition-colors focus:outline-none"
+              >
+                {assigneeName ? (
+                  <Avatar className="w-9 h-9 shrink-0">
+                    {assigneeAvatarUrl ? (
+                      <AvatarImage src={assigneeAvatarUrl} alt={assigneeName} className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                      {getInitials(assigneeName)}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                )}
+              </button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            {assigneeName ?? "Sem responsável"}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <PopoverContent align="start" className="w-auto p-1 rounded-xl min-w-[180px]">
+        <button
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/60 text-left transition-colors rounded-lg"
+          onClick={() => { onSelect("unassigned"); setOpen(false); }}
+        >
+          <User className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground lowercase">Sem responsável</span>
+        </button>
+        {members?.map(m => (
+          <button
+            key={m.userId}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/60 text-left transition-colors rounded-lg ${assignedTo === m.userId ? "font-semibold" : ""}`}
+            onClick={() => { onSelect(m.userId); setOpen(false); }}
+          >
+            <Avatar className="w-6 h-6 shrink-0">
+              {m.user.avatarUrl ? (
+                <AvatarImage src={m.user.avatarUrl} alt={m.user.name} className="object-cover" />
+              ) : null}
+              <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                {getInitials(m.user.name)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-sm text-foreground">{m.user.name}</span>
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1142,11 +1227,6 @@ export function TaskDetailModal({
               {/* Title + actions */}
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  {isOverdue && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-1 rounded-full lowercase">
-                      🔴 Atrasada
-                    </span>
-                  )}
                   {parentApprovalStatus && (
                     <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full lowercase border ${
                       parentApprovalStatus === 'approved'
@@ -1342,25 +1422,16 @@ export function TaskDetailModal({
                           <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                             <User className="w-3 h-3" /> Responsável
                           </label>
-                          <Select
-                            value={assignedTo}
-                            onValueChange={v => {
+                          <AssigneeAvatarPicker
+                            assignedTo={assignedTo}
+                            members={members}
+                            onSelect={v => {
                               setAssignedTo(v);
                               markDirty();
                               if (isCardMode) saveCardTaskDetails({ assignedTo: v });
                               else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { assignedTo: v === "unassigned" ? null : v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                             }}
-                          >
-                            <SelectTrigger className="bg-background rounded-xl h-10">
-                              <SelectValue placeholder="Sem responsável" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="unassigned"><span className="lowercase">Sem responsável</span></SelectItem>
-                              {members?.map((m) => (
-                                <SelectItem key={m.userId} value={m.userId}>{m.user.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          />
                         </div>
                       )}
 
@@ -1385,7 +1456,7 @@ export function TaskDetailModal({
 
                       {/* Due Date + Recurrence */}
                       <div>
-                        <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
+                        <label className={`text-xs font-semibold tracking-wider mb-1.5 flex items-center gap-1 block lowercase ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
                           <Calendar className="w-3 h-3" /> Prazo
                         </label>
                         <div className="flex items-center gap-1.5">
@@ -1398,7 +1469,7 @@ export function TaskDetailModal({
                               if (isCardMode) saveCardTaskDetails({ dueDate: e.target.value });
                               else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { dueDate: e.target.value || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                             }}
-                            className="bg-background rounded-xl h-10 text-sm flex-1 min-w-0"
+                            className={`rounded-xl h-10 text-sm flex-1 min-w-0 ${isOverdue ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : "bg-background"}`}
                           />
                           {!isCardMode && (() => {
                             const hasMapId = !!(mapId || taskMapId);
