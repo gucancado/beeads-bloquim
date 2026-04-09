@@ -1,0 +1,62 @@
+Criar funcionalidade de link direto para tarefa (deep link da edição de tarefa)
+
+Objetivo:
+Permitir que cada tarefa tenha uma URL única que, ao ser acessada, abre diretamente a tela de edição daquela tarefa específica.
+
+Requisitos funcionais:
+
+1. Atualização da URL ao abrir tarefa
+
+* Sempre que o usuário abrir a tela de edição de uma tarefa, a URL do navegador deve ser atualizada sem recarregar a página (SPA).
+* A URL deve conter um identificador único da tarefa.
+* Exemplo de formato:
+  /my-tasks/tasks/{taskId}
+  ou
+  /workspaces/63492807-240e-4ad4-8e14-c3c4b80e9aaa/tasks/{taskId}?tab=tasks
+
+2. Acesso direto via URL
+
+* Ao acessar uma URL que contenha o identificador da tarefa, o sistema deve:
+  a) Carregar o workspace/contexto necessário (se aplicável)
+  b) Buscar os dados da tarefa pelo taskId
+  c) Abrir automaticamente o modal ou tela de edição da tarefa com os dados preenchidos
+
+3. Comportamento de fallback
+
+* Se o taskId não existir ou não for encontrado:
+
+  * Exibir mensagem: "Tarefa não encontrada"
+  * Não quebrar a aplicação
+* Se o usuário não tiver permissão para acessar a tarefa:
+
+  * Exibir mensagem: "Você não tem permissão para acessar esta tarefa"
+
+4. Sincronização com estado da UI
+
+* Se o usuário fechar o modal de edição:
+
+  * A URL deve voltar ao estado anterior (remover taskId)
+* Se o usuário navegar entre tarefas diferentes:
+
+  * A URL deve ser atualizada dinamicamente para o novo taskId
+
+5. Navegação do navegador
+
+* O botão voltar/avançar do navegador deve funcionar normalmente:
+
+6. Compartilhamento
+
+* O usuário pode copiar a URL a qualquer momento
+* Outro usuário ao acessar o link deve cair diretamente na edição da mesma tarefa (respeitando permissões)
+
+7. Critérios de aceite
+
+* Abrir tarefa atualiza a URL corretamente
+* Acessar a URL abre diretamente a tarefa
+* Fechar a tarefa limpa a URL
+* Navegação do navegador funciona corretamente
+* Tratamento de erro e permissão implementados
+
+Observação:
+A funcionalidade deve ser implementada sem impactar negativamente o desempenho da aplicação e deve ser compatível com a estrutura atual de tarefas já existente.
+
