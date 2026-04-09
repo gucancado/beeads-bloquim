@@ -461,6 +461,32 @@ router.delete("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   return res.json({ ok: true });
 });
 
+router.get("/:taskId/meta", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db
+    .select({ id: tasks.id, workspaceId: tasks.workspaceId, assignedTo: tasks.assignedTo })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+
+  if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+  if (task.workspaceId !== null) {
+    const [membership] = await db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, task.workspaceId), eq(workspaceMembers.userId, userId)))
+      .limit(1);
+    if (!membership) return res.status(403).json({ message: "Sem permissão" });
+  } else {
+    if (task.assignedTo !== userId) return res.status(403).json({ message: "Sem permissão" });
+  }
+
+  return res.json({ id: task.id, workspaceId: task.workspaceId });
+});
+
 router.get("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const { taskId } = req.params;

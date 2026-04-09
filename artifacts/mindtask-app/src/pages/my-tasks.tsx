@@ -92,10 +92,30 @@ export default function MyTasksPage() {
     },
   });
 
+  const { data: deepLinkTaskMeta } = useQuery<{ id: string; workspaceId: string | null } | null>({
+    queryKey: ["/api/my-tasks/task-meta", deepLinkTaskId],
+    queryFn: async () => {
+      if (!deepLinkTaskId) return null;
+      try {
+        return await customFetch<{ id: string; workspaceId: string | null }>(`/api/my-tasks/${deepLinkTaskId}/meta`);
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!deepLinkTaskId,
+    retry: false,
+  });
+
   useEffect(() => {
     if (deepLinkTaskId) {
       if (!standaloneTask && !openCard) {
-        setStandaloneTask({ workspaceId: "", id: deepLinkTaskId, mapId: null, cardId: null, title: "" });
+        if (deepLinkTaskMeta !== undefined) {
+          if (deepLinkTaskMeta && deepLinkTaskMeta.workspaceId) {
+            navigate(`/workspaces/${deepLinkTaskMeta.workspaceId}/tasks/${deepLinkTaskId}`, { replace: true });
+          } else {
+            setStandaloneTask({ workspaceId: "", id: deepLinkTaskId, mapId: null, cardId: null, title: "" });
+          }
+        }
       }
     } else {
       if (standaloneTask || openCard) {
@@ -103,7 +123,7 @@ export default function MyTasksPage() {
         setOpenCard(null);
       }
     }
-  }, [deepLinkTaskId]);
+  }, [deepLinkTaskId, deepLinkTaskMeta]);
 
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
@@ -131,7 +151,9 @@ export default function MyTasksPage() {
   };
 
   const openTaskItem = (task: any) => {
-    if (task.cardId && task.mapId) {
+    if (task.workspaceId) {
+      navigate(`/workspaces/${task.workspaceId}/tasks/${task.id}`);
+    } else if (task.cardId && task.mapId) {
       setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: task.cardId });
       navigate(`/my-tasks/tasks/${task.id}`);
     } else {
