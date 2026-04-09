@@ -486,7 +486,11 @@ export function TaskDetailModal({
   const dialogContentCallbackRef = useCallback((el: HTMLDivElement | null) => setDialogContentEl(el), []);
 
   const effectiveWorkspaceId = propWorkspaceId || taskWorkspaceId || "";
-  const isStandalone = !effectiveWorkspaceId;
+  // isStandalone is derived from the PROP, not effectiveWorkspaceId.
+  // effectiveWorkspaceId can change mid-flight (once taskWorkspaceId resolves),
+  // which would switch the query key and trigger a 403 workspace fetch for
+  // users who are assigned a task but not workspace members.
+  const isStandalone = !propWorkspaceId;
 
   const markDirty = () => { if (autoCreatedTaskId) setAutoCreateDirty(true); };
 
