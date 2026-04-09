@@ -1,0 +1,171 @@
+
+
+Quero implementar no sistema uma funcionalidade de repetição de tarefas, inspirada no Asana. A tarefa comum já existe, então vamos apenas adicionar a função de repetição.
+
+Objetivo geral:
+
+Permitir que uma tarefa tenha uma configuração de repetição. Quando uma tarefa recorrente for concluída, o sistema deve duplicar essa tarefa usando o processo de duplicação já existente e, em seguida, ajustar o prazo da nova tarefa conforme a regra de repetição configurada.
+
+Importante: não criar uma nova lógica de criação de tarefa. Sempre usar o processo já existente de duplicação.
+
+Regra principal:
+
+Quando uma tarefa com repetição ativada for concluída:
+
+1. duplicar a tarefa usando a função existente de duplicação
+2. a nova tarefa deve nascer como não concluída
+3. manter todos os dados principais da tarefa original
+4. manter a configuração de repetição na nova tarefa
+5. recalcular e atualizar o prazo da nova tarefa conforme a regra de repetição
+
+Restrições importantes:
+
+1. tarefas associadas a plano não podem ser recorrentes
+
+* se uma tarefa com repetição ativa for associada a um plano, a repetição deve ser desativada automaticamente
+* tarefas criadas dentro de um plano devem ter o botão de recorrência desabilitado
+* ao passar o mouse sobre o botão desabilitado, mostrar o texto: "não é possível ter tarefas recorrentes em um plano"
+
+2. botão de repetição
+
+* deve existir um botão para ativar/configurar repetição
+* se não houver repetição, botão em estado normal
+* se houver repetição ativa, botão destacado
+* se a tarefa estiver em um plano, botão desabilitado
+
+Comportamento do botão:
+
+Ao clicar no botão, abrir um modal de configuração da repetição.
+
+O modal deve conter:
+
+* texto "Repetir"
+* ao lado um seletor com as opções:
+  diariamente
+  semanalmente
+  mensalmente
+  anualmente
+  periodicamente
+  personalizado
+
+Também deve existir um botão com ícone de lixeira para desativar a repetição.
+
+Tipos de repetição:
+
+1. diariamente
+
+* sem campos adicionais
+* ao concluir, nova tarefa com prazo +1 dia (ou lógica equivalente do sistema)
+
+2. semanalmente
+
+* exibir "Nestes dias"
+* checkboxes: 2ª, 3ª, 4ª, 5ª, 6ª, S, D
+* permitir selecionar múltiplos dias
+* ao concluir, calcular o próximo dia válido selecionado
+* se nenhum dia estiver marcado, usar o dia da semana atual da tarefa
+
+3. mensalmente
+
+* duas opções:
+  "Na" (ex: 2ª quarta-feira)
+  "No dia" (ex: dia 8)
+
+* se "Na":
+  repetir baseado em ordinal da semana + dia da semana
+
+* se "No dia":
+  repetir no mesmo dia numérico do mês
+
+4. anualmente
+
+* repetir no mesmo dia e mês do ano seguinte
+
+5. periodicamente
+
+* campo "Dias após a conclusão"
+* ao concluir, nova tarefa com prazo = data de conclusão + número de dias configurado
+
+6. personalizado
+
+* campo "A cada" + número
+* unidade: dia, semana, mês, ano
+* se unidade for semana:
+  exibir "Nestes dias" com seleção de dias da semana
+
+Campos de dados necessários:
+
+Adicionar na tarefa:
+
+isRecurring: boolean
+recurrenceConfig: objeto com:
+
+* type: daily, weekly, monthly, yearly, periodic, custom
+* weeklyDays: array de dias da semana
+* monthlyMode: weekday_of_month ou day_of_month
+* monthlyWeekOrdinal
+* monthlyWeekday
+* monthlyDay
+* periodicDaysAfterCompletion
+* customInterval
+* customUnit: day, week, month, year
+* customWeeklyDays
+
+Regras de cálculo da próxima data:
+
+Criar função:
+
+calculateNextDueDate(task, recurrenceConfig, completedAt)
+
+Criar fluxo:
+
+onTaskCompleted(task):
+if task.isRecurring == true:
+if task não pertence a plano:
+newTask = duplicar tarefa (usar função existente)
+newDueDate = calcular próxima data
+atualizar prazo da newTask
+salvar newTask
+
+Compatibilidade com plano:
+
+* ao associar tarefa com repetição a um plano:
+  remover repetição automaticamente
+  atualizar estado visual
+
+* tarefas dentro de plano:
+  botão de recorrência desabilitado
+  hover com mensagem:
+  "não é possível ter tarefas recorrentes em um plano"
+
+Casos de borda:
+
+* mensal dia 31: usar último dia do mês se necessário
+* anual 29/02: usar 28/02 em ano não bissexto
+* semanal com múltiplos dias: escolher próximo dia válido após conclusão
+* periodicamente: sempre usar data de conclusão como base
+* personalizado semanal: respeitar dias selecionados
+
+Critérios de aceite:
+
+* tarefa comum pode ter repetição
+* tarefa de plano não pode ter repetição
+* botão muda de estado corretamente
+* modal funciona para todos os tipos
+* ao concluir tarefa recorrente, nova tarefa é criada via duplicação
+* prazo da nova tarefa é recalculado corretamente
+* repetição é removida ao vincular tarefa a plano
+* botão desabilitado mostra mensagem correta
+* botão de lixeira remove recorrência
+
+Implementar:
+
+* modelagem de dados
+* lógica backend
+* cálculo de datas
+* botão e estados visuais
+* modal completo
+* validações
+* integração com fluxo de conclusão de tarefa
+
+Se necessário, reorganizar o código para manter clareza e facilidade de manutenção.
