@@ -300,6 +300,9 @@ export default function MyTasksPage() {
           open={!!openCard}
           onClose={handleClosePanel}
           onDeleteCard={handleDeleteCardFromPanel}
+          onDuplicated={(newTaskId) => {
+            navigate(`/workspaces/${openCard.workspaceId}/tasks/${newTaskId}`);
+          }}
         />
       )}
 
@@ -308,6 +311,11 @@ export default function MyTasksPage() {
         taskId={standaloneTask?.id ?? null}
         open={!!standaloneTask}
         onClose={handleCloseSheet}
+        onDuplicated={(newTaskId) => {
+          if (standaloneTask?.workspaceId) {
+            navigate(`/workspaces/${standaloneTask.workspaceId}/tasks/${newTaskId}`);
+          }
+        }}
       />
 
       <TaskDetailModal

@@ -1044,6 +1044,9 @@ export default function WorkspaceDetailPage() {
           open={!!openCard}
           onClose={handleClosePanel}
           onDeleteCard={handleDeleteCardFromPanel}
+          onDuplicated={(newTaskId) => {
+            navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
+          }}
         />
       )}
 
@@ -1053,6 +1056,9 @@ export default function WorkspaceDetailPage() {
         open={taskSheetOpen}
         onClose={handleCloseTaskSheet}
         onAutoCreated={(newTaskId) => {
+          navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
+        }}
+        onDuplicated={(newTaskId) => {
           navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
         }}
       />

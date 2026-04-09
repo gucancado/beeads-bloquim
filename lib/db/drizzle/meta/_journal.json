@@ -92,6 +92,13 @@
       "when": 1775100000000,
       "tag": "0012_add_parent_approval_status",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1744190000000,
+      "tag": "0013_add_task_duplicated_activity_type",
+      "breakpoints": true
     }
   ]
 }

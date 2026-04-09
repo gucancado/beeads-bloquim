@@ -137,10 +137,13 @@ router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), a
     .where(eq(cards.id, req.params.cardId))
     .returning();
 
-  if (parsed.data.title && updated.taskId) {
+  if (updated.taskId && (parsed.data.title || parsed.data.description !== undefined)) {
+    const taskUpdate: { title?: string; description?: string | null; updatedAt: Date } = { updatedAt: new Date() };
+    if (parsed.data.title) taskUpdate.title = parsed.data.title;
+    if (parsed.data.description !== undefined) taskUpdate.description = parsed.data.description;
     await db
       .update(tasks)
-      .set({ title: parsed.data.title, updatedAt: new Date() })
+      .set(taskUpdate)
       .where(eq(tasks.id, updated.taskId));
   }
 

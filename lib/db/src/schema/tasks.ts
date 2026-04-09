@@ -122,6 +122,7 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   "approval_comment",
   "task_approved",
   "task_rejected",
+  "task_duplicated",
 ]);
 
 export const taskActivities = pgTable("task_activities", {

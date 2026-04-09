@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Trash2, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard, X, Plus, CheckSquare } from "lucide-react";
+import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard, X, Plus, CheckSquare } from "lucide-react";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -379,6 +379,7 @@ interface TaskDetailModalProps {
   mapId?: string;
   cardId?: string | null;
   onDeleteCard?: (cardId: string) => void;
+  onDuplicated?: (newTaskId: string, newCardId: string | null) => void;
 }
 
 function generateLocalId() {
@@ -456,6 +457,7 @@ export function TaskDetailModal({
   mapId,
   cardId = null,
   onDeleteCard,
+  onDuplicated,
 }: TaskDetailModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -476,6 +478,7 @@ export function TaskDetailModal({
   const [status, setStatus] = useState<string>("pending");
   const [showDelete, setShowDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   const [localSubtasks, setLocalSubtasks] = useState<SubtaskItem[]>([]);
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
@@ -896,6 +899,26 @@ export function TaskDetailModal({
     }
   };
 
+  const handleDuplicate = async () => {
+    const dupWorkspaceId = effectiveWorkspaceId;
+    const dupTaskId = isCardMode ? (card?.task?.id ?? null) : resolvedTaskId;
+    if (!dupWorkspaceId || !dupTaskId) return;
+    setIsDuplicating(true);
+    try {
+      const result = await customFetch(`/api/workspaces/${dupWorkspaceId}/tasks/${dupTaskId}/duplicate`, { method: "POST" });
+      const newTaskId = result.id as string;
+      const newCardId = (result.cardId as string | null) ?? null;
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${dupWorkspaceId}/tasks`] });
+      if (mapId) queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${dupWorkspaceId}/maps/${mapId}`] });
+      onClose();
+      onDuplicated?.(newTaskId, newCardId);
+    } catch {
+      toast({ title: "Erro ao duplicar tarefa", variant: "destructive" });
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
+
   const handleCloseModal = async () => {
     if (showDelete || isDeleting || deleteCardMut.isPending) return;
     if (isCardMode) { saveCard(); if (card?.task) saveCardTaskDetails(); }
@@ -1111,6 +1134,18 @@ export function TaskDetailModal({
                         {opt.label}
                       </button>
                     ))}
+                    {isEditing && !isStandalone && !!effectiveWorkspaceId && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleDuplicate}
+                        disabled={isDuplicating}
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
+                        title="duplicar tarefa"
+                      >
+                        {isDuplicating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                      </Button>
+                    )}
                     {isEditing && (
                       <Button
                         variant="ghost"

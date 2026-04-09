@@ -1423,6 +1423,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           navigate(canvasBasePath, { replace: true });
         }}
         onDeleteCard={handleDeleteCard}
+        onDuplicated={(_, newCardId) => {
+          if (newCardId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            setSelectedCardId(newCardId);
+            navigate(`${canvasBasePath}?cardId=${newCardId}`);
+          } else {
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          }
+        }}
       />
 
       <AlertDialog open={!!pendingDeleteNodeIds} onOpenChange={(open) => { if (!open) setPendingDeleteNodeIds(null); }}>

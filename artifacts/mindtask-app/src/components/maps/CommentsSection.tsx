@@ -266,9 +266,46 @@ function formatActivityText(activity: TaskActivityItem): string {
       const comment = m.comment ? ` — "${m.comment}"` : "";
       return `${dateStr}: ${actor} reprovou a tarefa${comment}`;
     }
+    case "task_duplicated":
+      return "";
     default:
       return "";
   }
+}
+
+const APP_BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+function DuplicatedActivityEntry({ activity }: { activity: TaskActivityItem }) {
+  const date = new Date(activity.createdAt);
+  const dateStr = format(date, "dd/MM/yyyy HH:mm");
+  const m = activity.metadata ?? {};
+  const originalTaskId = m.originalTaskId;
+  const wsId = m.workspaceId;
+
+  const href = originalTaskId && wsId
+    ? `${window.location.origin}${APP_BASE}/workspaces/${wsId}/tasks/${originalTaskId}`
+    : null;
+
+  return (
+    <div className="flex items-start gap-2 py-1 px-2">
+      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
+      <p className="text-xs text-muted-foreground">
+        {dateStr}: duplicada{" "}
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors"
+          >
+            dessa tarefa
+          </a>
+        ) : (
+          "dessa tarefa"
+        )}
+      </p>
+    </div>
+  );
 }
 
 function ApprovalCommentEntry({ activity }: { activity: TaskActivityItem }) {
@@ -321,6 +358,10 @@ function ApprovalCommentEntry({ activity }: { activity: TaskActivityItem }) {
 function ActivityEntry({ activity }: { activity: TaskActivityItem }) {
   if (activity.type === "approval_comment") {
     return <ApprovalCommentEntry activity={activity} />;
+  }
+
+  if (activity.type === "task_duplicated") {
+    return <DuplicatedActivityEntry activity={activity} />;
   }
 
   const text = formatActivityText(activity);
