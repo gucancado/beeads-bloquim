@@ -10,6 +10,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TASK_STATUS_ORDER, getStatusActiveClass } from "@/lib/taskStatusConstants";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
+import { getColorByIndex } from "@workspace/db/colorPalette";
 
 function getInitials(name: string) {
   return name
@@ -42,6 +43,7 @@ export interface TaskListItemData {
   mapName?: string | null;
   cardId?: string | null;
   workspaceName?: string | null;
+  workspaceColorIndex?: number | null;
   isApprovalTask?: boolean | null;
   isRecurring?: boolean | null;
   recurrenceConfig?: { type: string } | null;
@@ -262,11 +264,47 @@ export function TaskListItem({
     onOpenDetail?.(localTask);
   };
 
+  const workspaceColorHex = getColorByIndex(localTask.workspaceColorIndex ?? null);
+
   return (
     <div
       className="px-4 py-3 transition-colors flex flex-col gap-1.5 group cursor-pointer relative hover:bg-muted/50 dark:hover:bg-[#404040]"
       onClick={handleRowClick}
     >
+      {/* Line 0: workspace and plan name above title */}
+      {((showWorkspaceName && localTask.workspaceName) || (showMapName && localTask.mapName)) && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+          {showWorkspaceName && localTask.workspaceName && (
+            <Link
+              href={`/workspaces/${localTask.workspaceId}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
+            >
+              {workspaceColorHex ? (
+                <span
+                  style={{ backgroundColor: workspaceColorHex, width: 8, height: 8, minWidth: 8 }}
+                  className="rounded-sm shrink-0 inline-block"
+                />
+              ) : (
+                <Building2 className="w-3 h-3 shrink-0" />
+              )}
+              <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
+            </Link>
+          )}
+
+          {showMapName && localTask.mapName && (
+            <Link
+              href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
+            >
+              <MapIcon className="w-3 h-3 shrink-0" />
+              <span className="truncate max-w-[180px]">{localTask.mapName}</span>
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Line 1: title (left), status badge (right) */}
       <div className="flex items-center gap-2 min-w-0">
         {/* Title — inline editable, takes remaining space */}
@@ -292,17 +330,38 @@ export function TaskListItem({
           )}
         </div>
 
-        {/* Priority badge — inline editable, fixed to right */}
-        <div onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
-          <PriorityBadge
-            value={localTask.priority}
-            onChange={handlePrioritySelect}
-            disabled={savingField === "priority"}
-          />
+        {/* Status badge — inline editable, fixed to right */}
+        <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
+          <Badge
+            variant="outline"
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+            onClick={handleStatusClick}
+            title="Clique para alterar status"
+          >
+            {getStatusLabel(localTask.status)}
+          </Badge>
+          {statusOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {STATUS_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
+                  >
+                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
+          )}
         </div>
       </div>
 
-      {/* Line 2: avatar + date + workspace + map + badges */}
+      {/* Line 2: avatar + date + recurrence + priority + approval badge */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {/* Assignee avatar — inline editable */}
         <div onClick={e => e.stopPropagation()} ref={assigneeRef} className="shrink-0">
@@ -394,6 +453,15 @@ export function TaskListItem({
           />
         </label>
 
+        {/* Priority badge — inline editable */}
+        <div onClick={e => e.stopPropagation()} className="shrink-0">
+          <PriorityBadge
+            value={localTask.priority}
+            onChange={handlePrioritySelect}
+            disabled={savingField === "priority"}
+          />
+        </div>
+
         {/* Recurrence indicator */}
         {localTask.isRecurring && localTask.recurrenceConfig && (
           <span
@@ -404,67 +472,12 @@ export function TaskListItem({
           </span>
         )}
 
-        {/* Workspace name (my-tasks page) */}
-        {showWorkspaceName && localTask.workspaceName && (
-          <Link
-            href={`/workspaces/${localTask.workspaceId}`}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
-          >
-            <Building2 className="w-3 h-3 shrink-0" />
-            <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
-          </Link>
-        )}
-
-        {/* Map name */}
-        {showMapName && localTask.mapName && (
-          <Link
-            href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
-          >
-            <MapIcon className="w-3 h-3 shrink-0" />
-            <span className="truncate max-w-[180px]">{localTask.mapName}</span>
-          </Link>
-        )}
-
         {/* Approval task badge */}
         {task.isApprovalTask && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-2 py-0.5 rounded-full tracking-wide lowercase shrink-0">
             aprovação
           </span>
         )}
-
-
-        {/* Status badge — inline editable, fixed to right */}
-        <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
-          <Badge
-            variant="outline"
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
-            onClick={handleStatusClick}
-            title="Clique para alterar status"
-          >
-            {getStatusLabel(localTask.status)}
-          </Badge>
-          {statusOpen && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {STATUS_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                  >
-                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </>,
-            document.body
-          )}
-        </div>
       </div>
     </div>
   );

@@ -158,6 +158,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       cardTitle: cards.title,
       mapName: maps.name,
       workspaceName: workspaces.name,
+      workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
     })

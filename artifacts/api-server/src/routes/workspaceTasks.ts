@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaceMembers, users, subtasks, taskActivities, cardConnections } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -199,12 +199,14 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       cardId: cards.id,
       cardTitle: cards.title,
       mapName: maps.name,
+      workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
     })
     .from(tasks)
     .leftJoin(cards, eq(cards.taskId, tasks.id))
     .leftJoin(maps, eq(maps.id, tasks.mapId))
+    .leftJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
     .where(
       and(
