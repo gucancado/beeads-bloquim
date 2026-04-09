@@ -1435,25 +1435,6 @@ export function TaskDetailModal({
                         </div>
                       )}
 
-                      {/* Priority */}
-                      <div>
-                        <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
-                          <Flag className="w-3 h-3" /> Prioridade
-                        </label>
-                        <div className="flex items-center h-10 px-2">
-                          <PriorityBadge
-                            value={priority}
-                            onChange={v => {
-                              setPriority(v);
-                              markDirty();
-                              if (isCardMode) saveCardTaskDetails({ priority: v });
-                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { priority: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                            }}
-                            portalContainer={dialogContentEl}
-                          />
-                        </div>
-                      </div>
-
                       {/* Due Date + Recurrence */}
                       <div>
                         <label className={`text-xs font-semibold tracking-wider mb-1.5 flex items-center gap-1 block lowercase ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
@@ -1533,6 +1514,25 @@ export function TaskDetailModal({
                               </Popover>
                             );
                           })()}
+                        </div>
+                      </div>
+
+                      {/* Priority */}
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center justify-end gap-1 block lowercase">
+                          <Flag className="w-3 h-3" /> Prioridade
+                        </label>
+                        <div className="flex items-center justify-end h-10 px-2">
+                          <PriorityBadge
+                            value={priority}
+                            onChange={v => {
+                              setPriority(v);
+                              markDirty();
+                              if (isCardMode) saveCardTaskDetails({ priority: v });
+                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { priority: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                            }}
+                            portalContainer={dialogContentEl}
+                          />
                         </div>
                       </div>
                     </div>
