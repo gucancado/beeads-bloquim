@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, useReactFlow } from 'reactflow';
+import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
@@ -895,6 +895,25 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     [workspaceId, mapId, updateCardMut, updateTextMut, highlightedEdgeId, deleteConnMut, createConnMut, queryClient, mapData],
   );
 
+  const onSelectionDragStop = useCallback(
+    (_event: React.MouseEvent, selectedNodes: Node[]) => {
+      selectedNodes.forEach(node => {
+        if (node.type === 'textnode') {
+          updateTextMut.mutate({
+            workspaceId, mapId, elementId: node.id,
+            data: { positionX: node.position.x, positionY: node.position.y },
+          });
+        } else {
+          updateCardMut.mutate({
+            workspaceId, mapId, cardId: node.id,
+            data: { positionX: node.position.x, positionY: node.position.y },
+          });
+        }
+      });
+    },
+    [workspaceId, mapId, updateCardMut, updateTextMut],
+  );
+
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) return;
@@ -1376,8 +1395,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onConnectEnd={onConnectEnd}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
+            onSelectionDragStop={onSelectionDragStop}
             onPaneClick={onPaneClick}
             onPaneContextMenu={(e) => e.preventDefault()}
+            selectionOnDrag
+            selectionMode={SelectionMode.Partial}
             panOnDrag={[2]}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}

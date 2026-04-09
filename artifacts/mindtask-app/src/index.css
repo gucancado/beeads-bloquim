@@ -137,6 +137,16 @@
 }
 
 /* React Flow customizations for a premium look */
+.react-flow__selection {
+  background: hsl(36 100% 50% / 0.08);
+  border: 2px solid hsl(36 100% 50%);
+  border-radius: 4px;
+}
+
+.react-flow__pane {
+  cursor: crosshair;
+}
+
 .react-flow__node {
   border-radius: var(--radius-xl);
 }
