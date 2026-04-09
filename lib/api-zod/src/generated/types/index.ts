@@ -28,6 +28,7 @@ export * from "./mapDetailResponse";
 export * from "./mapResponse";
 export * from "./registerRequest";
 export * from "./successResponse";
+export * from "./recurrenceConfig";
 export * from "./taskPriority";
 export * from "./taskResponse";
 export * from "./taskStatus";

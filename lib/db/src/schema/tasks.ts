@@ -15,6 +15,21 @@ import { users } from "./users";
 import { maps } from "./maps";
 import { workspaces } from "./workspaces";
 
+export type RecurrenceType = "daily" | "weekly" | "monthly" | "yearly" | "periodic" | "custom";
+
+export interface RecurrenceConfig {
+  type: RecurrenceType;
+  weekDays?: number[];
+  monthlyMode?: "ordinal" | "day";
+  ordinalWeek?: number;
+  ordinalDay?: number;
+  monthDay?: number;
+  intervalDays?: number;
+  customInterval?: number;
+  customUnit?: "day" | "week" | "month" | "year";
+  customWeekDays?: number[];
+}
+
 export const taskStatusEnum = pgEnum("task_status", [
   "pending",
   "in_progress",
@@ -72,6 +87,8 @@ export const tasks = pgTable("tasks", {
   approvalComment: text("approval_comment"),
   approvalMode: approvalModeEnum("approval_mode"),
   parentApprovalStatus: parentApprovalStatusEnum("parent_approval_status"),
+  isRecurring: boolean("is_recurring").notNull().default(false),
+  recurrenceConfig: jsonb("recurrence_config").$type<RecurrenceConfig>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard, X, Plus, CheckSquare } from "lucide-react";
+import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, GripVertical, Check, Briefcase, ChevronDown, LayoutDashboard, X, Plus, CheckSquare, Repeat } from "lucide-react";
+import { RecurrencePanel } from "@/components/tasks/RecurrencePanel";
+import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -344,6 +347,8 @@ interface WorkspaceTask {
   isApprovalTask?: boolean;
   parentTaskId?: string | null;
   parentApprovalStatus?: string | null;
+  isRecurring?: boolean;
+  recurrenceConfig?: RecurrenceConfig | null;
 }
 
 interface SubtaskItem {
@@ -359,6 +364,8 @@ interface UpdateTaskPayload {
   assignedTo?: string | null;
   priority?: string;
   dueDate?: string | null;
+  isRecurring?: boolean;
+  recurrenceConfig?: RecurrenceConfig | null;
 }
 
 interface CreateTaskPayload {
@@ -485,6 +492,9 @@ export function TaskDetailModal({
   const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
   const [taskMapId, setTaskMapId] = useState<string | null>(null);
   const [autoCreateDirty, setAutoCreateDirty] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
+  const [showRecurrencePanel, setShowRecurrencePanel] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const initializedForTaskRef = useRef<string | null>(null);
   const [dialogContentEl, setDialogContentEl] = useState<HTMLDivElement | null>(null);
@@ -519,6 +529,9 @@ export function TaskDetailModal({
       setTaskMapId(null);
       setShowMore(false);
       setAutoCreateDirty(false);
+      setIsRecurring(false);
+      setRecurrenceConfig(null);
+      setShowRecurrencePanel(false);
     }
   }, [open]);
 
@@ -608,6 +621,11 @@ export function TaskDetailModal({
           setStatus(task.status ?? "pending");
           setTaskWorkspaceId(task.workspaceId ?? null);
           setTaskMapId(task.mapId ?? null);
+          setIsRecurring(task.isRecurring ?? false);
+          setRecurrenceConfig(task.recurrenceConfig ?? null);
+          if (task.isRecurring && task.recurrenceConfig) {
+            setShowRecurrencePanel(true);
+          }
         }
       } else if (!isEditing) {
         initializedForTaskRef.current = null;
@@ -618,6 +636,9 @@ export function TaskDetailModal({
         setDueDate("");
         setStatus("pending");
         setLocalSubtasks([]);
+        setIsRecurring(false);
+        setRecurrenceConfig(null);
+        setShowRecurrencePanel(false);
       }
     }
   }, [task, isEditing, open, isCardMode, resolvedTaskId]);
@@ -757,14 +778,20 @@ export function TaskDetailModal({
     taskId: string;
     standalone: boolean;
     wsId: string;
+    currentIsRecurring?: boolean;
+    currentRecurrenceConfig?: RecurrenceConfig | null;
   }
 
   const statusMutation = useMutation({
-    mutationFn: ({ newStatus, taskId, standalone, wsId }: StatusMutationInput) =>
-      customFetch(standalone ? `/api/my-tasks/${taskId}/status` : `/api/workspaces/${wsId}/tasks/${taskId}/status`, {
+    mutationFn: ({ newStatus, taskId, standalone, wsId, currentIsRecurring, currentRecurrenceConfig }: StatusMutationInput) => {
+      const body: Record<string, unknown> = { status: newStatus };
+      if (currentIsRecurring !== undefined) body.isRecurring = currentIsRecurring;
+      if (currentRecurrenceConfig !== undefined) body.recurrenceConfig = currentRecurrenceConfig ?? null;
+      return customFetch(standalone ? `/api/my-tasks/${taskId}/status` : `/api/workspaces/${wsId}/tasks/${taskId}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      }),
+        body: JSON.stringify(body),
+      });
+    },
     onSuccess: (_, { taskId, standalone, wsId }) => {
       invalidateTask();
       if (standalone) {
@@ -841,6 +868,8 @@ export function TaskDetailModal({
     const payload: UpdateTaskPayload = {
       title, description: description || null,
       priority, dueDate: dueDate || null,
+      isRecurring,
+      recurrenceConfig: recurrenceConfig ?? null,
     };
     if (!isStandalone) {
       payload.assignedTo = assignedTo === "unassigned" ? null : assignedTo;
@@ -857,7 +886,14 @@ export function TaskDetailModal({
     setStatus(newStatus);
     markDirty();
     if (isCardMode) handleCardStatusChange(newStatus);
-    else statusMutation.mutate({ newStatus, taskId: resolvedTaskId!, standalone: isStandalone, wsId: effectiveWorkspaceId });
+    else statusMutation.mutate({
+      newStatus,
+      taskId: resolvedTaskId!,
+      standalone: isStandalone,
+      wsId: effectiveWorkspaceId,
+      currentIsRecurring: isRecurring,
+      currentRecurrenceConfig: recurrenceConfig,
+    });
   };
 
   const handleConcluir = () => {
@@ -873,7 +909,14 @@ export function TaskDetailModal({
     } else {
       setStatus("completed");
       if (isCardMode) handleCardStatusChange("completed");
-      else statusMutation.mutate({ newStatus: "completed", taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+      else statusMutation.mutate({
+        newStatus: "completed",
+        taskId: resolvedTaskId,
+        standalone: isStandalone,
+        wsId: effectiveWorkspaceId,
+        currentIsRecurring: isRecurring,
+        currentRecurrenceConfig: recurrenceConfig,
+      });
     }
   };
 
@@ -1247,6 +1290,12 @@ export function TaskDetailModal({
                                 }).then(() => {
                                   setTaskMapId(newMapId);
                                   markDirty();
+                                  // Clear recurrence when associating with a map
+                                  if (newMapId) {
+                                    setIsRecurring(false);
+                                    setRecurrenceConfig(null);
+                                    setShowRecurrencePanel(false);
+                                  }
                                   invalidateTask();
                                 }).catch(() => toast({ title: "Erro ao alterar plano", variant: "destructive" }));
                               }
@@ -1334,22 +1383,86 @@ export function TaskDetailModal({
                         </div>
                       </div>
 
-                      {/* Due Date */}
+                      {/* Due Date + Recurrence */}
                       <div>
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
                           <Calendar className="w-3 h-3" /> Prazo
                         </label>
-                        <Input
-                          type="date"
-                          value={dueDate}
-                          onChange={e => {
-                            setDueDate(e.target.value);
-                            markDirty();
-                            if (isCardMode) saveCardTaskDetails({ dueDate: e.target.value });
-                            else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { dueDate: e.target.value || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                          }}
-                          className="bg-background rounded-xl h-10 text-sm"
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="date"
+                            value={dueDate}
+                            onChange={e => {
+                              setDueDate(e.target.value);
+                              markDirty();
+                              if (isCardMode) saveCardTaskDetails({ dueDate: e.target.value });
+                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { dueDate: e.target.value || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                            }}
+                            className="bg-background rounded-xl h-10 text-sm flex-1 min-w-0"
+                          />
+                          {!isCardMode && (() => {
+                            const hasMapId = !!(mapId || taskMapId);
+                            const isDisabled = hasMapId;
+                            return (
+                              <Popover
+                                open={showRecurrencePanel}
+                                onOpenChange={(open) => {
+                                  if (isDisabled) return;
+                                  if (open && !showRecurrencePanel) {
+                                    setShowRecurrencePanel(true);
+                                    if (!recurrenceConfig) {
+                                      const defaultCfg: RecurrenceConfig = { type: "weekly", weekDays: [1] };
+                                      setRecurrenceConfig(defaultCfg);
+                                      setIsRecurring(true);
+                                      if (isEditing && resolvedTaskId) {
+                                        saveMutation.mutate({ body: { isRecurring: true, recurrenceConfig: defaultCfg }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                      }
+                                    }
+                                  } else if (!open) {
+                                    setShowRecurrencePanel(false);
+                                  }
+                                }}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    disabled={isDisabled}
+                                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all shrink-0 ${
+                                      isDisabled
+                                        ? "opacity-40 cursor-not-allowed border-border bg-background text-muted-foreground"
+                                        : isRecurring
+                                          ? "border-primary bg-primary/10 text-primary hover:bg-primary/20"
+                                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                                    }`}
+                                    title={isDisabled ? "não é possível ter tarefas recorrentes em um plano" : isRecurring && recurrenceConfig ? `repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[recurrenceConfig.type]}` : "configurar repetição"}
+                                  >
+                                    <Repeat className="w-4 h-4" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align="end"
+                                  className="w-auto p-0 rounded-xl"
+                                  onOpenAutoFocus={(e) => e.preventDefault()}
+                                >
+                                  <RecurrencePanel
+                                    value={recurrenceConfig}
+                                    onChange={(cfg) => {
+                                      setRecurrenceConfig(cfg);
+                                      setIsRecurring(!!cfg);
+                                      markDirty();
+                                      if (!cfg) {
+                                        setShowRecurrencePanel(false);
+                                      }
+                                      if (isEditing && resolvedTaskId) {
+                                        saveMutation.mutate({ body: { isRecurring: !!cfg, recurrenceConfig: cfg ?? null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                      }
+                                    }}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
 

@@ -1,9 +1,12 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
+import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { computeOverdue } from "../lib/overdue";
+import { calculateNextDueDate } from "../lib/recurrence";
+import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -185,11 +188,26 @@ function parseDateNoon(value: string | null | undefined): Date | null {
   return new Date(dateOnly + "T12:00:00.000Z");
 }
 
+const recurrenceConfigSchema = z.object({
+  type: z.enum(["daily", "weekly", "monthly", "yearly", "periodic", "custom"]),
+  weekDays: z.array(z.number().int().min(0).max(6)).optional(),
+  monthlyMode: z.enum(["ordinal", "day"]).optional(),
+  ordinalWeek: z.number().int().min(1).max(5).optional(),
+  ordinalDay: z.number().int().min(0).max(6).optional(),
+  monthDay: z.number().int().min(1).max(31).optional(),
+  intervalDays: z.number().int().min(1).optional(),
+  customInterval: z.number().int().min(1).optional(),
+  customUnit: z.enum(["day", "week", "month", "year"]).optional(),
+  customWeekDays: z.array(z.number().int().min(0).max(6)).optional(),
+});
+
 const createStandaloneTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
+  isRecurring: z.boolean().optional(),
+  recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
@@ -199,7 +217,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
   }
 
-  const { title, description, dueDate, priority } = parsed.data;
+  const { title, description, dueDate, priority, isRecurring, recurrenceConfig } = parsed.data;
   const dueDateValue = parseDateNoon(dueDate);
   const overdueValue = computeOverdue(dueDateValue, "draft");
 
@@ -213,6 +231,8 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     priority,
     status: "draft",
     overdue: overdueValue,
+    isRecurring: isRecurring ?? false,
+    recurrenceConfig: recurrenceConfig ?? null,
   }).returning();
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
@@ -232,6 +252,8 @@ const updateStandaloneTaskSchema = z.object({
   description: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  isRecurring: z.boolean().optional(),
+  recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
 router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
@@ -265,6 +287,8 @@ router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
 
 const statusSchema = z.object({
   status: z.enum(["pending", "in_progress", "blocked", "completed", "draft"]),
+  isRecurring: z.boolean().optional(),
+  recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
 router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
@@ -274,7 +298,7 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
   if (!parsed.success) {
     return res.status(400).json({ message: "Status inválido", errors: parsed.error.flatten() });
   }
-  const { status: newStatus } = parsed.data;
+  const { status: newStatus, isRecurring: bodyIsRecurring, recurrenceConfig: bodyRecurrenceConfig } = parsed.data;
 
   const [existing] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!existing) return res.status(404).json({ message: "Tarefa não encontrada" });
@@ -295,6 +319,9 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
     overdue: computeOverdue(existing.dueDate, newStatus),
   };
   if (newStatus === "completed") updateData.completedAt = new Date();
+  // If client sends recurrence state alongside status, apply it atomically (prevents race condition)
+  if (bodyIsRecurring !== undefined) updateData.isRecurring = bodyIsRecurring;
+  if (bodyRecurrenceConfig !== undefined) updateData.recurrenceConfig = bodyRecurrenceConfig ?? null;
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
 
@@ -310,6 +337,17 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
         newStatus,
       },
     });
+  }
+
+  // Use the final effective recurrence state (from DB update or existing)
+  const effectiveIsRecurring = updated.isRecurring;
+  const effectiveRecurrenceConfig = updated.recurrenceConfig;
+
+  // Handle recurrence: when a recurring standalone task transitions INTO completed, duplicate it with the next due date
+  if (newStatus === "completed" && previousStatus !== "completed" && effectiveIsRecurring && effectiveRecurrenceConfig && !existing.mapId) {
+    const completedAt = updated.completedAt ?? new Date();
+    const nextDueDate = calculateNextDueDate(existing.dueDate, effectiveRecurrenceConfig as RecurrenceConfig, completedAt);
+    await duplicateRecurringTask(updated, nextDueDate, userId, existing.workspaceId ?? undefined);
   }
 
   return res.json(updated);
@@ -401,6 +439,9 @@ router.patch("/:taskId/association", requireAuth, async (req: AuthRequest, res) 
       }
       const [map] = await db.select().from(maps).where(and(eq(maps.id, parsed.data.mapId), eq(maps.workspaceId, targetWorkspaceId)));
       if (!map) return res.status(400).json({ message: "Plano não encontrado neste workspace" });
+      // Remove recurrence when associating a task with a map
+      updateData.isRecurring = false;
+      updateData.recurrenceConfig = null;
     }
     updateData.mapId = parsed.data.mapId;
   }

@@ -1,11 +1,14 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaceMembers, users, subtasks, taskActivities, cardConnections } from "@workspace/db/schema";
+import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
+import { calculateNextDueDate } from "../lib/recurrence";
+import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -218,12 +221,27 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
   res.json(taskList);
 });
 
+const recurrenceConfigSchema = z.object({
+  type: z.enum(["daily", "weekly", "monthly", "yearly", "periodic", "custom"]),
+  weekDays: z.array(z.number().int().min(0).max(6)).optional(),
+  monthlyMode: z.enum(["ordinal", "day"]).optional(),
+  ordinalWeek: z.number().int().min(1).max(5).optional(),
+  ordinalDay: z.number().int().min(0).max(6).optional(),
+  monthDay: z.number().int().min(1).max(31).optional(),
+  intervalDays: z.number().int().min(1).optional(),
+  customInterval: z.number().int().min(1).optional(),
+  customUnit: z.enum(["day", "week", "month", "year"]).optional(),
+  customWeekDays: z.array(z.number().int().min(0).max(6)).optional(),
+});
+
 const createTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  isRecurring: z.boolean().optional(),
+  recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
 const updateTaskSchema = createTaskSchema.partial();
@@ -236,7 +254,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
     return;
   }
 
-  const { title, description, assignedTo, dueDate, priority } = parsed.data;
+  const { title, description, assignedTo, dueDate, priority, isRecurring, recurrenceConfig } = parsed.data;
 
   const dueDateValue = parseDateNoon(dueDate);
   const overdueValue = computeOverdue(dueDateValue, "draft");
@@ -254,6 +272,8 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       priority: priority ?? "medium",
       status: "draft",
       overdue: overdueValue,
+      isRecurring: isRecurring ?? false,
+      recurrenceConfig: recurrenceConfig ?? null,
     })
     .returning();
 
@@ -348,6 +368,15 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   if ("assignedTo" in parsed.data) updateData.assignedTo = parsed.data.assignedTo ?? null;
   if ("dueDate" in parsed.data) updateData.dueDate = parseDateNoon(parsed.data.dueDate as string);
   if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
+  // Invariant: tasks linked to a plan (mapId) cannot be recurring
+  const effectiveMapId = existing.mapId;
+  if (effectiveMapId) {
+    updateData.isRecurring = false;
+    updateData.recurrenceConfig = null;
+  } else {
+    if ("isRecurring" in parsed.data) updateData.isRecurring = parsed.data.isRecurring ?? false;
+    if ("recurrenceConfig" in parsed.data) updateData.recurrenceConfig = parsed.data.recurrenceConfig ?? null;
+  }
 
   const effectiveDueDate = "dueDate" in updateData ? updateData.dueDate : existing.dueDate;
   const effectiveStatus = existing.status;
@@ -419,6 +448,8 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
 
 const patchStatusSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "blocked", "draft"]),
+  isRecurring: z.boolean().optional(),
+  recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
 router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -430,7 +461,7 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
     res.status(400).json({ error: "Invalid status" });
     return;
   }
-  const { status } = parsed.data;
+  const { status, isRecurring: bodyIsRecurring, recurrenceConfig: bodyRecurrenceConfig } = parsed.data;
 
   const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
   if (!existing) {
@@ -448,6 +479,9 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
   };
 
   updateData.overdue = computeOverdue(existing.dueDate, status);
+  // If client sends recurrence state alongside status, apply it atomically (prevents race condition)
+  if (bodyIsRecurring !== undefined && !existing.mapId) updateData.isRecurring = bodyIsRecurring;
+  if (bodyRecurrenceConfig !== undefined && !existing.mapId) updateData.recurrenceConfig = bodyRecurrenceConfig ?? null;
 
   // Reset parentApprovalStatus when task goes back to in_progress/draft/pending from approved
   if (["in_progress", "draft", "pending"].includes(status) && existing.parentApprovalStatus === "approved") {
@@ -531,6 +565,14 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
         .where(eq(tasks.id, taskId));
       updated.parentApprovalStatus = "in_approval";
     }
+  }
+
+  // Handle recurrence: when a recurring task without mapId transitions INTO completed, duplicate it with the next due date
+  // Use updated.isRecurring/recurrenceConfig so that recurrence state sent atomically with status is respected
+  if (status === "completed" && previousStatus !== "completed" && updated.isRecurring && updated.recurrenceConfig && !existing.mapId) {
+    const completedAt = updated.completedAt ?? new Date();
+    const nextDueDate = calculateNextDueDate(existing.dueDate, updated.recurrenceConfig as RecurrenceConfig, completedAt);
+    await duplicateRecurringTask(updated, nextDueDate, actorId, workspaceId);
   }
 
   res.json(updated);
