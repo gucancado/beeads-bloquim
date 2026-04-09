@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Calendar as CalendarIcon, Map as MapIcon, Building2, User } from "lucide-react";
+import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat } from "lucide-react";
 import { formatDueDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -43,6 +43,8 @@ export interface TaskListItemData {
   cardId?: string | null;
   workspaceName?: string | null;
   isApprovalTask?: boolean | null;
+  isRecurring?: boolean | null;
+  recurrenceConfig?: { type: string } | null;
 }
 
 interface Props {
@@ -391,6 +393,16 @@ export function TaskListItem({
             title="Alterar prazo"
           />
         </label>
+
+        {/* Recurrence indicator */}
+        {localTask.isRecurring && localTask.recurrenceConfig && (
+          <span
+            className="inline-flex items-center shrink-0 text-muted-foreground"
+            title={`repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[localTask.recurrenceConfig.type] ?? "periodicamente"}`}
+          >
+            <Repeat className="w-3 h-3" />
+          </span>
+        )}
 
         {/* Workspace name (my-tasks page) */}
         {showWorkspaceName && localTask.workspaceName && (

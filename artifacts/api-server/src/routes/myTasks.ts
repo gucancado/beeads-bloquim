@@ -151,6 +151,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       updatedAt: tasks.updatedAt,
       overdue: tasks.overdue,
       isApprovalTask: tasks.isApprovalTask,
+      isRecurring: tasks.isRecurring,
+      recurrenceConfig: tasks.recurrenceConfig,
       parentTaskId: tasks.parentTaskId,
       cardId: cards.id,
       cardTitle: cards.title,

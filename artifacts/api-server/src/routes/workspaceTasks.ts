@@ -192,6 +192,8 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       isApprovalTask: tasks.isApprovalTask,
+      isRecurring: tasks.isRecurring,
+      recurrenceConfig: tasks.recurrenceConfig,
       parentTaskId: tasks.parentTaskId,
       parentApprovalStatus: tasks.parentApprovalStatus,
       cardId: cards.id,
