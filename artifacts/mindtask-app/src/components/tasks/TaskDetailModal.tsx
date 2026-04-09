@@ -374,6 +374,7 @@ interface TaskDetailModalProps {
   open: boolean;
   onClose: () => void;
   taskId?: string | null;
+  onAutoCreated?: (taskId: string) => void;
 
   mapId?: string;
   cardId?: string | null;
@@ -451,6 +452,7 @@ export function TaskDetailModal({
   open,
   onClose,
   taskId = null,
+  onAutoCreated,
   mapId,
   cardId = null,
   onDeleteCard,
@@ -802,6 +804,7 @@ export function TaskDetailModal({
         return;
       }
       setAutoCreatedTaskId(newTask.id);
+      onAutoCreated?.(newTask.id);
 
       setTitle("nova tarefa");
       if (wasStandalone) {

@@ -1052,6 +1052,9 @@ export default function WorkspaceDetailPage() {
         taskId={editingTaskId}
         open={taskSheetOpen}
         onClose={handleCloseTaskSheet}
+        onAutoCreated={(newTaskId) => {
+          navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
+        }}
       />
 
       {/* Add Member Dialog */}

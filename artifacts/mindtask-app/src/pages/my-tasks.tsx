@@ -108,7 +108,7 @@ export default function MyTasksPage() {
 
   useEffect(() => {
     if (deepLinkTaskId) {
-      if (!standaloneTask && !openCard) {
+      if (!standaloneTask && !openCard && !createSheetOpen) {
         if (deepLinkTaskMeta !== undefined) {
           if (deepLinkTaskMeta && deepLinkTaskMeta.workspaceId) {
             navigate(`/workspaces/${deepLinkTaskMeta.workspaceId}/tasks/${deepLinkTaskId}`, { replace: true });
@@ -123,7 +123,7 @@ export default function MyTasksPage() {
         setOpenCard(null);
       }
     }
-  }, [deepLinkTaskId, deepLinkTaskMeta]);
+  }, [deepLinkTaskId, deepLinkTaskMeta, createSheetOpen]);
 
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
@@ -148,6 +148,7 @@ export default function MyTasksPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setCreateSheetOpen(false);
+    if (deepLinkTaskId) navigate("/my-tasks", { replace: true });
   };
 
   const openTaskItem = (task: any) => {
@@ -314,6 +315,9 @@ export default function MyTasksPage() {
         taskId={null}
         open={createSheetOpen}
         onClose={handleCloseCreateSheet}
+        onAutoCreated={(newTaskId) => {
+          navigate(`/my-tasks/tasks/${newTaskId}`, { replace: true });
+        }}
       />
     </AppLayout>
   );
