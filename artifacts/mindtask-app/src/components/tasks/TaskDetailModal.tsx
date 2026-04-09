@@ -526,13 +526,16 @@ export function TaskDetailModal({
 
   const taskIdResolved: string | undefined = isCardMode ? (card?.task?.id ?? undefined) : (resolvedTaskId ?? undefined);
 
-  const { data: task, isLoading: isTaskLoading } = useQuery<WorkspaceTask>({
+  const { data: task, isLoading: isTaskLoading, error: taskError } = useQuery<WorkspaceTask>({
     queryKey: isStandalone
       ? [`/api/my-tasks/${resolvedTaskId}`]
       : [`/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`],
     queryFn: () => customFetch(isStandalone ? `/api/my-tasks/${resolvedTaskId}` : `/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`),
     enabled: !isCardMode && isEditing && open && !!resolvedTaskId,
+    retry: false,
   });
+  const taskNotFound = !isTaskLoading && !!taskError && !task;
+  const taskErrorStatus = taskError && typeof (taskError as { status?: unknown }).status === "number" ? (taskError as { status: number }).status : 0;
 
   const { data: cardModeMembers } = useListWorkspaceMembers(effectiveWorkspaceId, {
     query: { enabled: open && isCardMode }
@@ -1025,6 +1028,23 @@ export function TaskDetailModal({
                 }}
               >
                 Tentar novamente
+              </Button>
+            </div>
+          ) : taskNotFound ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3">
+              <AlertTriangle className="w-8 h-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground lowercase text-center">
+                {taskErrorStatus === 403
+                  ? "Você não tem permissão para acessar esta tarefa."
+                  : "Tarefa não encontrada."}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl lowercase"
+                onClick={onClose}
+              >
+                Fechar
               </Button>
             </div>
           ) : isLoading || (isCardMode && !card) ? (

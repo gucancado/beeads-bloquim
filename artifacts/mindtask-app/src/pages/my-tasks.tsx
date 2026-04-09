@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
 import { CheckSquare, Loader2, Plus } from "lucide-react";
@@ -8,6 +8,7 @@ import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListIte
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { groupTasksByDeadline } from "@/lib/groupTasksByDeadline";
+import { useRoute, useLocation } from "wouter";
 
 interface OpenCard {
   workspaceId: string;
@@ -38,6 +39,9 @@ export default function MyTasksPage() {
   const [standaloneTask, setStandaloneTask] = useState<StandaloneTask | null>(null);
   const queryClient = useQueryClient();
   const { data: me } = useGetMe();
+  const [, navigate] = useLocation();
+  const [, deepLinkParams] = useRoute("/my-tasks/tasks/:taskId");
+  const deepLinkTaskId = deepLinkParams?.taskId ?? null;
 
   const toggleStatus = (value: string) => {
     setSelectedStatuses(prev =>
@@ -88,20 +92,36 @@ export default function MyTasksPage() {
     },
   });
 
+  useEffect(() => {
+    if (deepLinkTaskId) {
+      if (!standaloneTask && !openCard) {
+        setStandaloneTask({ workspaceId: "", id: deepLinkTaskId, mapId: null, cardId: null, title: "" });
+      }
+    } else {
+      if (standaloneTask || openCard) {
+        setStandaloneTask(null);
+        setOpenCard(null);
+      }
+    }
+  }, [deepLinkTaskId]);
+
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setOpenCard(null);
+    if (deepLinkTaskId) navigate("/my-tasks", { replace: true });
   };
 
   const handleDeleteCardFromPanel = () => {
     setOpenCard(null);
+    if (deepLinkTaskId) navigate("/my-tasks", { replace: true });
   };
 
   const handleCloseSheet = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setStandaloneTask(null);
+    if (deepLinkTaskId) navigate("/my-tasks", { replace: true });
   };
 
   const handleCloseCreateSheet = () => {
@@ -113,8 +133,10 @@ export default function MyTasksPage() {
   const openTaskItem = (task: any) => {
     if (task.cardId && task.mapId) {
       setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: task.cardId });
+      navigate(`/my-tasks/tasks/${task.id}`);
     } else {
       setStandaloneTask({ workspaceId: task.workspaceId ?? "", id: task.id, mapId: task.mapId, cardId: task.cardId, title: task.title });
+      navigate(`/my-tasks/tasks/${task.id}`);
     }
   };
 

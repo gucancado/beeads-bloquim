@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRoute, Link, useSearch } from "wouter";
+import { useRoute, Link, useSearch, useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden, useDeleteMap } from "@/hooks/useHidden";
@@ -161,15 +161,22 @@ function isValidTab(v: string | null): v is TabValue {
 
 export default function WorkspaceDetailPage() {
   const [, params] = useRoute("/workspaces/:id");
-  const workspaceId = params?.id || "";
+  const [, deepLinkParams] = useRoute("/workspaces/:wsId/tasks/:taskId");
+  const workspaceId = params?.id || deepLinkParams?.wsId || "";
+  const deepLinkTaskId = deepLinkParams?.taskId ?? null;
   const search = useSearch();
   const tabParam = new URLSearchParams(search).get("tab");
   const tabFromUrl: TabValue = isValidTab(tabParam) ? tabParam : "maps";
-  const [activeTab, setActiveTab] = useState<TabValue>(tabFromUrl);
+  const [activeTab, setActiveTab] = useState<TabValue>(deepLinkTaskId ? "tasks" : tabFromUrl);
+  const [, navigate] = useLocation();
 
   useEffect(() => {
-    setActiveTab(tabFromUrl);
-  }, [workspaceId, tabFromUrl]);
+    if (deepLinkTaskId) {
+      setActiveTab("tasks");
+    } else {
+      setActiveTab(tabFromUrl);
+    }
+  }, [workspaceId, tabFromUrl, deepLinkTaskId]);
 
   const { data: workspace, isLoading: isWsLoading } = useGetWorkspace(workspaceId);
   const { data: dashboard } = useGetDashboard(workspaceId);
@@ -460,15 +467,32 @@ export default function WorkspaceDetailPage() {
     );
   };
 
+  useEffect(() => {
+    if (deepLinkTaskId) {
+      if (!taskSheetOpen && !openCard) {
+        setEditingTaskId(deepLinkTaskId);
+        setTaskSheetOpen(true);
+      }
+    } else {
+      if (taskSheetOpen || openCard) {
+        setTaskSheetOpen(false);
+        setEditingTaskId(null);
+        setOpenCard(null);
+      }
+    }
+  }, [deepLinkTaskId]);
+
   const handleClosePanel = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setOpenCard(null);
+    if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
   };
 
   const handleDeleteCardFromPanel = () => {
     setOpenCard(null);
+    if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
   };
 
   const handleCloseTaskSheet = () => {
@@ -476,14 +500,17 @@ export default function WorkspaceDetailPage() {
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
     setTaskSheetOpen(false);
     setEditingTaskId(null);
+    if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
   };
 
   const openTaskItem = (task: any) => {
     if (task.cardId && task.mapId) {
       setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: task.cardId });
+      navigate(`/workspaces/${workspaceId}/tasks/${task.id}`);
     } else {
       setEditingTaskId(task.id);
       setTaskSheetOpen(true);
+      navigate(`/workspaces/${workspaceId}/tasks/${task.id}`);
     }
   };
 

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -337,6 +337,7 @@ function edgeIntersectsNodeBBox(
 
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
@@ -349,9 +350,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
   const connectingJoinNodeRef = useRef<string | null>(null);
 
+  const search = useSearch();
+  const canvasBasePath = `/workspaces/${workspaceId}/maps/${mapId}`;
+  const cardIdFromUrl = new URLSearchParams(search).get("cardId");
+
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(cardIdFromUrl);
   const [autoFocusCardId, setAutoFocusCardId] = useState<string | null>(null);
   const autoFocusCardIdRef = useRef<string | null>(null);
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
@@ -389,9 +394,18 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       });
   }, [workspaceId, mapId]);
 
+  useEffect(() => {
+    if (cardIdFromUrl && !selectedCardId) {
+      setSelectedCardId(cardIdFromUrl);
+    } else if (!cardIdFromUrl && selectedCardId) {
+      setSelectedCardId(null);
+    }
+  }, [cardIdFromUrl]);
+
   const handleOpenPanel = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
-  }, []);
+    navigate(`${canvasBasePath}?cardId=${cardId}`);
+  }, [canvasBasePath, navigate]);
 
   const handleInlineUpdate = useCallback((cardId: string, patch: Partial<{
     title: string;
@@ -1404,7 +1418,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         mapId={mapId}
         cardId={selectedCardId}
         open={!!selectedCardId}
-        onClose={() => setSelectedCardId(null)}
+        onClose={() => {
+          setSelectedCardId(null);
+          navigate(canvasBasePath, { replace: true });
+        }}
         onDeleteCard={handleDeleteCard}
       />
 

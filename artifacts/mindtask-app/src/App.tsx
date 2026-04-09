@@ -75,8 +75,10 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/workspaces" component={WorkspacesPage} />
+      <Route path="/workspaces/:wsId/tasks/:taskId" component={WorkspaceDetailPage} />
       <Route path="/workspaces/:id" component={WorkspaceDetailPage} />
       <Route path="/workspaces/:wsId/maps/:mapId" component={CanvasPage} />
+      <Route path="/my-tasks/tasks/:taskId" component={MyTasksPage} />
       <Route path="/my-tasks" component={MyTasksPage} />
       <Route component={NotFound} />
     </Switch>
