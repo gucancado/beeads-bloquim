@@ -4,7 +4,6 @@ import { useLogin } from "@workspace/api-client-react";
 import { NotebookPen, Loader2, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggleFloat } from "@/components/layout/ThemeToggleFloat";
@@ -50,43 +49,37 @@ export default function LoginPage() {
             <p className="text-muted-foreground mt-2">oi! quer ver o que tem no seu bloquim?<br/>então entra aí =)</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6 bg-card p-8 rounded-3xl shadow-xl border border-border/50">
+          <form onSubmit={handleSubmit} className="space-y-6 p-8 rounded-3xl">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">e-mail</Label>
-                <div className="relative">
-                  <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="voce@exemplo.com" 
-                    className="pl-10 h-12 rounded-xl bg-background"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
+              <div className="relative">
+                <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="voce@exemplo.com"
+                  className="pl-10 h-12 rounded-xl bg-background"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password">senha</Label>
-                <div className="relative">
-                  <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••" 
-                    className="pl-10 h-12 rounded-xl bg-background"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
+
+              <div className="relative">
+                <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  className="pl-10 h-12 rounded-xl bg-background"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
               </div>
             </div>
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full h-12 text-base font-semibold rounded-xl border bg-primary/10 text-primary border-primary hover:bg-primary/15 dark:bg-primary/15 dark:hover:bg-primary/20 hover:-translate-y-0.5 transition-all"
               disabled={loginMutation.isPending}
             >
@@ -102,7 +95,6 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
-      
     </div>
   );
 }
