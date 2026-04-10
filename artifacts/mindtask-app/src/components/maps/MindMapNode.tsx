@@ -31,7 +31,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-blue-50 dark:bg-blue-950/20',
         borderNormal: 'border-blue-200 dark:border-blue-800',
         borderSelected: 'border-blue-500',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('pending').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('pending').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('pending').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-700',
       };
     case 'in_progress':
@@ -40,7 +40,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-amber-50 dark:bg-amber-950/20',
         borderNormal: 'border-amber-200 dark:border-amber-800',
         borderSelected: 'border-amber-500',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('in_progress').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('in_progress').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('in_progress').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-amber-300 dark:hover:border-amber-700',
       };
     case 'completed':
@@ -49,7 +49,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
         borderNormal: 'border-emerald-200 dark:border-emerald-800',
         borderSelected: 'border-emerald-500',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('completed').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('completed').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('completed').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-700',
       };
     case 'blocked':
@@ -58,7 +58,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-slate-50 dark:bg-slate-950/20',
         borderNormal: 'border-slate-200 dark:border-slate-700',
         borderSelected: 'border-slate-400',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('blocked').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('blocked').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('blocked').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-slate-400 dark:hover:border-slate-500',
       };
     case 'overdue':
@@ -67,7 +67,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-red-50 dark:bg-red-950/20',
         borderNormal: 'border-red-200 dark:border-red-800',
         borderSelected: 'border-red-500',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('overdue').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('overdue').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('overdue').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-red-300 dark:hover:border-red-700',
       };
     case 'draft':
@@ -76,7 +76,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-purple-50 dark:bg-purple-950/20',
         borderNormal: 'border-purple-200 dark:border-purple-800',
         borderSelected: 'border-purple-500',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('draft').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('draft').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('draft').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-purple-300 dark:hover:border-purple-700',
       };
     default:
@@ -85,7 +85,7 @@ function getNodeColors(status: string): NodeColors {
         bgLight: 'bg-slate-50 dark:bg-slate-950/20',
         borderNormal: 'border-slate-200 dark:border-slate-700',
         borderSelected: 'border-slate-400',
-        shadowSelected: `0 10px 25px -5px ${getStatusColorHex('no_task').replace(')', ' / 0.3)')}`,
+        shadowSelected: `0 0 0 3px ${getStatusColorHex('no_task').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('no_task').replace(')', ' / 0.55)')}`,
         hoverBorder: 'hover:border-slate-300 dark:hover:border-slate-600',
       };
   }
@@ -335,7 +335,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       : getStatusLabelCentralized('blocked');
     return (
       <div
-        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl border-2 transition-all duration-300 hover:shadow-md ${nodeColors.hoverBorder} ${nodeColors.bgLight} ${selected ? `shadow-md scale-[1.02] ${nodeColors.borderSelected}` : nodeColors.borderNormal}`}
+        className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl transition-all duration-300 hover:shadow-md ${nodeColors.hoverBorder} ${nodeColors.bgLight} ${selected ? `border-[3px] scale-[1.02] ${nodeColors.borderSelected}` : `border-2 ${nodeColors.borderNormal}`}`}
+        style={selected ? { boxShadow: nodeColors.shadowSelected } : undefined}
         onDoubleClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
       >
         {/* Add child button — floats outside card to the right */}
@@ -411,7 +412,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   return (
     <div
-      className={`group/node relative min-w-[220px] max-w-[280px] rounded-2xl shadow-lg border-2 transition-all duration-200 ${nodeColors.bgLight} ${selected ? `shadow-xl scale-[1.02] ${nodeColors.borderSelected}` : nodeColors.borderNormal}`}
+      className={`group/node relative min-w-[220px] max-w-[280px] rounded-2xl shadow-lg transition-all duration-200 ${nodeColors.bgLight} ${selected ? `border-[3px] scale-[1.02] ${nodeColors.borderSelected}` : `border-2 ${nodeColors.borderNormal}`}`}
       style={{
         boxShadow: selected ? nodeColors.shadowSelected : undefined,
       }}

@@ -226,8 +226,8 @@ function TextNode({ id, data, selected }: TextNodeProps) {
           display: 'inline-block',
           maxWidth: 480,
           cursor: isEditing ? 'text' : 'grab',
-          outline: selected && !isEditing ? '2px solid hsl(36 100% 50%)' : 'none',
-          outlineOffset: '4px',
+          outline: selected && !isEditing ? '3px solid hsl(36 100% 50%)' : 'none',
+          outlineOffset: '6px',
           borderRadius: '4px',
         }}
         onClick={handleClick}

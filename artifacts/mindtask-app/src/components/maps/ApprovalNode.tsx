@@ -57,7 +57,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
         hex: getStatusColorHex('pending'),
         bgLight: 'bg-blue-50 dark:bg-blue-950/20',
         borderLight: 'border-blue-200 dark:border-blue-800',
-        borderSelected: 'border-blue-500 shadow-lg shadow-blue-500/20',
+        borderSelected: 'border-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.35),0_8px_32px_-4px_rgba(59,130,246,0.55)]',
         ringLight: 'ring-blue-300 dark:ring-blue-700',
         textColor: 'text-blue-800 dark:text-blue-200',
         stripBg: 'bg-blue-400 dark:bg-blue-600',
@@ -71,7 +71,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
         hex: getStatusColorHex('in_progress'),
         bgLight: 'bg-amber-50 dark:bg-amber-950/20',
         borderLight: 'border-amber-200 dark:border-amber-800',
-        borderSelected: 'border-amber-500 shadow-lg shadow-amber-500/20',
+        borderSelected: 'border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.35),0_8px_32px_-4px_rgba(245,158,11,0.55)]',
         ringLight: 'ring-amber-300 dark:ring-amber-700',
         textColor: 'text-amber-800 dark:text-amber-200',
         stripBg: 'bg-amber-400 dark:bg-amber-600',
@@ -85,7 +85,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
         hex: getStatusColorHex('completed'),
         bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
         borderLight: 'border-emerald-200 dark:border-emerald-800',
-        borderSelected: 'border-emerald-500 shadow-lg shadow-emerald-500/20',
+        borderSelected: 'border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35),0_8px_32px_-4px_rgba(16,185,129,0.55)]',
         ringLight: 'ring-emerald-300 dark:ring-emerald-700',
         textColor: 'text-emerald-800 dark:text-emerald-200',
         stripBg: 'bg-emerald-400 dark:bg-emerald-600',
@@ -99,7 +99,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
         hex: getStatusColorHex('blocked'),
         bgLight: 'bg-slate-50 dark:bg-slate-950/20',
         borderLight: 'border-slate-200 dark:border-slate-800',
-        borderSelected: 'border-slate-500 shadow-lg shadow-slate-500/20',
+        borderSelected: 'border-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,0.35),0_8px_32px_-4px_rgba(100,116,139,0.55)]',
         ringLight: 'ring-slate-300 dark:ring-slate-700',
         textColor: 'text-slate-700 dark:text-slate-300',
         stripBg: 'bg-slate-400 dark:bg-slate-600',
@@ -114,7 +114,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
         hex: getStatusColorHex('draft'),
         bgLight: 'bg-violet-50 dark:bg-violet-950/20',
         borderLight: 'border-violet-200 dark:border-violet-800',
-        borderSelected: 'border-violet-500 shadow-lg shadow-violet-500/20',
+        borderSelected: 'border-violet-500 shadow-[0_0_0_3px_rgba(139,92,246,0.35),0_8px_32px_-4px_rgba(139,92,246,0.55)]',
         ringLight: 'ring-violet-300 dark:ring-violet-700',
         textColor: 'text-violet-800 dark:text-violet-200',
         stripBg: 'bg-violet-400 dark:bg-violet-600',
@@ -155,10 +155,10 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
   if (data.allSiblingsApproved) {
     return (
       <div
-        className={`group/node relative rounded-full border-2 transition-all duration-200 bg-neutral-100 dark:bg-neutral-800 overflow-hidden ${
+        className={`group/node relative rounded-full transition-all duration-200 bg-neutral-100 dark:bg-neutral-800 overflow-hidden ${
           selected
-            ? 'border-emerald-500 shadow-lg shadow-emerald-500/20'
-            : 'border-emerald-400 dark:border-emerald-600 shadow-md'
+            ? 'border-[3px] border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35),0_8px_32px_-4px_rgba(16,185,129,0.55)]'
+            : 'border-2 border-emerald-400 dark:border-emerald-600 shadow-md'
         }`}
         style={{ width: 48, height: 48 }}
         onDoubleClick={handleDoubleClick}
@@ -201,10 +201,10 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
 
   return (
     <div
-      className={`group/node relative min-w-[160px] max-w-[200px] rounded-2xl border-2 transition-all duration-200 ${colors.bgLight} ${
+      className={`group/node relative min-w-[160px] max-w-[200px] rounded-2xl transition-all duration-200 ${colors.bgLight} ${
         selected
-          ? colors.borderSelected
-          : `${colors.borderLight} shadow-md`
+          ? `border-[3px] ${colors.borderSelected}`
+          : `border-2 ${colors.borderLight} shadow-md`
       }`}
       onDoubleClick={handleDoubleClick}
     >
