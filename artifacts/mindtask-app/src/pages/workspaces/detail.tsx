@@ -805,10 +805,11 @@ export default function WorkspaceDetailPage() {
                       )}
                     </div>
                     <Button
-                      className="rounded-xl h-9 px-4 shrink-0 lowercase"
+                      variant="outline"
+                      className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer shrink-0 lowercase"
                       onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
                     >
-                      <Plus className="w-4 h-4 mr-1.5" /> Nova Tarefa
+                      <Plus className="w-4 h-4 mr-1.5" /> criar
                     </Button>
                   </div>
 
@@ -817,14 +818,10 @@ export default function WorkspaceDetailPage() {
                       <Loader2 className="w-10 h-10 animate-spin text-primary" />
                     </div>
                   ) : workspaceTasks?.length === 0 ? (
-                    <div className="text-center py-24 bg-card rounded-3xl border border-border shadow-sm">
-                      <div className="w-20 h-20 bg-slate-100 dark:bg-slate-900 text-muted-foreground rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckSquare className="w-10 h-10" />
-                      </div>
-                      <h3 className="text-2xl font-bold font-display text-foreground lowercase">Nenhuma tarefa encontrada</h3>
-                      <p className="text-muted-foreground mt-2 max-w-md mx-auto lowercase">Nenhuma tarefa neste espaço com estes filtros.</p>
-                      <Button className="mt-6 rounded-xl lowercase" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
-                        <Plus className="w-4 h-4 mr-1.5" /> Nova Tarefa
+                    <div className="text-center py-24">
+                      <p className="text-muted-foreground lowercase">nada.</p>
+                      <Button variant="outline" className="mt-6 rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer lowercase" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
+                        <Plus className="w-4 h-4 mr-1.5" /> criar
                       </Button>
                     </div>
                   ) : (() => {

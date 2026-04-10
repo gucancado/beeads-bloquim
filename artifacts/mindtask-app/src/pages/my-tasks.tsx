@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
-import { CheckSquare, Loader2, Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
@@ -236,12 +236,8 @@ export default function MyTasksPage() {
               <Loader2 className="w-10 h-10 animate-spin text-primary" />
             </div>
           ) : tasks?.length === 0 ? (
-            <div className="text-center py-24 bg-card rounded-3xl border border-border shadow-sm">
-              <div className="w-20 h-20 bg-slate-100 dark:bg-slate-900 text-muted-foreground rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckSquare className="w-10 h-10" />
-              </div>
-              <h3 className="text-2xl font-bold font-display text-foreground lowercase">Nenhuma tarefa encontrada</h3>
-              <p className="text-muted-foreground mt-2 max-w-md mx-auto lowercase">Não há tarefas com os filtros selecionados.</p>
+            <div className="text-center py-24">
+              <p className="text-muted-foreground lowercase">nada.</p>
             </div>
           ) : (() => {
             const now = new Date();
