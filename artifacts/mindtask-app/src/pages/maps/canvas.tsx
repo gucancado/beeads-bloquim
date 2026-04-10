@@ -10,7 +10,7 @@ import ApprovalNode from "@/components/maps/ApprovalNode";
 import ApprovalJoinNode from "@/components/maps/ApprovalJoinNode";
 import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement } from "@workspace/api-client-react";
+import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type, CheckSquare, Users, Image, Shapes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -338,7 +338,7 @@ function edgeIntersectsNodeBBox(
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView, setCenter } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const [cardGhost, setCardGhost] = useState<{ x: number; y: number } | null>(null);
@@ -365,10 +365,34 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
   const mapDataRef = useRef<typeof mapData>(undefined);
+  const selectedCardIdRef = useRef<string | null>(selectedCardId);
+  const pendingDeleteNodeIdsRef = useRef<string[] | null>(pendingDeleteNodeIds);
+  const focusOnLoadCardIdRef = useRef<string | null>(null);
+  const focusOnLoadAppliedRef = useRef(false);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
   useEffect(() => { mapDataRef.current = mapData; }, [mapData]);
+  useEffect(() => { selectedCardIdRef.current = selectedCardId; }, [selectedCardId]);
+  useEffect(() => { pendingDeleteNodeIdsRef.current = pendingDeleteNodeIds; }, [pendingDeleteNodeIds]);
+
+  useEffect(() => {
+    if (focusOnLoadAppliedRef.current) return;
+    if (nodes.length === 0) return;
+    const cardId = focusOnLoadCardIdRef.current;
+    if (!cardId) return;
+    focusOnLoadAppliedRef.current = true;
+    const card = mapDataRef.current?.cards.find(c => c.id === cardId);
+    if (!card) return;
+    const NODE_W = 200;
+    const NODE_H = 80;
+    const centerX = card.positionX + NODE_W / 2;
+    const centerY = card.positionY + NODE_H / 2;
+    const timer = setTimeout(() => {
+      setCenter(centerX, centerY, { duration: 400, zoom: Math.min(getViewport().zoom, 0.75) });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nodes, setCenter, getViewport]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -384,6 +408,107 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, []);
+
+  useEffect(() => {
+    const handleWASD = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (key !== 'w' && key !== 'a' && key !== 's' && key !== 'd') return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) return;
+
+      if (editingCardIdRef.current !== null) return;
+      if (selectedCardIdRef.current !== null) return;
+      if (pendingDeleteNodeIdsRef.current !== null) return;
+
+      const currentNodes = nodesRef.current;
+      const currentEdges = edgesRef.current;
+
+      const selectedMindmapNodes = currentNodes.filter(n => n.selected && n.type === 'mindmap');
+      if (selectedMindmapNodes.length !== 1) return;
+
+      const current = selectedMindmapNodes[0];
+
+      let targetNode: typeof current | null = null;
+
+      if (key === 'd') {
+        const outEdges = currentEdges.filter(ed => ed.source === current.id);
+        const children = outEdges
+          .map(ed => currentNodes.find(n => n.id === ed.target && n.type === 'mindmap'))
+          .filter(Boolean) as typeof currentNodes;
+        if (children.length === 0) return;
+        targetNode = children.reduce((closest, n) =>
+          Math.abs(n.position.y - current.position.y) < Math.abs(closest.position.y - current.position.y) ? n : closest
+        );
+      } else if (key === 'a') {
+        const inEdges = currentEdges.filter(ed => ed.target === current.id);
+        const parents = inEdges
+          .map(ed => currentNodes.find(n => n.id === ed.source && n.type === 'mindmap'))
+          .filter(Boolean) as typeof currentNodes;
+        if (parents.length === 0) return;
+        targetNode = parents.reduce((closest, n) =>
+          Math.abs(n.position.y - current.position.y) < Math.abs(closest.position.y - current.position.y) ? n : closest
+        );
+      } else if (key === 'w' || key === 's') {
+        const siblingIds = new Set<string>();
+
+        const parentEdges = currentEdges.filter(ed => ed.target === current.id);
+        if (parentEdges.length > 0) {
+          const parentIds = new Set(parentEdges.map(ed => ed.source));
+          currentEdges
+            .filter(ed => parentIds.has(ed.source) && ed.target !== current.id)
+            .forEach(ed => siblingIds.add(ed.target));
+        }
+
+        const childEdges = currentEdges.filter(ed => ed.source === current.id);
+        if (childEdges.length > 0) {
+          const childIds = new Set(childEdges.map(ed => ed.target));
+          currentEdges
+            .filter(ed => childIds.has(ed.target) && ed.source !== current.id)
+            .forEach(ed => siblingIds.add(ed.source));
+        }
+
+        const siblings = Array.from(siblingIds)
+          .map(id => currentNodes.find(n => n.id === id && n.type === 'mindmap'))
+          .filter(Boolean) as typeof currentNodes;
+        if (key === 'w') {
+          const above = siblings.filter(n => n.position.y < current.position.y);
+          if (above.length === 0) return;
+          targetNode = above.reduce((closest, n) =>
+            current.position.y - n.position.y < current.position.y - closest.position.y ? n : closest
+          );
+        } else {
+          const below = siblings.filter(n => n.position.y > current.position.y);
+          if (below.length === 0) return;
+          targetNode = below.reduce((closest, n) =>
+            n.position.y - current.position.y < closest.position.y - current.position.y ? n : closest
+          );
+        }
+      }
+
+      if (!targetNode) return;
+
+      e.preventDefault();
+
+      const nodeWidth = targetNode.width ?? 200;
+      const nodeHeight = targetNode.height ?? 80;
+      const centerX = targetNode.position.x + nodeWidth / 2;
+      const centerY = targetNode.position.y + nodeHeight / 2;
+
+      const finalTarget = targetNode;
+      setNodes(prev => prev.map(n => ({ ...n, selected: n.id === finalTarget.id })));
+      setCenter(centerX, centerY, { duration: 300, zoom: Math.min(getViewport().zoom, 0.75) });
+    };
+
+    document.addEventListener('keydown', handleWASD);
+    return () => document.removeEventListener('keydown', handleWASD);
+  }, [setNodes, setCenter, getViewport]);
 
   useEffect(() => {
     if (!workspaceId || !mapId) return;
@@ -519,6 +644,35 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     }
 
     if (!initializedRef.current) {
+      if (!cardIdFromUrl) {
+        type CardWithDates = typeof mapData.cards[0] & { createdAt?: string };
+        const regularCards = (mapData.cards as CardWithDates[]).filter(
+          c => !(c as ApprovalCardMeta).taskIsApprovalTask,
+        );
+        const inProgressWithDue = regularCards
+          .filter(c => c.statusVisual === 'in_progress' && c.taskDueDate)
+          .sort((a, b) => new Date(a.taskDueDate!).getTime() - new Date(b.taskDueDate!).getTime());
+        if (inProgressWithDue.length > 0) {
+          focusOnLoadCardIdRef.current = inProgressWithDue[0].id;
+        } else {
+          for (const status of ['draft', 'pending', 'in_progress', 'completed', 'blocked']) {
+            const candidates = regularCards
+              .filter(c => c.statusVisual === status)
+              .sort((a, b) => {
+                const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return tb - ta;
+              });
+            if (candidates.length > 0) {
+              focusOnLoadCardIdRef.current = candidates[0].id;
+              break;
+            }
+          }
+        }
+      }
+
+      const focusCardId = focusOnLoadCardIdRef.current;
+
       const initialNodes: Node[] = mapData.cards.map(c => {
         const isApproval = (c as ApprovalCardMeta).taskIsApprovalTask === true;
         const isTerminalNode = !isApproval ? terminalNodeMap.get(c.id) === c.id : undefined;
@@ -534,6 +688,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
           draggable: true,
           deletable: !isApproval,
+          selected: !isApproval && c.id === focusCardId,
         };
       });
 
@@ -542,6 +697,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       );
 
       const joinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
+
       setNodes([...initialNodes, ...textNodes, ...joinNodes]);
 
       const regularEdges: Edge[] = mapData.connections.map(c => {
@@ -675,6 +831,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const createTextMut = useCreateTextElement();
   const updateTextMut = useUpdateTextElement();
   const deleteTextMut = useDeleteTextElement();
+  const updateTaskStatusMut = useUpdateTaskStatus();
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     // For parallel mode, prefer the join node position (to the right of the join circle)
@@ -702,6 +859,80 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       }
     );
   }, [workspaceId, mapId, createCardMut, createConnMut, queryClient]);
+
+  const updateTaskStatusMutRef = useRef(updateTaskStatusMut);
+  updateTaskStatusMutRef.current = updateTaskStatusMut;
+
+  useEffect(() => {
+    const handleNodeShortcuts = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) return;
+      if (editingCardIdRef.current !== null) return;
+
+      const key = e.key;
+      const noMod = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
+
+      if (key === 'Escape' && noMod) {
+        if (selectedCardIdRef.current !== null || pendingDeleteNodeIdsRef.current !== null) return;
+        const anySelected = nodesRef.current.some(n => n.selected && n.type === 'mindmap');
+        if (!anySelected) return;
+        e.preventDefault();
+        setNodes(prev => prev.map(n => ({ ...n, selected: false })));
+        navigate(canvasBasePath);
+        return;
+      }
+
+      if (selectedCardIdRef.current !== null || pendingDeleteNodeIdsRef.current !== null) return;
+
+      const selectedMindmapNodes = nodesRef.current.filter(n => n.selected && n.type === 'mindmap');
+      if (selectedMindmapNodes.length !== 1) return;
+      const current = selectedMindmapNodes[0];
+      const cardId = current.id;
+      const taskId = current.data?.taskId as string | null | undefined;
+
+      if (key === 'Enter' && noMod) {
+        e.preventDefault();
+        handleOpenPanel(cardId);
+        return;
+      }
+
+      if (!noMod) return;
+
+      const lkey = key.toLowerCase();
+
+      if (lkey === 'n') {
+        e.preventDefault();
+        handleAddChildCard(cardId);
+        return;
+      }
+
+      const STATUS_MAP: Record<string, 'draft' | 'pending' | 'in_progress' | 'completed' | 'blocked'> = {
+        z: 'draft',
+        x: 'pending',
+        c: 'in_progress',
+        v: 'completed',
+        b: 'blocked',
+      };
+      const newStatus = STATUS_MAP[lkey];
+      if (newStatus) {
+        e.preventDefault();
+        handleInlineUpdate(cardId, { statusVisual: newStatus });
+        if (taskId) {
+          updateTaskStatusMutRef.current.mutate({
+            workspaceId, mapId, cardId, data: { status: newStatus },
+          });
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleNodeShortcuts);
+    return () => document.removeEventListener('keydown', handleNodeShortcuts);
+  }, [setNodes, navigate, canvasBasePath, handleOpenPanel, handleAddChildCard, handleInlineUpdate, workspaceId, mapId]);
 
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, node: Node) => {
