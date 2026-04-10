@@ -1,11 +1,12 @@
 import { useRef, useEffect, useCallback, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2 } from "lucide-react";
 import {
   useListTaskAttachments,
   useCreateTaskAttachment,
   useDeleteTaskAttachment,
   getListTaskAttachmentsQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import type { AttachmentResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +36,7 @@ async function uploadFileWithAuth(file: File): Promise<{ objectPath: string } | 
 }
 
 interface AttachmentsSectionProps {
-  workspaceId: string;
+  workspaceId?: string;
   taskId: string;
   dropTargetEl?: HTMLElement | null;
 }
@@ -62,7 +63,11 @@ function getFileIcon(mimeType: string) {
   return File;
 }
 
-export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: AttachmentsSectionProps) {
+function getStandaloneAttachmentsQueryKey(taskId: string) {
+  return ["myTasks", taskId, "attachments"] as const;
+}
+
+function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Required<Pick<AttachmentsSectionProps, "workspaceId">> & Omit<AttachmentsSectionProps, "workspaceId">) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +77,7 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
   const attachmentsKey = getListTaskAttachmentsQueryKey(workspaceId, taskId);
 
   const { data: attachments, isLoading } = useListTaskAttachments(workspaceId, taskId, {
-    query: { enabled: !!workspaceId && !!taskId },
+    query: { enabled: !!taskId },
   });
 
   const createAttachmentMut = useCreateTaskAttachment();
@@ -117,12 +122,120 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
     }
   }, [deleteAttachmentMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
 
+  return (
+    <AttachmentsSectionUI
+      attachments={attachments ?? []}
+      isLoading={isLoading}
+      uploading={uploading}
+      isDragOver={isDragOver}
+      fileInputRef={fileInputRef}
+      dropTargetEl={dropTargetEl}
+      onFiles={handleFiles}
+      onRemove={handleRemove}
+      onDragOver={setIsDragOver}
+    />
+  );
+}
+
+function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<AttachmentsSectionProps, "workspaceId">) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const attachmentsKey = getStandaloneAttachmentsQueryKey(taskId);
+
+  const { data: attachments, isLoading } = useQuery<AttachmentResponse[]>({
+    queryKey: attachmentsKey,
+    queryFn: () => customFetch<AttachmentResponse[]>(`/api/my-tasks/${taskId}/attachments`),
+    enabled: !!taskId,
+  });
+
+  const createMut = useMutation({
+    mutationFn: (data: { objectPath: string; fileName: string; fileSize: number; mimeType: string }) =>
+      customFetch<AttachmentResponse>(`/api/my-tasks/${taskId}/attachments`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (attachmentId: string) =>
+      customFetch<{ success: boolean }>(`/api/my-tasks/${taskId}/attachments/${attachmentId}`, {
+        method: "DELETE",
+      }),
+  });
+
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of fileArray) {
+        const uploadResult = await uploadFileWithAuth(file);
+        if (!uploadResult) {
+          toast({ title: `Falha ao fazer upload de "${file.name}"`, variant: "destructive" });
+          continue;
+        }
+        await createMut.mutateAsync({
+          objectPath: uploadResult.objectPath,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+        });
+        queryClient.invalidateQueries({ queryKey: attachmentsKey });
+      }
+    } catch {
+      toast({ title: "Erro ao anexar arquivo", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }, [createMut, taskId, queryClient, attachmentsKey, toast]);
+
+  const handleRemove = useCallback(async (attachmentId: string) => {
+    try {
+      await deleteMut.mutateAsync(attachmentId);
+      queryClient.invalidateQueries({ queryKey: attachmentsKey });
+    } catch {
+      toast({ title: "Erro ao remover anexo", variant: "destructive" });
+    }
+  }, [deleteMut, taskId, queryClient, attachmentsKey, toast]);
+
+  return (
+    <AttachmentsSectionUI
+      attachments={attachments ?? []}
+      isLoading={isLoading}
+      uploading={uploading}
+      isDragOver={isDragOver}
+      fileInputRef={fileInputRef}
+      dropTargetEl={dropTargetEl}
+      onFiles={handleFiles}
+      onRemove={handleRemove}
+      onDragOver={setIsDragOver}
+    />
+  );
+}
+
+interface AttachmentsSectionUIProps {
+  attachments: AttachmentResponse[];
+  isLoading: boolean;
+  uploading: boolean;
+  isDragOver: boolean;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  dropTargetEl?: HTMLElement | null;
+  onFiles: (files: FileList | File[]) => void;
+  onRemove: (attachmentId: string) => void;
+  onDragOver: (value: boolean) => void;
+}
+
+function AttachmentsSectionUI({ attachments, isLoading, uploading, isDragOver, fileInputRef, dropTargetEl, onFiles, onRemove, onDragOver }: AttachmentsSectionUIProps) {
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleFiles(e.target.files);
+      onFiles(e.target.files);
       e.target.value = "";
     }
-  }, [handleFiles]);
+  }, [onFiles]);
 
   useEffect(() => {
     const target = dropTargetEl;
@@ -130,12 +243,12 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
 
     const handleDragEnter = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) {
-        setIsDragOver(true);
+        onDragOver(true);
       }
     };
     const handleDragLeave = (e: DragEvent) => {
       if (!target.contains(e.relatedTarget as Node)) {
-        setIsDragOver(false);
+        onDragOver(false);
       }
     };
     const handleDragOver = (e: DragEvent) => {
@@ -145,9 +258,9 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
     };
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
-      setIsDragOver(false);
+      onDragOver(false);
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        handleFiles(e.dataTransfer.files);
+        onFiles(e.dataTransfer.files);
       }
     };
 
@@ -162,7 +275,7 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
       target.removeEventListener("dragover", handleDragOver);
       target.removeEventListener("drop", handleDrop);
     };
-  }, [dropTargetEl, handleFiles]);
+  }, [dropTargetEl, onFiles, onDragOver]);
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -176,13 +289,13 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
         }
       }
       if (files.length > 0) {
-        handleFiles(files);
+        onFiles(files);
       }
     };
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [handleFiles]);
+  }, [onFiles]);
 
   return (
     <div className="space-y-2">
@@ -215,7 +328,7 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
         />
       </div>
 
-      {isLoading ? null : attachments && attachments.length > 0 ? (
+      {isLoading ? null : attachments.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {attachments.map((attachment: AttachmentResponse) => {
             const IconComponent = getFileIcon(attachment.mimeType);
@@ -231,7 +344,7 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleRemove(attachment.id)}
+                  onClick={() => onRemove(attachment.id)}
                   className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
                   title="Remover anexo"
                 >
@@ -244,4 +357,11 @@ export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: Attach
       ) : null}
     </div>
   );
+}
+
+export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: AttachmentsSectionProps) {
+  if (workspaceId) {
+    return <AttachmentsSectionWorkspace workspaceId={workspaceId} taskId={taskId} dropTargetEl={dropTargetEl} />;
+  }
+  return <AttachmentsSectionStandalone taskId={taskId} dropTargetEl={dropTargetEl} />;
 }

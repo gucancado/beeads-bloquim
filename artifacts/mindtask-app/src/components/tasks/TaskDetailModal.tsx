@@ -659,10 +659,14 @@ export function TaskDetailModal({
 
   const isAdmin = (members?.find((m) => m.userId === currentUserId)?.role === "admin") || false;
 
+  const subtasksEndpoint = effectiveWorkspaceId
+    ? `/api/workspaces/${effectiveWorkspaceId}/tasks/${taskIdResolved}/subtasks`
+    : `/api/my-tasks/${taskIdResolved}/subtasks`;
+
   const { data: subtasksData } = useQuery<SubtaskItem[]>({
-    queryKey: [`/api/workspaces/${effectiveWorkspaceId}/tasks/${taskIdResolved}/subtasks`],
-    queryFn: () => customFetch(`/api/workspaces/${effectiveWorkspaceId}/tasks/${taskIdResolved}/subtasks`),
-    enabled: open && !!taskIdResolved && !!effectiveWorkspaceId,
+    queryKey: [subtasksEndpoint],
+    queryFn: () => customFetch(subtasksEndpoint),
+    enabled: open && !!taskIdResolved,
   });
 
   useEffect(() => {
@@ -747,7 +751,7 @@ export function TaskDetailModal({
 
   const saveSubtasksMutation = useMutation({
     mutationFn: (items: SubtaskItem[]) =>
-      customFetch(`/api/workspaces/${effectiveWorkspaceId}/tasks/${taskIdResolved}/subtasks`, {
+      customFetch(subtasksEndpoint, {
         method: "PUT",
         body: JSON.stringify({ subtasks: items.map((s, idx) => ({ id: s.id.startsWith("local-") ? undefined : s.id, text: s.text, completed: s.completed, order: idx })) }),
       }),
@@ -961,7 +965,7 @@ export function TaskDetailModal({
       payload.assignedTo = assignedTo === "unassigned" ? null : assignedTo;
     }
     saveMutation.mutate({ body: payload, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-    if (effectiveWorkspaceId && taskIdResolved) {
+    if (taskIdResolved) {
       saveSubtasksMutation.mutate(localSubtasks.filter(s => s.text.trim() !== ""));
     }
   };
@@ -1552,7 +1556,7 @@ export function TaskDetailModal({
                     </div>
 
                     {/* Attachments section — only shown when a task exists */}
-                    {!!effectiveWorkspaceId && !!taskIdResolved && (
+                    {!!taskIdResolved && (
                       <AttachmentsSection
                         workspaceId={effectiveWorkspaceId}
                         taskId={taskIdResolved}
@@ -1560,39 +1564,37 @@ export function TaskDetailModal({
                       />
                     )}
 
-                    {!!effectiveWorkspaceId && (
-                      <div>
-                        <div className="flex items-center mb-1.5">
-                          <button
-                            onClick={() => addSubtask()}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted"
-                            title="Adicionar subtarefa"
-                          >
-                            <ListChecks className="w-3.5 h-3.5" />
-                            <span className="lowercase">subtarefas +</span>
-                          </button>
-                        </div>
-                        {localSubtasks.length > 0 && (
-                          <div className="bg-muted/30 rounded-xl px-2 py-1.5 space-y-0.5">
-                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                              <SortableContext items={localSubtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                                {localSubtasks.map(subtask => (
-                                  <SortableSubtask
-                                    key={subtask.id}
-                                    subtask={subtask}
-                                    onChange={handleSubtaskChange}
-                                    onToggle={handleSubtaskToggle}
-                                    onBlur={handleSubtaskBlur}
-                                    onKeyDown={handleSubtaskKeyDown}
-                                    inputRef={(el) => { inputRefs.current[subtask.id] = el; }}
-                                  />
-                                ))}
-                              </SortableContext>
-                            </DndContext>
-                          </div>
-                        )}
+                    <div>
+                      <div className="flex items-center mb-1.5">
+                        <button
+                          onClick={() => addSubtask()}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+                          title="Adicionar subtarefa"
+                        >
+                          <ListChecks className="w-3.5 h-3.5" />
+                          <span className="lowercase">subtarefas +</span>
+                        </button>
                       </div>
-                    )}
+                      {localSubtasks.length > 0 && (
+                        <div className="bg-muted/30 rounded-xl px-2 py-1.5 space-y-0.5">
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={localSubtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                              {localSubtasks.map(subtask => (
+                                <SortableSubtask
+                                  key={subtask.id}
+                                  subtask={subtask}
+                                  onChange={handleSubtaskChange}
+                                  onToggle={handleSubtaskToggle}
+                                  onBlur={handleSubtaskBlur}
+                                  onKeyDown={handleSubtaskKeyDown}
+                                  inputRef={(el) => { inputRefs.current[subtask.id] = el; }}
+                                />
+                              ))}
+                            </SortableContext>
+                          </DndContext>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Approval section — only shown for workspace tasks */}
                     {!!effectiveWorkspaceId && !!taskIdResolved && (

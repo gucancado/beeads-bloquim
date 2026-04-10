@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -593,6 +593,173 @@ router.post("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
   const [author] = await db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, userId)).limit(1);
 
   return res.status(201).json({ ...comment, authorName: author?.name ?? null, authorAvatar: author?.avatarUrl ?? null });
+});
+
+const subtaskItemSchema = z.object({
+  id: z.string().uuid().optional(),
+  text: z.string(),
+  completed: z.boolean().optional().default(false),
+  order: z.number().int().optional().default(0),
+});
+
+const bulkSubtasksSchema = z.object({
+  subtasks: z.array(subtaskItemSchema),
+});
+
+router.get("/:taskId/subtasks", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo, workspaceId: tasks.workspaceId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ error: "Not found" });
+  if (task.assignedTo !== userId) return res.status(403).json({ error: "Forbidden" });
+  if (task.workspaceId) return res.status(400).json({ error: "Use workspace subtask endpoint for workspace tasks" });
+
+  const items = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
+  return res.json(items);
+});
+
+router.put("/:taskId/subtasks", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo, workspaceId: tasks.workspaceId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ error: "Not found" });
+  if (task.assignedTo !== userId) return res.status(403).json({ error: "Forbidden" });
+  if (task.workspaceId) return res.status(400).json({ error: "Use workspace subtask endpoint for workspace tasks" });
+
+  const parsed = bulkSubtasksSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation error", message: parsed.error.message });
+  }
+
+  const incoming = parsed.data.subtasks.filter(s => s.text.trim() !== "");
+
+  await db.delete(subtasks).where(eq(subtasks.taskId, taskId));
+
+  if (incoming.length > 0) {
+    await db.insert(subtasks).values(
+      incoming.map((s, idx) => ({
+        id: s.id,
+        taskId,
+        text: s.text.trim(),
+        completed: s.completed ?? false,
+        order: s.order ?? idx,
+      }))
+    );
+  }
+
+  const result = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
+  return res.json(result);
+});
+
+const createAttachmentSchema = z.object({
+  objectPath: z.string().min(1),
+  fileName: z.string().min(1),
+  fileSize: z.number().int().positive(),
+  mimeType: z.string().min(1),
+});
+
+router.get("/:taskId/attachments", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo, workspaceId: tasks.workspaceId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ error: "Not found" });
+  if (task.assignedTo !== userId) return res.status(403).json({ error: "Forbidden" });
+  if (task.workspaceId) return res.status(400).json({ error: "Use workspace attachment endpoint for workspace tasks" });
+
+  const attachments = await db
+    .select({
+      id: attachmentLinks.id,
+      fileUploadId: fileUploads.id,
+      objectPath: fileUploads.objectPath,
+      fileName: fileUploads.fileName,
+      fileSize: fileUploads.fileSize,
+      mimeType: fileUploads.mimeType,
+      uploadedBy: fileUploads.uploadedBy,
+      createdAt: attachmentLinks.createdAt,
+    })
+    .from(attachmentLinks)
+    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .where(and(eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
+    .orderBy(asc(attachmentLinks.createdAt));
+
+  return res.json(attachments);
+});
+
+router.post("/:taskId/attachments", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const parsed = createAttachmentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation error", message: parsed.error.message });
+  }
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo, workspaceId: tasks.workspaceId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ error: "Not found" });
+  if (task.assignedTo !== userId) return res.status(403).json({ error: "Forbidden" });
+  if (task.workspaceId) return res.status(400).json({ error: "Use workspace attachment endpoint for workspace tasks" });
+
+  const { objectPath, fileName, fileSize, mimeType } = parsed.data;
+
+  const [fileUpload] = await db.insert(fileUploads).values({
+    objectPath,
+    fileName,
+    fileSize,
+    mimeType,
+    uploadedBy: userId,
+  }).returning();
+
+  const [link] = await db.insert(attachmentLinks).values({
+    fileUploadId: fileUpload.id,
+    entityType: "task",
+    entityId: taskId,
+  }).returning();
+
+  return res.status(201).json({
+    id: link.id,
+    fileUploadId: fileUpload.id,
+    objectPath: fileUpload.objectPath,
+    fileName: fileUpload.fileName,
+    fileSize: fileUpload.fileSize,
+    mimeType: fileUpload.mimeType,
+    uploadedBy: fileUpload.uploadedBy,
+    createdAt: link.createdAt,
+  });
+});
+
+router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId, attachmentId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo, workspaceId: tasks.workspaceId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ error: "Not found" });
+  if (task.assignedTo !== userId) return res.status(403).json({ error: "Forbidden" });
+  if (task.workspaceId) return res.status(400).json({ error: "Use workspace attachment endpoint for workspace tasks" });
+
+  const [link] = await db
+    .select({ id: attachmentLinks.id, fileUploadId: attachmentLinks.fileUploadId })
+    .from(attachmentLinks)
+    .where(and(eq(attachmentLinks.id, attachmentId), eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
+    .limit(1);
+
+  if (!link) return res.status(404).json({ error: "Attachment not found" });
+
+  await db.delete(attachmentLinks).where(eq(attachmentLinks.id, link.id));
+
+  const [otherLinks] = await db
+    .select({ id: attachmentLinks.id })
+    .from(attachmentLinks)
+    .where(eq(attachmentLinks.fileUploadId, link.fileUploadId))
+    .limit(1);
+
+  if (!otherLinks) {
+    await db.delete(fileUploads).where(eq(fileUploads.id, link.fileUploadId));
+  }
+
+  return res.json({ success: true });
 });
 
 export default router;
