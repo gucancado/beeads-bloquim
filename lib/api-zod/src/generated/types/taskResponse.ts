@@ -8,7 +8,6 @@
 import type { TaskPriority } from "./taskPriority";
 import type { TaskStatus } from "./taskStatus";
 import type { UserResponse } from "./userResponse";
-import type { RecurrenceConfig } from "./recurrenceConfig";
 
 export interface TaskResponse {
   id: string;
@@ -22,8 +21,6 @@ export interface TaskResponse {
   priority: TaskPriority;
   status: TaskStatus;
   completedAt?: Date | null;
-  isRecurring?: boolean;
-  recurrenceConfig?: RecurrenceConfig | null;
   createdAt: Date;
   updatedAt: Date;
 }

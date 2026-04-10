@@ -101,7 +101,6 @@ export interface WorkspaceTaskCounts {
 export interface WorkspaceResponse {
   id: string;
   name: string;
-  colorIndex?: number | null;
   createdBy: string;
   createdAt: string;
   role: WorkspaceRole;
@@ -129,7 +128,6 @@ export interface MapResponse {
 export interface WorkspaceDetailResponse {
   id: string;
   name: string;
-  colorIndex?: number | null;
   createdBy: string;
   createdAt: string;
   role: WorkspaceRole;
@@ -297,6 +295,24 @@ export interface DashboardResponse {
   totalTasks: number;
   tasksByStatus: DashboardResponseTasksByStatus;
   tasksByPriority: DashboardResponseTasksByPriority;
+}
+
+export interface AttachmentResponse {
+  id: string;
+  fileUploadId: string;
+  objectPath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedBy?: string | null;
+  createdAt: string;
+}
+
+export interface CreateAttachmentRequest {
+  objectPath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
 }
 
 export interface UploadUrlRequest {

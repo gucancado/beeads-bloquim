@@ -6,7 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TaskPriority } from "./taskPriority";
-import type { RecurrenceConfig } from "./recurrenceConfig";
 
 export interface CreateTaskRequest {
   title: string;
@@ -14,6 +13,4 @@ export interface CreateTaskRequest {
   assignedTo?: string | null;
   dueDate?: Date | null;
   priority?: TaskPriority;
-  isRecurring?: boolean;
-  recurrenceConfig?: RecurrenceConfig | null;
 }

@@ -28,6 +28,7 @@ import type { WorkspaceMemberResponse, TaskPriority, TaskStatus, TaskResponse } 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { ApprovalTaskView } from "@/components/tasks/ApprovalTaskView";
+import { AttachmentsSection } from "@/components/tasks/AttachmentsSection";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import {
   DndContext,
@@ -1537,6 +1538,28 @@ export function TaskDetailModal({
                       </div>
                     </div>
 
+                    {/* Description */}
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Descrição</label>
+                      <DescriptionEditor
+                        value={description}
+                        onChange={v => { setDescription(v); markDirty(); }}
+                        onBlur={() => {
+                          if (isCardMode) saveCard();
+                          else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { description: description || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                        }}
+                      />
+                    </div>
+
+                    {/* Attachments section — only shown when a task exists */}
+                    {!!effectiveWorkspaceId && !!taskIdResolved && (
+                      <AttachmentsSection
+                        workspaceId={effectiveWorkspaceId}
+                        taskId={taskIdResolved}
+                        dropTargetEl={dialogContentEl}
+                      />
+                    )}
+
                     {!!effectiveWorkspaceId && (
                       <div>
                         <div className="flex items-center mb-1.5">
@@ -1570,19 +1593,6 @@ export function TaskDetailModal({
                         )}
                       </div>
                     )}
-
-                    {/* Description */}
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Descrição</label>
-                      <DescriptionEditor
-                        value={description}
-                        onChange={v => { setDescription(v); markDirty(); }}
-                        onBlur={() => {
-                          if (isCardMode) saveCard();
-                          else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { description: description || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                        }}
-                      />
-                    </div>
 
                     {/* Approval section — only shown for workspace tasks */}
                     {!!effectiveWorkspaceId && !!taskIdResolved && (

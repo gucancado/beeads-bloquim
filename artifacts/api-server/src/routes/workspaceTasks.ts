@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -1610,6 +1610,120 @@ router.post("/:taskId/duplicate", requireAuth, requireWorkspaceRole(["admin", "e
     approvalMode: result.newTask.approvalMode,
     createdAt: result.newTask.createdAt,
   });
+});
+
+const createAttachmentSchema = z.object({
+  objectPath: z.string().min(1),
+  fileName: z.string().min(1),
+  fileSize: z.number().int().positive(),
+  mimeType: z.string().min(1),
+});
+
+router.get("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+
+  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!taskExists) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const attachments = await db
+    .select({
+      id: attachmentLinks.id,
+      fileUploadId: fileUploads.id,
+      objectPath: fileUploads.objectPath,
+      fileName: fileUploads.fileName,
+      fileSize: fileUploads.fileSize,
+      mimeType: fileUploads.mimeType,
+      uploadedBy: fileUploads.uploadedBy,
+      createdAt: attachmentLinks.createdAt,
+    })
+    .from(attachmentLinks)
+    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .where(and(eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
+    .orderBy(asc(attachmentLinks.createdAt));
+
+  res.json(attachments);
+});
+
+router.post("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId } = req.params;
+  const actorId = req.user!.userId;
+
+  const parsed = createAttachmentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!taskExists) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const { objectPath, fileName, fileSize, mimeType } = parsed.data;
+
+  const [fileUpload] = await db.insert(fileUploads).values({
+    objectPath,
+    fileName,
+    fileSize,
+    mimeType,
+    uploadedBy: actorId,
+  }).returning();
+
+  const [link] = await db.insert(attachmentLinks).values({
+    fileUploadId: fileUpload.id,
+    entityType: "task",
+    entityId: taskId,
+  }).returning();
+
+  res.status(201).json({
+    id: link.id,
+    fileUploadId: fileUpload.id,
+    objectPath: fileUpload.objectPath,
+    fileName: fileUpload.fileName,
+    fileSize: fileUpload.fileSize,
+    mimeType: fileUpload.mimeType,
+    uploadedBy: fileUpload.uploadedBy,
+    createdAt: link.createdAt,
+  });
+});
+
+router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId, attachmentId } = req.params;
+
+  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!taskExists) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [link] = await db
+    .select({ id: attachmentLinks.id, fileUploadId: attachmentLinks.fileUploadId })
+    .from(attachmentLinks)
+    .where(and(eq(attachmentLinks.id, attachmentId), eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
+    .limit(1);
+
+  if (!link) {
+    res.status(404).json({ error: "Attachment not found" });
+    return;
+  }
+
+  await db.delete(attachmentLinks).where(eq(attachmentLinks.id, link.id));
+
+  const [otherLinks] = await db
+    .select({ id: attachmentLinks.id })
+    .from(attachmentLinks)
+    .where(eq(attachmentLinks.fileUploadId, link.fileUploadId))
+    .limit(1);
+
+  if (!otherLinks) {
+    await db.delete(fileUploads).where(eq(fileUploads.id, link.fileUploadId));
+  }
+
+  res.json({ success: true });
 });
 
 export default router;

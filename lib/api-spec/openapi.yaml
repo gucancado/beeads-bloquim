@@ -885,6 +885,120 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardResponse"
 
+  /workspaces/{workspaceId}/tasks/{taskId}/attachments:
+    get:
+      operationId: listTaskAttachments
+      tags: [tasks]
+      summary: List attachments for a task
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttachmentResponse"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createTaskAttachment
+      tags: [tasks]
+      summary: Create an attachment for a task
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAttachmentRequest"
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/tasks/{taskId}/attachments/{attachmentId}:
+    delete:
+      operationId: deleteTaskAttachment
+      tags: [tasks]
+      summary: Delete an attachment from a task
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Attachment deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Task or attachment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /storage/uploads/request-url:
     post:
       tags: [Storage]
@@ -1497,6 +1611,45 @@ components:
               type: integer
           required: [low, medium, high, critical]
       required: [workspaceId, totalMaps, totalCards, totalTasks, tasksByStatus, tasksByPriority]
+
+    AttachmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileUploadId:
+          type: string
+          format: uuid
+        objectPath:
+          type: string
+        fileName:
+          type: string
+        fileSize:
+          type: integer
+        mimeType:
+          type: string
+        uploadedBy:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt]
+
+    CreateAttachmentRequest:
+      type: object
+      properties:
+        objectPath:
+          type: string
+        fileName:
+          type: string
+        fileSize:
+          type: integer
+        mimeType:
+          type: string
+      required: [objectPath, fileName, fileSize, mimeType]
 
     UploadUrlRequest:
       type: object

@@ -7,11 +7,13 @@
  */
 
 export * from "./addMemberRequest";
+export * from "./attachmentResponse";
 export * from "./authResponse";
 export * from "./cardDetailResponse";
 export * from "./cardResponse";
 export * from "./cardVisualStatus";
 export * from "./connectionResponse";
+export * from "./createAttachmentRequest";
 export * from "./createCardRequest";
 export * from "./createConnectionRequest";
 export * from "./createMapRequest";
@@ -28,7 +30,6 @@ export * from "./mapDetailResponse";
 export * from "./mapResponse";
 export * from "./registerRequest";
 export * from "./successResponse";
-export * from "./recurrenceConfig";
 export * from "./taskPriority";
 export * from "./taskResponse";
 export * from "./taskStatus";

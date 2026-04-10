@@ -331,6 +331,8 @@ export const GetMapResponse = zod.object({
         "in_progress",
         "completed",
         "overdue",
+        "blocked",
+        "draft",
       ]),
       taskId: zod.string().uuid().nullish(),
       createdAt: zod.date(),
@@ -340,6 +342,7 @@ export const GetMapResponse = zod.object({
       taskAssigneeId: zod.string().uuid().nullish(),
       taskOverdue: zod.boolean().optional(),
       taskAssigneeAvatarUrl: zod.string().nullish(),
+      taskCompletedAt: zod.date().nullish(),
     }),
   ),
   connections: zod.array(
@@ -424,6 +427,8 @@ export const GetCardResponse = zod.object({
     "in_progress",
     "completed",
     "overdue",
+    "blocked",
+    "draft",
   ]),
   taskId: zod.string().uuid().nullish(),
   task: zod
@@ -451,6 +456,7 @@ export const GetCardResponse = zod.object({
         "completed",
         "overdue",
         "blocked",
+        "draft",
       ]),
       completedAt: zod.date().nullish(),
       createdAt: zod.date(),
@@ -490,6 +496,8 @@ export const UpdateCardResponse = zod.object({
     "in_progress",
     "completed",
     "overdue",
+    "blocked",
+    "draft",
   ]),
   taskId: zod.string().uuid().nullish(),
   createdAt: zod.date(),
@@ -499,6 +507,7 @@ export const UpdateCardResponse = zod.object({
   taskAssigneeId: zod.string().uuid().nullish(),
   taskOverdue: zod.boolean().optional(),
   taskAssigneeAvatarUrl: zod.string().nullish(),
+  taskCompletedAt: zod.date().nullish(),
 });
 
 /**
@@ -589,6 +598,7 @@ export const UpdateTaskStatusBody = zod.object({
     "completed",
     "overdue",
     "blocked",
+    "draft",
   ]),
 });
 
@@ -616,6 +626,7 @@ export const UpdateTaskStatusResponse = zod.object({
     "completed",
     "overdue",
     "blocked",
+    "draft",
   ]),
   completedAt: zod.date().nullish(),
   createdAt: zod.date(),
@@ -663,6 +674,7 @@ export const UpdateTaskDetailsResponse = zod.object({
     "completed",
     "overdue",
     "blocked",
+    "draft",
   ]),
   completedAt: zod.date().nullish(),
   createdAt: zod.date(),
@@ -675,7 +687,14 @@ export const UpdateTaskDetailsResponse = zod.object({
 export const GetMyTasksQueryParams = zod.object({
   workspaceId: zod.coerce.string().uuid().optional(),
   status: zod
-    .enum(["pending", "in_progress", "completed", "overdue", "blocked"])
+    .enum([
+      "pending",
+      "in_progress",
+      "completed",
+      "overdue",
+      "blocked",
+      "draft",
+    ])
     .optional(),
 });
 
@@ -694,6 +713,7 @@ export const GetMyTasksResponseItem = zod.object({
     "completed",
     "overdue",
     "blocked",
+    "draft",
   ]),
   completedAt: zod.date().nullish(),
   createdAt: zod.date(),
@@ -729,6 +749,57 @@ export const GetDashboardResponse = zod.object({
     high: zod.number(),
     critical: zod.number(),
   }),
+});
+
+/**
+ * @summary List attachments for a task
+ */
+export const ListTaskAttachmentsParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+});
+
+export const ListTaskAttachmentsResponseItem = zod.object({
+  id: zod.string().uuid(),
+  fileUploadId: zod.string().uuid(),
+  objectPath: zod.string(),
+  fileName: zod.string(),
+  fileSize: zod.number(),
+  mimeType: zod.string(),
+  uploadedBy: zod.string().uuid().nullish(),
+  createdAt: zod.date(),
+});
+export const ListTaskAttachmentsResponse = zod.array(
+  ListTaskAttachmentsResponseItem,
+);
+
+/**
+ * @summary Create an attachment for a task
+ */
+export const CreateTaskAttachmentParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+});
+
+export const CreateTaskAttachmentBody = zod.object({
+  objectPath: zod.string(),
+  fileName: zod.string(),
+  fileSize: zod.number(),
+  mimeType: zod.string(),
+});
+
+/**
+ * @summary Delete an attachment from a task
+ */
+export const DeleteTaskAttachmentParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+  attachmentId: zod.coerce.string().uuid(),
+});
+
+export const DeleteTaskAttachmentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
