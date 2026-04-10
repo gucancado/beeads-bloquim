@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { usePositionHistory, NodePositionSnapshot } from "@/hooks/usePositionHistory";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
@@ -349,6 +350,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const editingCardIdRef = useRef<string | null>(null);
   const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
   const connectingJoinNodeRef = useRef<string | null>(null);
+  const { pushSnapshot, undo, redo } = usePositionHistory();
+  const dragStartSnapshotRef = useRef<NodePositionSnapshot | null>(null);
 
   const search = useSearch();
   const canvasBasePath = `/workspaces/${workspaceId}/maps/${mapId}`;
@@ -934,6 +937,31 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     return () => document.removeEventListener('keydown', handleNodeShortcuts);
   }, [setNodes, navigate, canvasBasePath, handleOpenPanel, handleAddChildCard, handleInlineUpdate, workspaceId, mapId]);
 
+  const onNodeDragStart = useCallback(
+    (_event: React.MouseEvent, _node: Node) => {
+      if (dragStartSnapshotRef.current) return;
+      const snapshot: NodePositionSnapshot = {};
+      for (const n of nodesRef.current) {
+        snapshot[n.id] = { x: n.position.x, y: n.position.y };
+      }
+      dragStartSnapshotRef.current = snapshot;
+      console.log('[undo] onNodeDragStart: snapshot captured for', Object.keys(snapshot).length, 'nodes');
+    },
+    [],
+  );
+
+  const onSelectionDragStart = useCallback(
+    (_event: React.MouseEvent, _selectedNodes: Node[]) => {
+      if (dragStartSnapshotRef.current) return;
+      const snapshot: NodePositionSnapshot = {};
+      for (const n of nodesRef.current) {
+        snapshot[n.id] = { x: n.position.x, y: n.position.y };
+      }
+      dragStartSnapshotRef.current = snapshot;
+    },
+    [],
+  );
+
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       // Text nodes, approval nodes, and join nodes are excluded from edge insertion logic
@@ -997,6 +1025,17 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      if (dragStartSnapshotRef.current) {
+        const snapshot = dragStartSnapshotRef.current;
+        dragStartSnapshotRef.current = null;
+        const prevPos = snapshot[node.id];
+        const moved = !prevPos ||
+          Math.abs(prevPos.x - node.position.x) > 0.5 ||
+          Math.abs(prevPos.y - node.position.y) > 0.5;
+        console.log('[undo] onNodeDragStop: moved=', moved, 'prevPos=', prevPos, 'newPos=', node.position);
+        if (moved) pushSnapshot(snapshot);
+      }
+
       // If this is a text node, use the text element update mutation
       if (node.type === 'textnode') {
         updateTextMut.mutate({
@@ -1128,6 +1167,17 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onSelectionDragStop = useCallback(
     (_event: React.MouseEvent, selectedNodes: Node[]) => {
+      if (dragStartSnapshotRef.current) {
+        const snapshot = dragStartSnapshotRef.current;
+        dragStartSnapshotRef.current = null;
+        const anyMoved = selectedNodes.some(n => {
+          const prevPos = snapshot[n.id];
+          return !prevPos ||
+            Math.abs(prevPos.x - n.position.x) > 0.5 ||
+            Math.abs(prevPos.y - n.position.y) > 0.5;
+        });
+        if (anyMoved) pushSnapshot(snapshot);
+      }
       selectedNodes.forEach(node => {
         if (node.type === 'textnode') {
           updateTextMut.mutate({
@@ -1144,6 +1194,83 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     },
     [workspaceId, mapId, updateCardMut, updateTextMut],
   );
+
+  const updateCardMutRef = useRef(updateCardMut);
+  updateCardMutRef.current = updateCardMut;
+  const updateTextMutRef = useRef(updateTextMut);
+  updateTextMutRef.current = updateTextMut;
+
+  useEffect(() => {
+    const handleUndoRedo = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if (!isCtrl) return;
+
+      const isZ = e.key === 'z' || e.key === 'Z';
+      const isY = e.key === 'y' || e.key === 'Y';
+      const isShift = e.shiftKey;
+
+      if (!isZ && !isY) return;
+
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) return;
+
+      const isUndo = isZ && !isShift;
+      const isRedo = isY || (isZ && isShift);
+
+      if (!isUndo && !isRedo) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const currentNodes = nodesRef.current;
+      const currentSnapshot: NodePositionSnapshot = {};
+      for (const n of currentNodes) {
+        currentSnapshot[n.id] = { x: n.position.x, y: n.position.y };
+      }
+
+      console.log('[undo] handleUndoRedo:', isUndo ? 'UNDO' : 'REDO', 'currentSnapshot keys:', Object.keys(currentSnapshot).length);
+      const targetSnapshot = isUndo
+        ? undo(currentSnapshot)
+        : redo(currentSnapshot);
+
+      console.log('[undo] targetSnapshot:', targetSnapshot ? Object.keys(targetSnapshot).length + ' nodes' : 'null (empty history)');
+      if (!targetSnapshot) return;
+
+      setNodes(prev =>
+        prev.map(n => {
+          const pos = targetSnapshot[n.id];
+          if (!pos) return n;
+          return { ...n, position: pos };
+        }),
+      );
+
+      for (const n of currentNodes) {
+        const pos = targetSnapshot[n.id];
+        if (!pos) continue;
+        if (Math.abs(pos.x - n.position.x) < 0.5 && Math.abs(pos.y - n.position.y) < 0.5) continue;
+
+        if (n.type === 'textnode') {
+          updateTextMutRef.current.mutate({
+            workspaceId, mapId, elementId: n.id,
+            data: { positionX: pos.x, positionY: pos.y },
+          });
+        } else if (n.type === 'mindmap' || n.type === 'approvalnode') {
+          updateCardMutRef.current.mutate({
+            workspaceId, mapId, cardId: n.id,
+            data: { positionX: pos.x, positionY: pos.y },
+          });
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleUndoRedo, true);
+    return () => document.removeEventListener('keydown', handleUndoRedo, true);
+  }, [workspaceId, mapId, undo, redo, setNodes]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -1407,6 +1534,21 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     return () => el.removeEventListener('wheel', handleWheel);
   }, [getViewport, setViewport]);
 
+  useEffect(() => {
+    const el = reactFlowRef.current;
+    if (!el) return;
+    const handleMouseDown = () => {
+      const snapshot: NodePositionSnapshot = {};
+      for (const n of nodesRef.current) {
+        snapshot[n.id] = { x: n.position.x, y: n.position.y };
+      }
+      dragStartSnapshotRef.current = snapshot;
+      console.log('[undo] mousedown: snapshot captured for', Object.keys(snapshot).length, 'nodes');
+    };
+    el.addEventListener('mousedown', handleMouseDown);
+    return () => el.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
   const createTextAt = useCallback((flowX: number, flowY: number) => {
     createTextMut.mutate(
       {
@@ -1624,8 +1766,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             onConnect={onConnect}
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
+            onNodeDragStart={onNodeDragStart}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
+            onSelectionDragStart={onSelectionDragStart}
             onSelectionDragStop={onSelectionDragStop}
             onPaneClick={onPaneClick}
             onPaneContextMenu={(e) => e.preventDefault()}
