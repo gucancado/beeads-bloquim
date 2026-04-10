@@ -103,9 +103,14 @@ function WorkspaceCard({ ws, showHidden }: {
   };
 
   const emptyDetail = (): StatusDetail => ({ total: 0, overdue: 0, noDue: 0 });
-  const counts: TaskCounts = ws.taskCounts ?? {
-    total: 0, completed: 0, blocked: 0,
-    draft: emptyDetail(), pending: emptyDetail(), in_progress: emptyDetail(),
+  const base = ws.taskCounts;
+  const counts: TaskCounts = {
+    total: base?.total ?? 0,
+    completed: base?.completed ?? 0,
+    blocked: base?.blocked ?? 0,
+    draft: base?.draft ?? emptyDetail(),
+    pending: base?.pending ?? emptyDetail(),
+    in_progress: base?.in_progress ?? emptyDetail(),
   };
   const hasAnyCounts = STATUS_ROWS.some((r) => counts[r.key].total > 0);
   const noTasks = counts.total === 0;
