@@ -25,24 +25,24 @@ function translateRole(role: string) {
   }
 }
 
+type StatusDetail = { total: number; overdue: number; noDue: number };
 type TaskCounts = {
-  overdue: number;
-  blocked: number;
-  in_progress: number;
-  pending: number;
   total: number;
   completed: number;
+  blocked: number;
+  draft: StatusDetail;
+  pending: StatusDetail;
+  in_progress: StatusDetail;
 };
 
-const STATUS_BADGES: Array<{
-  key: keyof TaskCounts;
+const STATUS_ROWS: Array<{
+  key: "draft" | "pending" | "in_progress";
   label: string;
-  className: string;
+  labelColor: string;
 }> = [
-  { key: "overdue", label: "vencidas", className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60" },
-  { key: "blocked", label: "canceladas", className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" },
-  { key: "in_progress", label: "em andamento", className: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/60" },
-  { key: "pending", label: "pendentes", className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" },
+  { key: "draft",       label: "rascunho",     labelColor: "text-purple-700 dark:text-purple-400" },
+  { key: "pending",     label: "pendentes",    labelColor: "text-blue-700 dark:text-blue-400" },
+  { key: "in_progress", label: "em andamento", labelColor: "text-amber-700 dark:text-amber-400" },
 ];
 
 type WorkspaceMemberPreview = {
@@ -102,8 +102,12 @@ function WorkspaceCard({ ws, showHidden }: {
     });
   };
 
-  const counts = ws.taskCounts ?? { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
-  const hasAnyCounts = STATUS_BADGES.some((b) => counts[b.key] > 0);
+  const emptyDetail = (): StatusDetail => ({ total: 0, overdue: 0, noDue: 0 });
+  const counts: TaskCounts = ws.taskCounts ?? {
+    total: 0, completed: 0, blocked: 0,
+    draft: emptyDetail(), pending: emptyDetail(), in_progress: emptyDetail(),
+  };
+  const hasAnyCounts = STATUS_ROWS.some((r) => counts[r.key].total > 0);
   const noTasks = counts.total === 0;
   const allCompleted = counts.total > 0 && counts.completed === counts.total;
 
@@ -132,19 +136,44 @@ function WorkspaceCard({ ws, showHidden }: {
           ) : allCompleted ? (
             <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-3 lowercase">Tarefas concluídas</p>
           ) : hasAnyCounts ? (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {STATUS_BADGES.map((badge) =>
-                counts[badge.key] > 0 ? (
-                  <span
-                    key={badge.key}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badge.className}`}
-                  >
-                    {counts[badge.key]} {badge.label}
-                  </span>
-                ) : null
-              )}
+            <div className="flex flex-col gap-1 mt-3">
+              {STATUS_ROWS.map((row) => {
+                const detail = counts[row.key];
+                if (detail.total === 0) return null;
+                return (
+                  <div key={row.key} className="flex items-center gap-1.5">
+                    <span className={`text-[12px] font-semibold lowercase ${row.labelColor}`}>
+                      {detail.total} {row.label}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {detail.overdue > 0 && (
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-[11px] font-semibold text-red-600 dark:text-red-400 cursor-default">{detail.overdue}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top"><p>atrasadas</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {detail.noDue > 0 && (
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-[11px] font-medium text-muted-foreground cursor-default">{detail.noDue}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top"><p>sem prazo</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ) : null}
+          ) : (
+            <p className="text-[13px] text-muted-foreground mt-3 lowercase">nada.</p>
+          )}
           <div className="mt-auto pt-6">
             {ws.members && ws.members.length > 0 && (
               <TooltipProvider delayDuration={200}>

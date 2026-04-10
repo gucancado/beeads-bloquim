@@ -44,11 +44,12 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         workspaceId: tasks.workspaceId,
         status: tasks.status,
         overdue: tasks.overdue,
+        noDue: sql<boolean>`(${tasks.dueDate} IS NULL)`,
         count: sql<number>`count(*)::int`,
       })
       .from(tasks)
       .where(inArray(tasks.workspaceId, workspaceIds))
-      .groupBy(tasks.workspaceId, tasks.status, tasks.overdue),
+      .groupBy(tasks.workspaceId, tasks.status, tasks.overdue, sql`(${tasks.dueDate} IS NULL)`),
     db
       .select({
         workspaceId: workspaceMembers.workspaceId,
@@ -62,24 +63,38 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       .where(inArray(workspaceMembers.workspaceId, workspaceIds)),
   ]);
 
-  const countsByWorkspace: Record<string, { overdue: number; blocked: number; in_progress: number; pending: number; total: number; completed: number }> = {};
+  type StatusDetail = { total: number; overdue: number; noDue: number };
+  type WorkspaceCounts = {
+    total: number;
+    completed: number;
+    blocked: number;
+    draft: StatusDetail;
+    pending: StatusDetail;
+    in_progress: StatusDetail;
+  };
+  const emptyDetail = (): StatusDetail => ({ total: 0, overdue: 0, noDue: 0 });
+  const emptyEntry = (): WorkspaceCounts => ({
+    total: 0, completed: 0, blocked: 0,
+    draft: emptyDetail(), pending: emptyDetail(), in_progress: emptyDetail(),
+  });
+
+  const countsByWorkspace: Record<string, WorkspaceCounts> = {};
   for (const row of taskCounts) {
     if (!countsByWorkspace[row.workspaceId]) {
-      countsByWorkspace[row.workspaceId] = { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
+      countsByWorkspace[row.workspaceId] = emptyEntry();
     }
     const entry = countsByWorkspace[row.workspaceId];
     entry.total += row.count;
     const s = row.status as string;
     if (s === "completed") {
       entry.completed += row.count;
-    } else if (row.overdue) {
-      entry.overdue += row.count;
     } else if (s === "blocked") {
       entry.blocked += row.count;
-    } else if (s === "in_progress") {
-      entry.in_progress += row.count;
-    } else if (s === "pending") {
-      entry.pending += row.count;
+    } else if (s === "draft" || s === "pending" || s === "in_progress") {
+      const detail = entry[s];
+      detail.total += row.count;
+      if (row.overdue) detail.overdue += row.count;
+      if (row.noDue) detail.noDue += row.count;
     }
   }
 
@@ -115,7 +130,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     })
     .map((w) => {
       const membership = memberships.find((m) => m.workspaceId === w.id)!;
-      const counts = countsByWorkspace[w.id] ?? { overdue: 0, blocked: 0, in_progress: 0, pending: 0, total: 0, completed: 0 };
+      const counts = countsByWorkspace[w.id] ?? emptyEntry();
       const members = membersByWorkspace[w.id] ?? [];
       return { ...w, role: membership.role, taskCounts: counts, members };
     });

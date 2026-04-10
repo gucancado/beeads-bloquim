@@ -118,12 +118,12 @@ export function useListWorkspacesWithHidden(showHidden: boolean) {
         createdAt: string;
         createdBy: string;
         taskCounts: {
-          overdue: number;
-          blocked: number;
-          in_progress: number;
-          pending: number;
           total: number;
           completed: number;
+          blocked: number;
+          draft: { total: number; overdue: number; noDue: number };
+          pending: { total: number; overdue: number; noDue: number };
+          in_progress: { total: number; overdue: number; noDue: number };
         };
         members: Array<{
           id: string;
