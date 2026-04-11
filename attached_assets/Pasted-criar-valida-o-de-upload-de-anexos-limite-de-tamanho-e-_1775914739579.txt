@@ -1,0 +1,132 @@
+criar validação de upload de anexos (limite de tamanho e restrição de tipos)
+
+Objetivo:  
+Implementar regras de validação para arquivos anexados nas tarefas, limitando o tamanho máximo e bloqueando tipos de arquivos potencialmente perigosos.
+
+Regras de negócio:
+
+1. Limite de tamanho
+    
+
+- Cada arquivo anexado deve ter no máximo 10 MB.
+    
+- Arquivos acima de 10 MB não devem ser aceitos.
+    
+
+2. Tipos de arquivos proibidos
+    
+
+- Bloquear upload de arquivos com extensão:
+    
+    - .exe
+        
+    - .bat
+        
+- A validação deve considerar:
+    
+    - extensão do arquivo (ex: nome_do_arquivo.exe)
+        
+    - garantir que variações como maiúsculas também sejam bloqueadas (EXE, Bat, etc)
+        
+
+3. Validação em múltiplas camadas
+    
+
+- Frontend:
+    
+    - Validar antes do upload iniciar
+        
+    - Se o arquivo ultrapassar 10 MB, impedir envio
+        
+    - Se for .exe ou .bat, impedir envio
+        
+    - Exibir mensagem clara de erro
+        
+- Backend:
+    
+    - Revalidar todas as regras (não confiar apenas no frontend)
+        
+    - Rejeitar requisições inválidas
+        
+    - Retornar erro estruturado
+        
+
+4. Mensagens de erro (UX)
+    
+
+- Para tamanho excedido:  
+    "O arquivo excede o limite de 10 MB"
+    
+- Para tipo não permitido:  
+    "Este tipo de arquivo não é permitido (.exe e .bat)"
+    
+- As mensagens devem aparecer imediatamente no frontend
+    
+
+5. Comportamento esperado
+    
+
+- As regras devem funcionar para todos os métodos de upload:
+    
+    - botão "Anexar arquivo"
+        
+    - drag and drop
+        
+    - Ctrl+V (colar da área de transferência)
+        
+- No caso de múltiplos arquivos:
+    
+    - validar cada arquivo individualmente
+        
+    - arquivos válidos podem ser enviados
+        
+    - arquivos inválidos devem ser ignorados com mensagem de erro
+        
+
+6. Estrutura técnica
+    
+
+- Criar função reutilizável de validação de arquivo:
+    
+    - validar tamanho
+        
+    - validar extensão
+        
+- Aplicar essa função em:
+    
+    - upload via input file
+        
+    - drag and drop
+        
+    - paste (Ctrl+V)
+        
+    - endpoint de upload no backend
+        
+
+7. Segurança adicional (recomendado)
+    
+
+- Não confiar apenas na extensão
+    
+- Se possível, validar também o mime type no backend
+    
+- Evitar que arquivos renomeados burlem a validação
+    
+
+8. Critérios de aceite
+    
+
+- Não é possível anexar arquivos maiores que 10 MB
+    
+- Não é possível anexar arquivos .exe ou .bat
+    
+- A validação funciona via botão, drag and drop e Ctrl+V
+    
+- O sistema exibe mensagens claras de erro
+    
+- O backend bloqueia uploads inválidos mesmo se o frontend falhar
+    
+- Arquivos válidos continuam funcionando normalmente
+    
+
+Implementar de forma integrada com a funcionalidade de anexos já existente, sem quebrar o comportamento atual.
