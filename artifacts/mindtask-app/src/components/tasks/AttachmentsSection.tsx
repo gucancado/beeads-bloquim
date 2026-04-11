@@ -25,11 +25,16 @@ async function uploadFileWithAuth(file: File): Promise<{ objectPath: string } | 
   if (!urlRes.ok) return null;
   const { uploadURL, objectPath } = await urlRes.json();
 
-  const putRes = await fetch(uploadURL, {
-    method: "PUT",
-    body: file,
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-  });
+  let putRes: Response;
+  try {
+    putRes = await fetch(uploadURL, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    });
+  } catch {
+    return null;
+  }
 
   if (!putRes.ok) return null;
   return { objectPath };
