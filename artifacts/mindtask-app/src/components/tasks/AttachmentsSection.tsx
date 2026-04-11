@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2 } from "lucide-react";
+import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2, Download } from "lucide-react";
 import {
   useListTaskAttachments,
   useCreateTaskAttachment,
@@ -127,6 +127,29 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
     }
   }, [deleteAttachmentMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
 
+  const handleDownload = useCallback((attachment: AttachmentResponse) => {
+    const token = localStorage.getItem("mindtask_token");
+    const url = `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachment.id}/download`;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    fetch(url, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = attachment.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      })
+      .catch(() => toast({ title: "Erro ao baixar anexo", variant: "destructive" }));
+  }, [workspaceId, taskId, toast]);
+
   return (
     <AttachmentsSectionUI
       attachments={attachments ?? []}
@@ -137,6 +160,7 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
       dropTargetEl={dropTargetEl}
       onFiles={handleFiles}
       onRemove={handleRemove}
+      onDownload={handleDownload}
       onDragOver={setIsDragOver}
     />
   );
@@ -207,6 +231,29 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<Attachments
     }
   }, [deleteMut, taskId, queryClient, attachmentsKey, toast]);
 
+  const handleDownload = useCallback((attachment: AttachmentResponse) => {
+    const token = localStorage.getItem("mindtask_token");
+    const url = `/api/my-tasks/${taskId}/attachments/${attachment.id}/download`;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    fetch(url, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = attachment.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      })
+      .catch(() => toast({ title: "Erro ao baixar anexo", variant: "destructive" }));
+  }, [taskId, toast]);
+
   return (
     <AttachmentsSectionUI
       attachments={attachments ?? []}
@@ -217,6 +264,7 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<Attachments
       dropTargetEl={dropTargetEl}
       onFiles={handleFiles}
       onRemove={handleRemove}
+      onDownload={handleDownload}
       onDragOver={setIsDragOver}
     />
   );
@@ -231,10 +279,11 @@ interface AttachmentsSectionUIProps {
   dropTargetEl?: HTMLElement | null;
   onFiles: (files: FileList | File[]) => void;
   onRemove: (attachmentId: string) => void;
+  onDownload: (attachment: AttachmentResponse) => void;
   onDragOver: (value: boolean) => void;
 }
 
-function AttachmentsSectionUI({ attachments, isLoading, uploading, isDragOver, fileInputRef, dropTargetEl, onFiles, onRemove, onDragOver }: AttachmentsSectionUIProps) {
+function AttachmentsSectionUI({ attachments, isLoading, uploading, isDragOver, fileInputRef, dropTargetEl, onFiles, onRemove, onDownload, onDragOver }: AttachmentsSectionUIProps) {
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onFiles(e.target.files);
@@ -340,7 +389,8 @@ function AttachmentsSectionUI({ attachments, isLoading, uploading, isDragOver, f
             return (
               <div
                 key={attachment.id}
-                className="flex items-center gap-2.5 px-3 py-2 bg-muted/40 rounded-xl border border-border group hover:bg-muted/60 transition-colors"
+                className="flex items-center gap-2.5 px-3 py-2 bg-muted/40 rounded-xl border border-border group hover:bg-muted/60 transition-colors cursor-pointer"
+                onDoubleClick={() => onDownload(attachment)}
               >
                 <IconComponent className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -349,7 +399,15 @@ function AttachmentsSectionUI({ attachments, isLoading, uploading, isDragOver, f
                 </div>
                 <button
                   type="button"
-                  onClick={() => onRemove(attachment.id)}
+                  onClick={(e) => { e.stopPropagation(); onDownload(attachment); }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 flex-shrink-0"
+                  title="Baixar anexo"
+                >
+                  <Download className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
                   title="Remover anexo"
                 >

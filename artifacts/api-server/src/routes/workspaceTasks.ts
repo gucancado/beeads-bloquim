@@ -1,4 +1,5 @@
 import { Router, IRouter } from "express";
+import { Readable } from "stream";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
@@ -9,6 +10,7 @@ import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -1724,6 +1726,60 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspac
   }
 
   res.json({ success: true });
+});
+
+const objectStorageService = new ObjectStorageService();
+
+router.get("/:taskId/attachments/:attachmentId/download", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId, attachmentId } = req.params;
+
+  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
+  if (!taskExists) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [attachment] = await db
+    .select({
+      id: attachmentLinks.id,
+      objectPath: fileUploads.objectPath,
+      fileName: fileUploads.fileName,
+      mimeType: fileUploads.mimeType,
+    })
+    .from(attachmentLinks)
+    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .where(and(eq(attachmentLinks.id, attachmentId), eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
+    .limit(1);
+
+  if (!attachment) {
+    res.status(404).json({ error: "Attachment not found" });
+    return;
+  }
+
+  try {
+    const objectFile = await objectStorageService.getObjectEntityFile(attachment.objectPath);
+    const response = await objectStorageService.downloadObject(objectFile);
+
+    const encoded = encodeURIComponent(attachment.fileName).replace(/'/g, "%27");
+    res.setHeader("Content-Disposition", `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`);
+    res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() !== "content-disposition" && key.toLowerCase() !== "content-type") {
+        res.setHeader(key, value);
+      }
+    });
+    res.status(200);
+
+    if (response.body) {
+      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    console.error("Error downloading attachment:", error);
+    res.status(500).json({ error: "Failed to download attachment" });
+  }
 });
 
 export default router;

@@ -1,4 +1,5 @@
 import { Router, IRouter } from "express";
+import { Readable } from "stream";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
@@ -8,6 +9,7 @@ import { computeOverdue } from "../lib/overdue";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 
@@ -760,6 +762,57 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: Aut
   }
 
   return res.json({ success: true });
+});
+
+const objectStorageService = new ObjectStorageService();
+
+router.get("/:taskId/attachments/:attachmentId/download", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId, attachmentId } = req.params;
+
+  const [task] = await db.select({ id: tasks.id, assignedTo: tasks.assignedTo, workspaceId: tasks.workspaceId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return res.status(404).json({ error: "Not found" });
+  if (task.assignedTo !== userId) return res.status(403).json({ error: "Forbidden" });
+  if (task.workspaceId) return res.status(400).json({ error: "Use workspace attachment endpoint for workspace tasks" });
+
+  const [attachment] = await db
+    .select({
+      id: attachmentLinks.id,
+      objectPath: fileUploads.objectPath,
+      fileName: fileUploads.fileName,
+      mimeType: fileUploads.mimeType,
+    })
+    .from(attachmentLinks)
+    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .where(and(eq(attachmentLinks.id, attachmentId), eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
+    .limit(1);
+
+  if (!attachment) return res.status(404).json({ error: "Attachment not found" });
+
+  try {
+    const objectFile = await objectStorageService.getObjectEntityFile(attachment.objectPath);
+    const response = await objectStorageService.downloadObject(objectFile);
+
+    const encoded = encodeURIComponent(attachment.fileName).replace(/'/g, "%27");
+    res.setHeader("Content-Disposition", `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`);
+    res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() !== "content-disposition" && key.toLowerCase() !== "content-type") {
+        res.setHeader(key, value);
+      }
+    });
+    res.status(200);
+
+    if (response.body) {
+      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    console.error("Error downloading attachment:", error);
+    return res.status(500).json({ error: "Failed to download attachment" });
+  }
 });
 
 export default router;
