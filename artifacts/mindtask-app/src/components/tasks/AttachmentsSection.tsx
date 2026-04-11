@@ -11,6 +11,20 @@ import {
 import type { AttachmentResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const BLOCKED_EXTENSIONS = [".exe", ".bat"];
+
+function validateFile(file: File): string | null {
+  if (file.size > MAX_FILE_SIZE) {
+    return "O arquivo excede o limite de 10 MB";
+  }
+  const nameLower = file.name.toLowerCase();
+  if (BLOCKED_EXTENSIONS.some((ext) => nameLower.endsWith(ext))) {
+    return "Este tipo de arquivo não é permitido (.exe e .bat)";
+  }
+  return null;
+}
+
 async function uploadFileWithAuth(file: File): Promise<{ objectPath: string } | null> {
   const token = localStorage.getItem("mindtask_token");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -94,6 +108,11 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
     setUploading(true);
     try {
       for (const file of fileArray) {
+        const validationError = validateFile(file);
+        if (validationError) {
+          toast({ title: validationError, variant: "destructive" });
+          continue;
+        }
         const uploadResult = await uploadFileWithAuth(file);
         if (!uploadResult) {
           toast({ title: `Falha ao fazer upload de "${file.name}"`, variant: "destructive" });
@@ -202,6 +221,11 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<Attachments
     setUploading(true);
     try {
       for (const file of fileArray) {
+        const validationError = validateFile(file);
+        if (validationError) {
+          toast({ title: validationError, variant: "destructive" });
+          continue;
+        }
         const uploadResult = await uploadFileWithAuth(file);
         if (!uploadResult) {
           toast({ title: `Falha ao fazer upload de "${file.name}"`, variant: "destructive" });

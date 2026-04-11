@@ -19,6 +19,15 @@ const objectStorageService = new ObjectStorageService();
  * Then uploads the file directly to the returned presigned URL.
  * Protected: requires authenticated user (Bearer token).
  */
+const BACKEND_MAX_FILE_SIZE = 10 * 1024 * 1024;
+const BACKEND_BLOCKED_EXTENSIONS = [".exe", ".bat"];
+const BACKEND_BLOCKED_MIME_TYPES = [
+  "application/x-msdownload",
+  "application/x-msdos-program",
+  "application/bat",
+  "application/x-bat",
+];
+
 router.post("/storage/uploads/request-url", requireAuth, async (req: AuthRequest, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
@@ -28,6 +37,23 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: AuthRequest
 
   try {
     const { name, size, contentType } = parsed.data;
+
+    if (size > BACKEND_MAX_FILE_SIZE) {
+      res.status(400).json({ error: "O arquivo excede o limite de 10 MB", code: "FILE_TOO_LARGE" });
+      return;
+    }
+
+    const nameLower = name.toLowerCase();
+    if (BACKEND_BLOCKED_EXTENSIONS.some((ext) => nameLower.endsWith(ext))) {
+      res.status(400).json({ error: "Este tipo de arquivo não é permitido (.exe e .bat)", code: "FILE_TYPE_NOT_ALLOWED" });
+      return;
+    }
+
+    const contentTypeLower = contentType.toLowerCase();
+    if (BACKEND_BLOCKED_MIME_TYPES.some((mime) => contentTypeLower === mime)) {
+      res.status(400).json({ error: "Este tipo de arquivo não é permitido (.exe e .bat)", code: "FILE_TYPE_NOT_ALLOWED" });
+      return;
+    }
 
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
