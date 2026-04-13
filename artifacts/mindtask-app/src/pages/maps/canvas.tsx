@@ -919,11 +919,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       }
 
       const STATUS_MAP: Record<string, 'draft' | 'pending' | 'in_progress' | 'completed' | 'blocked'> = {
-        z: 'draft',
-        x: 'pending',
-        c: 'in_progress',
-        v: 'completed',
-        b: 'blocked',
+        '1': 'draft',
+        '2': 'pending',
+        '3': 'in_progress',
+        '4': 'completed',
+        '5': 'blocked',
       };
       const newStatus = STATUS_MAP[lkey];
       if (newStatus) {
