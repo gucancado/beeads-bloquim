@@ -7,6 +7,7 @@ import { Maximize2, Calendar, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorkspaceMembers } from '@workspace/api-client-react';
+import { AssigneeAvatarPicker } from '@/components/tasks/AssigneeAvatarPicker';
 import { useQueryClient } from '@tanstack/react-query';
 
 function stripHtml(html: string): string {
@@ -99,6 +100,7 @@ interface MindMapNodeProps {
     taskId?: string | null;
     taskDueDate?: string | null;
     taskAssigneeName?: string | null;
+    taskAssigneeId?: string | null;
     taskAssigneeAvatarUrl?: string | null;
     taskDescription?: string | null;
     taskCompletedAt?: string | null;
@@ -111,6 +113,7 @@ interface MindMapNodeProps {
       title: string;
       statusVisual: string;
       taskAssigneeName: string | null;
+      taskAssigneeId: string | null;
       taskAssigneeAvatarUrl: string | null;
       taskDueDate: string | null;
     }>) => void;
@@ -194,7 +197,6 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(data.title);
-  const [editingAssignee, setEditingAssignee] = useState(false);
   const [editingStatus, setEditingStatus] = useState(false);
   const [statusDropdownPos, setStatusDropdownPos] = useState({ top: 0, left: 0 });
   const [editingDueDate, setEditingDueDate] = useState(false);
@@ -273,13 +275,27 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   };
 
   const handleAssigneeChange = (userId: string) => {
-    setEditingAssignee(false);
+    if (userId === 'unassigned') {
+      data.onInlineUpdate?.(id, {
+        taskAssigneeName: null,
+        taskAssigneeId: null,
+        taskAssigneeAvatarUrl: null,
+      });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { assignedTo: null } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
     const member = members?.find(m => m.userId === userId);
     if (!member) return;
     const assigneeName = member.user.name;
     const assigneeAvatar = member.user.avatarUrl ?? null;
     data.onInlineUpdate?.(id, {
       taskAssigneeName: assigneeName,
+      taskAssigneeId: userId,
       taskAssigneeAvatarUrl: assigneeAvatar,
     });
     if (data.taskId) {
@@ -541,60 +557,34 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         {/* Assignee & Due Date */}
         {(hasAssignee || hasDueDate || hasTask) ? (
           <div className="mt-3 flex items-center justify-between gap-2">
-            {hasTask && editingAssignee ? (
-              <div className="relative nodrag flex-shrink-0">
-                <select
-                  autoFocus
-                  className="text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer max-w-[130px]"
-                  defaultValue=""
-                  onBlur={() => setEditingAssignee(false)}
-                  onChange={e => { if (e.target.value) handleAssigneeChange(e.target.value); }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <option value="">— responsável —</option>
-                  {members?.map(m => (
-                    <option key={m.userId} value={m.userId}>{m.user.name}</option>
-                  ))}
-                </select>
+            {hasTask ? (
+              <div
+                className="nodrag flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <AssigneeAvatarPicker
+                  assignedTo={data.taskAssigneeId ?? ''}
+                  members={members}
+                  onSelect={handleAssigneeChange}
+                />
               </div>
             ) : hasAssignee ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={`flex items-center cursor-pointer nodrag ${hasTask ? 'hover:ring-2 hover:ring-primary/40 rounded-full transition-all' : 'cursor-default'}`}
-                      onClick={(e) => { if (hasTask) { e.stopPropagation(); setEditingAssignee(true); } }}
-                      onDoubleClick={(e) => e.stopPropagation()}
-                      title={hasTask ? 'Clique para alterar responsável' : undefined}
-                    >
-                      {data.taskAssigneeAvatarUrl ? (
-                        <img
-                          src={data.taskAssigneeAvatarUrl}
-                          alt={data.taskAssigneeName ?? ''}
-                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-bold text-muted-foreground">
-                            {data.taskAssigneeName!.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>{data.taskAssigneeName}{hasTask ? ' (clique para editar)' : ''}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : hasTask ? (
-              <button
-                className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all"
-                title="Adicionar responsável"
-                onClick={(e) => { e.stopPropagation(); setEditingAssignee(true); }}
-              >
-                <div className="w-7 h-7 rounded-full bg-muted/60 flex items-center justify-center hover:bg-muted transition-colors">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-              </button>
+              <div className="flex items-center flex-shrink-0 nodrag">
+                {data.taskAssigneeAvatarUrl ? (
+                  <img
+                    src={data.taskAssigneeAvatarUrl}
+                    alt={data.taskAssigneeName ?? ''}
+                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-muted-foreground">
+                      {data.taskAssigneeName!.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : null}
 
             {hasTask && editingDueDate ? (
