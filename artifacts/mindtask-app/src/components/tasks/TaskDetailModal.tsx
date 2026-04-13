@@ -235,17 +235,15 @@ function ApprovalSection({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <label className="text-xs font-semibold text-muted-foreground tracking-wider lowercase flex items-center gap-1">
-          <CheckSquare className="w-3 h-3" /> aprovação
-        </label>
         {approvals.length < MAX_APPROVERS && (
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowUserMenu(v => !v)}
-              className="w-6 h-6 rounded-full bg-muted hover:bg-primary/10 text-muted-foreground hover:text-primary flex items-center justify-center transition-all"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted"
               title="Adicionar aprovador"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span className="lowercase">aprovações +</span>
             </button>
             {showUserMenu && (
               <div className="absolute top-8 left-0 z-50 bg-popover border border-border rounded-xl shadow-lg min-w-[200px] py-1.5 overflow-hidden">
