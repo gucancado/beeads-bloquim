@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat } from "lucide-react";
+import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip } from "lucide-react";
 import { formatDueDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,6 +47,7 @@ export interface TaskListItemData {
   isApprovalTask?: boolean | null;
   isRecurring?: boolean | null;
   recurrenceConfig?: { type: string } | null;
+  attachmentCount?: number | null;
 }
 
 interface Props {
@@ -461,6 +462,11 @@ export function TaskListItem({
             disabled={savingField === "priority"}
           />
         </div>
+
+        {/* Attachment icon */}
+        {localTask.attachmentCount != null && localTask.attachmentCount > 0 && (
+          <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" aria-label="Possui anexos" />
+        )}
 
         {/* Recurrence indicator */}
         {localTask.isRecurring && localTask.recurrenceConfig && (

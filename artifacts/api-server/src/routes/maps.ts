@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachmentLinks } from "@workspace/db/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -79,13 +79,14 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskApprovalDecision: tasks.approvalStatus,
       taskApprovalOrder: tasks.approvalOrder,
       taskParentApprovalStatus: tasks.parentApprovalStatus,
+      taskAttachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
     })
     .from(cards)
     .leftJoin(tasks, eq(tasks.id, cards.taskId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
     .where(eq(cards.mapId, mapId));
 
-  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, ...c }) => ({
+  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, ...c }) => ({
     ...c,
     taskDueDate: taskDueDate ?? null,
     taskAssigneeName: taskAssigneeName ?? null,
@@ -99,6 +100,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     taskApprovalDecision: taskApprovalDecision ?? null,
     taskApprovalOrder: taskApprovalOrder ?? null,
     taskParentApprovalStatus: taskParentApprovalStatus ?? null,
+    taskAttachmentCount: Number(taskAttachmentCount ?? 0),
   }));
 
   const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex, formatDueDate } from '@/lib/utils';
 import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized } from '@/lib/taskStatusConstants';
-import { Maximize2, Calendar, User, Plus } from 'lucide-react';
+import { Maximize2, Calendar, User, Plus, Paperclip } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorkspaceMembers } from '@workspace/api-client-react';
@@ -105,6 +105,7 @@ interface MindMapNodeProps {
     taskDescription?: string | null;
     taskCompletedAt?: string | null;
     taskParentApprovalStatus?: string | null;
+    taskAttachmentCount?: number | null;
     workspaceId?: string;
     mapId?: string;
     onOpen?: (id: string) => void;
@@ -417,6 +418,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 </span>
               </div>
             ) : null}
+            {data.taskAttachmentCount != null && data.taskAttachmentCount > 0 && (
+              <Paperclip className="w-3 h-3 flex-shrink-0 text-gray-400" aria-label="Possui anexos" />
+            )}
             <span className={`text-[10px] text-gray-400 transition-colors duration-300 ${mutedTextColor}`}>
               {statusText}
             </span>
@@ -586,6 +590,10 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 )}
               </div>
             ) : null}
+
+            {data.taskAttachmentCount != null && data.taskAttachmentCount > 0 && (
+              <Paperclip className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" aria-label="Possui anexos" />
+            )}
 
             {hasTask && editingDueDate ? (
               <input

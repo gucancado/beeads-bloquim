@@ -204,6 +204,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
+      attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
     })
     .from(tasks)
     .leftJoin(cards, eq(cards.taskId, tasks.id))
