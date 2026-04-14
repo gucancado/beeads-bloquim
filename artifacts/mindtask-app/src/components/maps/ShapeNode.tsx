@@ -23,6 +23,10 @@ interface ShapeNodeData {
   strokeStyle: 'solid' | 'dashed';
   workspaceId: string;
   mapId: string;
+  x1?: number | null;
+  y1?: number | null;
+  x2?: number | null;
+  y2?: number | null;
   onBeforeMutate?: () => void;
 }
 
@@ -45,6 +49,26 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
   const [filled, setFilled] = useState(data.filled);
   const [strokeStyle, setStrokeStyle] = useState(data.strokeStyle);
 
+  const getDefaultLineCoords = useCallback((w: number) => ({
+    lx1: 0,
+    ly1: 0,
+    lx2: w,
+    ly2: 0,
+  }), []);
+
+  const [lx1, setLx1] = useState(() =>
+    data.type === 'line' && data.x1 != null ? data.x1 : 0
+  );
+  const [ly1, setLy1] = useState(() =>
+    data.type === 'line' && data.y1 != null ? data.y1 : 0
+  );
+  const [lx2, setLx2] = useState(() =>
+    data.type === 'line' && data.x2 != null ? data.x2 : data.width
+  );
+  const [ly2, setLy2] = useState(() =>
+    data.type === 'line' && data.y2 != null ? data.y2 : 0
+  );
+
   const { setNodes, getZoom, getNode } = useReactFlow();
   const transform = useStore(state => state.transform);
   const updateMut = useUpdateShape();
@@ -61,6 +85,16 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     setFilled(data.filled);
     setStrokeStyle(data.strokeStyle);
   }, [data.width, data.height, data.color, data.filled, data.strokeStyle]);
+
+  useEffect(() => {
+    if (data.type === 'line') {
+      const defaults = getDefaultLineCoords(data.width);
+      setLx1(data.x1 != null ? data.x1 : defaults.lx1);
+      setLy1(data.y1 != null ? data.y1 : defaults.ly1);
+      setLx2(data.x2 != null ? data.x2 : defaults.lx2);
+      setLy2(data.y2 != null ? data.y2 : defaults.ly2);
+    }
+  }, [data.type, data.x1, data.y1, data.x2, data.y2, data.width, getDefaultLineCoords]);
 
   const saveStyle = useCallback((patch: {
     color?: string;
@@ -92,6 +126,96 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     setStrokeStyle(next);
     saveStyle({ strokeStyle: next });
   }, [strokeStyle, saveStyle]);
+
+  const startResizeLine = useCallback((e: React.MouseEvent, endpoint: 'start' | 'end') => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const startNode = getNode(id);
+    const nodePosX = startNode?.position.x ?? data.positionX;
+    const nodePosY = startNode?.position.y ?? data.positionY;
+
+    const canvasX1 = nodePosX + lx1;
+    const canvasY1 = nodePosY + ly1;
+    const canvasX2 = nodePosX + lx2;
+    const canvasY2 = nodePosY + ly2;
+
+    const compute = (ev: MouseEvent) => {
+      const zoom = getZoom();
+      const dx = (ev.clientX - startClientX) / zoom;
+      const dy = (ev.clientY - startClientY) / zoom;
+
+      let newCanvasX1 = canvasX1;
+      let newCanvasY1 = canvasY1;
+      let newCanvasX2 = canvasX2;
+      let newCanvasY2 = canvasY2;
+
+      if (endpoint === 'start') {
+        newCanvasX1 = canvasX1 + dx;
+        newCanvasY1 = canvasY1 + dy;
+      } else {
+        newCanvasX2 = canvasX2 + dx;
+        newCanvasY2 = canvasY2 + dy;
+      }
+
+      const minX = Math.min(newCanvasX1, newCanvasX2);
+      const minY = Math.min(newCanvasY1, newCanvasY2);
+      const maxX = Math.max(newCanvasX1, newCanvasX2);
+      const maxY = Math.max(newCanvasY1, newCanvasY2);
+
+      const newNodePosX = minX;
+      const newNodePosY = minY;
+      const newW = Math.max(maxX - minX, 4);
+      const newH = Math.max(maxY - minY, 4);
+
+      const newLocalX1 = newCanvasX1 - minX;
+      const newLocalY1 = newCanvasY1 - minY;
+      const newLocalX2 = newCanvasX2 - minX;
+      const newLocalY2 = newCanvasY2 - minY;
+
+      return { newNodePosX, newNodePosY, newW, newH, newLocalX1, newLocalY1, newLocalX2, newLocalY2 };
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      const { newNodePosX, newNodePosY, newW, newH, newLocalX1, newLocalY1, newLocalX2, newLocalY2 } = compute(ev);
+      setLx1(newLocalX1);
+      setLy1(newLocalY1);
+      setLx2(newLocalX2);
+      setLy2(newLocalY2);
+      setWidth(newW);
+      setHeight(newH);
+      setNodes(nodes => nodes.map(n =>
+        n.id === id ? { ...n, position: { x: newNodePosX, y: newNodePosY } } : n
+      ));
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const { newNodePosX, newNodePosY, newW, newH, newLocalX1, newLocalY1, newLocalX2, newLocalY2 } = compute(ev);
+      data.onBeforeMutate?.();
+      updateMut.mutate({
+        workspaceId: data.workspaceId,
+        mapId: data.mapId,
+        shapeId: id,
+        data: {
+          positionX: newNodePosX,
+          positionY: newNodePosY,
+          width: newW,
+          height: newH,
+          x1: newLocalX1,
+          y1: newLocalY1,
+          x2: newLocalX2,
+          y2: newLocalY2,
+        },
+      });
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [lx1, ly1, lx2, ly2, data, id, updateMut, setNodes, getZoom, getNode]);
 
   const startResize = useCallback((e: React.MouseEvent, handle: ResizeHandle) => {
     e.stopPropagation();
@@ -152,19 +276,23 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, [width, height, data.type, data.positionX, data.positionY, data.workspaceId, data.mapId, id, updateMut, setNodes, getZoom, getNode]);
+  }, [width, height, data.positionX, data.positionY, data.workspaceId, data.mapId, id, updateMut, setNodes, getZoom, getNode]);
 
   const strokeDash = strokeStyle === 'dashed' ? '8 5' : undefined;
   const fillColor = filled ? color + '33' : 'none';
-  const svgW = width;
+
+  const svgW = data.type === 'line' ? Math.max(width, 4) : width;
   const svgH = data.type === 'line' ? Math.max(height, 4) : height;
 
-  const handlePositions: { handle: ResizeHandle; cx: number; cy: number }[] = data.type === 'line'
+  const lineHandles = data.type === 'line'
     ? [
-        { handle: 'w', cx: 0, cy: svgH / 2 },
-        { handle: 'e', cx: svgW, cy: svgH / 2 },
+        { endpoint: 'start' as const, cx: lx1, cy: ly1 },
+        { endpoint: 'end' as const, cx: lx2, cy: ly2 },
       ]
-    : [
+    : [];
+
+  const rectHandlePositions: { handle: ResizeHandle; cx: number; cy: number }[] = data.type !== 'line'
+    ? [
         { handle: 'nw', cx: 0, cy: 0 },
         { handle: 'n',  cx: svgW / 2, cy: 0 },
         { handle: 'ne', cx: svgW, cy: 0 },
@@ -173,7 +301,8 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
         { handle: 's',  cx: svgW / 2, cy: svgH },
         { handle: 'sw', cx: 0, cy: svgH },
         { handle: 'w',  cx: 0, cy: svgH / 2 },
-      ];
+      ]
+    : [];
 
   const cursorMap: Record<ResizeHandle, string> = {
     nw: 'nw-resize', n: 'n-resize', ne: 'ne-resize',
@@ -274,10 +403,10 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
           )}
           {data.type === 'line' && (
             <line
-              x1={4}
-              y1={svgH / 2}
-              x2={svgW - 4}
-              y2={svgH / 2}
+              x1={lx1}
+              y1={ly1}
+              x2={lx2}
+              y2={ly2}
               stroke={color}
               strokeWidth={2}
               strokeLinecap="round"
@@ -287,7 +416,25 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
             />
           )}
 
-          {selected && handlePositions.map(({ handle, cx, cy }) => (
+          {selected && data.type === 'line' && lineHandles.map(({ endpoint, cx, cy }) => (
+            <rect
+              key={endpoint}
+              x={cx - HANDLE_SIZE / 2}
+              y={cy - HANDLE_SIZE / 2}
+              width={HANDLE_SIZE}
+              height={HANDLE_SIZE}
+              rx={1}
+              fill="white"
+              stroke={color}
+              strokeWidth={1.5}
+              className="nodrag"
+              style={{ cursor: 'crosshair' }}
+              pointerEvents="all"
+              onMouseDown={e => startResizeLine(e, endpoint)}
+            />
+          ))}
+
+          {selected && data.type !== 'line' && rectHandlePositions.map(({ handle, cx, cy }) => (
             <rect
               key={handle}
               x={cx - HANDLE_SIZE / 2}

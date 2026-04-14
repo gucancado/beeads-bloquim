@@ -14,6 +14,10 @@ export interface ShapeResponse {
   color: string;
   filled: boolean;
   strokeStyle: "solid" | "dashed";
+  x1: number | null;
+  y1: number | null;
+  x2: number | null;
+  y2: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +43,10 @@ export interface UpdateShapeRequest {
   color?: string;
   filled?: boolean;
   strokeStyle?: "solid" | "dashed";
+  x1?: number | null;
+  y1?: number | null;
+  x2?: number | null;
+  y2?: number | null;
 }
 
 export const createShape = async (
