@@ -4,7 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, useTaskActivities, useStandaloneTaskComments, useCreateStandaloneTaskComment, CommentItem, TaskActivityItem } from "@/hooks/useComments";
 import { Button } from "@/components/ui/button";
-import { Loader2, Bold, Italic, List, Underline as UnderlineIcon, Strikethrough, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
+import { Loader2, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -42,6 +42,7 @@ type CommentsSectionProps =
 
 function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => void; isPending: boolean }) {
   const [isEmpty, setIsEmpty] = useState(true);
+  const [isFocused, setIsFocused] = useState(false);
   const submitRef = useRef<() => void>(() => {});
 
   const editor = useEditor({
@@ -66,6 +67,12 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
     onUpdate: ({ editor }) => {
       setIsEmpty(!editor.getText().trim());
     },
+    onFocus: () => {
+      setIsFocused(true);
+    },
+    onBlur: () => {
+      setIsFocused(false);
+    },
   });
 
   const handleSubmit = useCallback(() => {
@@ -82,48 +89,50 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
 
   return (
     <div className="border border-border rounded-xl bg-background focus-within:ring-2 focus-within:ring-primary/30 transition-all">
-      <div className="flex items-center gap-0.5 px-2 pt-1.5 border-b border-border/60">
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
-          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("bold") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="negrito"
-        >
-          <Bold className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
-          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("italic") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="itálico"
-        >
-          <Italic className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleUnderline().run(); }}
-          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("underline") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="sublinhado"
-        >
-          <UnderlineIcon className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleStrike().run(); }}
-          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("strike") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="tachado"
-        >
-          <Strikethrough className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
-          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("bulletList") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-          title="lista"
-        >
-          <List className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      {isFocused && (
+        <div className="flex items-center gap-0.5 px-2 pt-1.5 border-b border-border/60">
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
+            className={`p-1.5 rounded-md transition-colors text-xs font-bold w-6 h-6 flex items-center justify-center ${editor?.isActive("bold") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+            title="negrito"
+          >
+            N
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
+            className={`p-1.5 rounded-md transition-colors ${editor?.isActive("italic") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+            title="itálico"
+          >
+            <Italic className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleUnderline().run(); }}
+            className={`p-1.5 rounded-md transition-colors text-xs font-bold underline w-6 h-6 flex items-center justify-center ${editor?.isActive("underline") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+            title="sublinhado"
+          >
+            S
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleStrike().run(); }}
+            className={`p-1.5 rounded-md transition-colors text-xs font-bold line-through w-6 h-6 flex items-center justify-center ${editor?.isActive("strike") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+            title="tachado"
+          >
+            T
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
+            className={`p-1.5 rounded-md transition-colors ${editor?.isActive("bulletList") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+            title="lista"
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <EditorContent editor={editor} />
 
