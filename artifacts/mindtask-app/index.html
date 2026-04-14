@@ -8,9 +8,27 @@
          as phantom crashes.  Proper errors still surface via the ErrorBoundary. -->
     <script>
       (function () {
+        // Wrap ResizeObserver so all callbacks run inside requestAnimationFrame.
+        // This prevents Chrome's "ResizeObserver loop completed with undelivered
+        // notifications." global error that fires whenever ReactFlow's internal
+        // ResizeObserver callbacks cannot be fully delivered within one paint
+        // frame. The error has error=null (not an Error instance) which causes
+        // Replit's cross-frame CDP monitor to report a spurious runtime crash on
+        // every node drag. Deferring via rAF eliminates the loop condition.
+        if (typeof window.ResizeObserver !== 'undefined') {
+          var _RO = window.ResizeObserver;
+          window.ResizeObserver = function ResizeObserver(cb) {
+            return new _RO(function(entries, observer) {
+              requestAnimationFrame(function() { cb(entries, observer); });
+            });
+          };
+          window.ResizeObserver.prototype = _RO.prototype;
+        }
+
+        // Suppress any remaining unhandled errors/rejections so they don't
+        // trigger Replit's phantom crash indicator.
         function suppress(e) {
           try { e.preventDefault(); } catch (_) {}
-          try { e.stopImmediatePropagation(); } catch (_) {}
           return true;
         }
         window.addEventListener('unhandledrejection', suppress, true);
