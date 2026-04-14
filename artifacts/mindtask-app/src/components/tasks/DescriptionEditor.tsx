@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Bold, Italic, List } from "lucide-react";
+import Underline from "@tiptap/extension-underline";
+import { Bold, Italic, List, Underline as UnderlineIcon, Strikethrough } from "lucide-react";
 
 interface DescriptionEditorProps {
   value: string;
@@ -11,7 +12,7 @@ interface DescriptionEditorProps {
 
 export function DescriptionEditor({ value, onChange, onBlur }: DescriptionEditorProps) {
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, Underline],
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -58,6 +59,22 @@ export function DescriptionEditor({ value, onChange, onBlur }: DescriptionEditor
           title="itálico"
         >
           <Italic className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleUnderline().run(); }}
+          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("underline") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+          title="sublinhado"
+        >
+          <UnderlineIcon className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleStrike().run(); }}
+          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("strike") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+          title="tachado"
+        >
+          <Strikethrough className="w-3.5 h-3.5" />
         </button>
         <button
           type="button"

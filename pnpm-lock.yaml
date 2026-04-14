@@ -157,6 +157,9 @@ importers:
       '@tiptap/extension-placeholder':
         specifier: ^3.20.4
         version: 3.20.4(@tiptap/extensions@3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))(@tiptap/pm@3.20.4))
+      '@tiptap/extension-underline':
+        specifier: ^3.20.4
+        version: 3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))
       '@tiptap/react':
         specifier: ^3.20.4
         version: 3.20.4(@floating-ui/dom@1.7.6)(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))(@tiptap/pm@3.20.4)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -2444,6 +2447,11 @@ packages:
     resolution: {integrity: sha512-0OjMc3FDujX16G+jhvqcY/mLot8SrNtDu8ggUwNLAfiI/QIvMVgk7giFD71DATC/4Nb8i/iwAEegTD8MxBIXCg==}
     peerDependencies:
       '@tiptap/core': ^3.20.4
+
+  '@tiptap/extension-underline@3.22.3':
+    resolution: {integrity: sha512-Ch6CBWRa5w90yYSPUW6x9Py9JdrXMqk3pZ9OIlMYD8A7BqyZGfiHerX7XDMYDS09KjyK3U9XH60/zxYOzXdDLA==}
+    peerDependencies:
+      '@tiptap/core': ^3.22.3
 
   '@tiptap/extensions@3.20.4':
     resolution: {integrity: sha512-8p6hVT65DjuQjtEdlH6ewX9SOJHlVQAOee3sWIJQmeJNRnZNvqPIBLleebUqDiljNTpxBv6s6QWkSTKgf3btwg==}
@@ -6360,6 +6368,10 @@ snapshots:
     dependencies:
       '@tiptap/core': 3.20.4(@tiptap/pm@3.20.4)
 
+  '@tiptap/extension-underline@3.22.3(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))':
+    dependencies:
+      '@tiptap/core': 3.20.4(@tiptap/pm@3.20.4)
+
   '@tiptap/extensions@3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))(@tiptap/pm@3.20.4)':
     dependencies:
       '@tiptap/core': 3.20.4(@tiptap/pm@3.20.4)
@@ -6426,7 +6438,7 @@ snapshots:
       '@tiptap/extension-paragraph': 3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))
       '@tiptap/extension-strike': 3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))
       '@tiptap/extension-text': 3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))
-      '@tiptap/extension-underline': 3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))
+      '@tiptap/extension-underline': 3.22.3(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))
       '@tiptap/extensions': 3.20.4(@tiptap/core@3.20.4(@tiptap/pm@3.20.4))(@tiptap/pm@3.20.4)
       '@tiptap/pm': 3.20.4
 

@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
 import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, useTaskActivities, useStandaloneTaskComments, useCreateStandaloneTaskComment, CommentItem, TaskActivityItem } from "@/hooks/useComments";
 import { Button } from "@/components/ui/button";
-import { Loader2, Bold, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
+import { Loader2, Bold, Italic, List, Underline as UnderlineIcon, Strikethrough, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -46,6 +47,7 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
   const editor = useEditor({
     extensions: [
       StarterKit,
+      Underline,
     ],
     immediatelyRender: false,
     editorProps: {
@@ -96,6 +98,22 @@ function RichTextEditor({ onSubmit, isPending }: { onSubmit: (html: string) => v
           title="itálico"
         >
           <Italic className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleUnderline().run(); }}
+          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("underline") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+          title="sublinhado"
+        >
+          <UnderlineIcon className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleStrike().run(); }}
+          className={`p-1.5 rounded-md transition-colors ${editor?.isActive("strike") ? "bg-slate-200 dark:bg-slate-700" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+          title="tachado"
+        >
+          <Strikethrough className="w-3.5 h-3.5" />
         </button>
         <button
           type="button"
