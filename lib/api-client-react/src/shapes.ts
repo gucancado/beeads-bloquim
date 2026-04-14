@@ -32,6 +32,10 @@ export interface CreateShapeRequest {
   color?: string;
   filled?: boolean;
   strokeStyle?: "solid" | "dashed";
+  x1?: number | null;
+  y1?: number | null;
+  x2?: number | null;
+  y2?: number | null;
 }
 
 export interface UpdateShapeRequest {

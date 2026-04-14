@@ -352,7 +352,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [shapeTool, setShapeTool] = useState<'line' | 'rect' | 'ellipse' | null>(null);
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
   const shapeDrawRef = useRef<{ startX: number; startY: number; flowX: number; flowY: number } | null>(null);
-  const [shapeGhost, setShapeGhost] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [shapeGhost, setShapeGhost] = useState<{ x: number; y: number; w: number; h: number; rawAbsW?: number; rawAbsH?: number; dxSign?: number; dySign?: number } | null>(null);
   const shapeToolRef = useRef<'line' | 'rect' | 'ellipse' | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
     query: { refetchInterval: 3000, throwOnError: false, retry: false },
@@ -856,6 +856,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
                   strokeStyle: serverShape.strokeStyle,
                   width: serverShape.width,
                   height: serverShape.height,
+                  x1: serverShape.x1 ?? null,
+                  y1: serverShape.y1 ?? null,
+                  x2: serverShape.x2 ?? null,
+                  y2: serverShape.y2 ?? null,
                 },
               };
             }
@@ -1768,9 +1772,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     const dy = e.clientY - startY;
     const x = Math.min(e.clientX, startX);
     const y = Math.min(e.clientY, startY);
-    const w = Math.abs(dx);
-    const h = shapeToolRef.current === 'line' ? 4 : Math.abs(dy);
-    setShapeGhost({ x, y, w, h });
+    const rawAbsW = Math.abs(dx);
+    const rawAbsH = Math.abs(dy);
+    const w = rawAbsW;
+    const h = shapeToolRef.current === 'line' ? Math.max(4, rawAbsH) : rawAbsH;
+    const dxSign = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    const dySign = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+    setShapeGhost({ x, y, w, h, rawAbsW, rawAbsH, dxSign, dySign });
   }, []);
 
   const handleShapeDrawMouseUp = useCallback((e: React.MouseEvent) => {
@@ -1783,21 +1791,40 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     const posY = Math.min(flowY, flowEnd.y);
     const rawW = Math.abs(flowEnd.x - flowX);
     const rawH = Math.abs(flowEnd.y - flowY);
-    const w = tool === 'line' ? Math.max(80, rawW) : Math.max(40, rawW);
-    const h = tool === 'line' ? 4 : Math.max(20, rawH);
+    const w = tool === 'line' ? Math.max(1, rawW) : Math.max(40, rawW);
+    const h = tool === 'line' ? Math.max(4, rawH) : Math.max(20, rawH);
     shapeDrawRef.current = null;
     setShapeGhost(null);
     setShapeTool(null);
-    createShapeMut.mutate(
-      { workspaceId, mapId, data: { type: tool, positionX: posX, positionY: posY, width: w, height: h } },
-      {
-        onSuccess: (shape) => {
-          const newNode = buildShapeNode(shape);
-          setNodes(prev => [newNode, ...prev]);
-          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+    if (tool === 'line') {
+      const dxSign = flowEnd.x > flowX ? 1 : flowEnd.x < flowX ? -1 : 0;
+      const dySign = flowEnd.y > flowY ? 1 : flowEnd.y < flowY ? -1 : 0;
+      const x1 = dxSign > 0 ? 0 : dxSign < 0 ? w : 0;
+      const y1 = dySign > 0 ? 0 : dySign < 0 ? h : 0;
+      const x2 = dxSign > 0 ? w : dxSign < 0 ? 0 : 0;
+      const y2 = dySign > 0 ? h : dySign < 0 ? 0 : 0;
+      createShapeMut.mutate(
+        { workspaceId, mapId, data: { type: tool, positionX: posX, positionY: posY, width: w, height: h, x1, y1, x2, y2 } },
+        {
+          onSuccess: (shape) => {
+            const newNode = buildShapeNode(shape);
+            setNodes(prev => [newNode, ...prev]);
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          },
         },
-      },
-    );
+      );
+    } else {
+      createShapeMut.mutate(
+        { workspaceId, mapId, data: { type: tool, positionX: posX, positionY: posY, width: w, height: h } },
+        {
+          onSuccess: (shape) => {
+            const newNode = buildShapeNode(shape);
+            setNodes(prev => [newNode, ...prev]);
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          },
+        },
+      );
+    }
   }, [screenToFlowPosition, workspaceId, mapId, createShapeMut, buildShapeNode, setNodes, queryClient]);
 
   const onPaneClick = useCallback(() => {
@@ -1863,18 +1890,26 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           />
         )}
 
-        {shapeGhost && shapeGhost.w > 2 && (
-          <div className="pointer-events-none fixed z-[9998]" style={{ left: shapeGhost.x, top: shapeGhost.y, width: shapeGhost.w, height: Math.max(shapeGhost.h, 4) }}>
-            <svg width={shapeGhost.w} height={Math.max(shapeGhost.h, 4)} style={{ overflow: 'visible' }}>
+        {shapeGhost && (shapeGhost.w > 2 || (shapeTool === 'line' && shapeGhost.h > 2)) && (
+          <div className="pointer-events-none fixed z-[9998]" style={{ left: shapeGhost.x, top: shapeGhost.y, width: Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0), height: Math.max(shapeGhost.h, 4) }}>
+            <svg width={Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0)} height={Math.max(shapeGhost.h, 4)} style={{ overflow: 'visible' }}>
               {shapeTool === 'rect' && (
                 <rect x={1} y={1} width={shapeGhost.w - 2} height={Math.max(shapeGhost.h - 2, 2)} rx={4} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
               )}
               {shapeTool === 'ellipse' && (
                 <ellipse cx={shapeGhost.w / 2} cy={Math.max(shapeGhost.h, 4) / 2} rx={shapeGhost.w / 2 - 1} ry={Math.max(shapeGhost.h, 4) / 2 - 1} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
               )}
-              {shapeTool === 'line' && (
-                <line x1={0} y1={2} x2={shapeGhost.w} y2={2} stroke="#6366f1" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />
-              )}
+              {shapeTool === 'line' && (() => {
+                const gw = Math.max(shapeGhost.rawAbsW ?? shapeGhost.w, 1);
+                const rawH = shapeGhost.rawAbsH ?? shapeGhost.h;
+                const gDxSign = shapeGhost.dxSign ?? 1;
+                const gDySign = shapeGhost.dySign ?? 1;
+                const lx1 = gDxSign > 0 ? 0 : gDxSign < 0 ? gw : 0;
+                const lx2 = gDxSign > 0 ? gw : gDxSign < 0 ? 0 : 0;
+                const ly1 = gDySign > 0 ? 0 : gDySign < 0 ? rawH : 0;
+                const ly2 = gDySign > 0 ? rawH : gDySign < 0 ? 0 : 0;
+                return <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#6366f1" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />;
+              })()}
             </svg>
           </div>
         )}

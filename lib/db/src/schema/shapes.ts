@@ -41,6 +41,10 @@ export const insertMapShapeSchema = z.object({
   color: z.string().optional().default("#6366f1"),
   filled: z.boolean().optional().default(false),
   strokeStyle: z.enum(["solid", "dashed"]).optional().default("solid"),
+  x1: z.number().nullable().optional(),
+  y1: z.number().nullable().optional(),
+  x2: z.number().nullable().optional(),
+  y2: z.number().nullable().optional(),
 });
 
 export const updateMapShapeSchema = z.object({
