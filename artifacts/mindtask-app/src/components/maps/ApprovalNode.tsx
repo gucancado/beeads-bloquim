@@ -29,8 +29,8 @@ const STRIP_HANDLE_CLS = [
 
 function decisionLabel(decision: string | null): { label: string; cls: string } | null {
   if (!decision || decision === 'pending') return null;
-  if (decision === 'approved') return { label: 'aprovado', cls: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' };
-  if (decision === 'rejected') return { label: 'rejeitado', cls: 'text-red-600 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900' };
+  if (decision === 'approved') return { label: 'aprovado', cls: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-900' };
+  if (decision === 'rejected') return { label: 'rejeitado', cls: 'text-red-600 bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-900' };
   return null;
 }
 
@@ -55,7 +55,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
     case 'pending':
       return {
         hex: getStatusColorHex('pending'),
-        bgLight: 'bg-blue-50 dark:bg-blue-950/20',
+        bgLight: 'bg-blue-50 dark:bg-blue-950',
         borderLight: 'border-blue-200 dark:border-blue-800',
         borderSelected: 'border-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.35),0_8px_32px_-4px_rgba(59,130,246,0.55)]',
         ringLight: 'ring-blue-300 dark:ring-blue-700',
@@ -69,7 +69,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
     case 'in_progress':
       return {
         hex: getStatusColorHex('in_progress'),
-        bgLight: 'bg-amber-50 dark:bg-amber-950/20',
+        bgLight: 'bg-amber-50 dark:bg-amber-950',
         borderLight: 'border-amber-200 dark:border-amber-800',
         borderSelected: 'border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.35),0_8px_32px_-4px_rgba(245,158,11,0.55)]',
         ringLight: 'ring-amber-300 dark:ring-amber-700',
@@ -83,7 +83,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
     case 'completed':
       return {
         hex: getStatusColorHex('completed'),
-        bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
+        bgLight: 'bg-emerald-50 dark:bg-emerald-950',
         borderLight: 'border-emerald-200 dark:border-emerald-800',
         borderSelected: 'border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35),0_8px_32px_-4px_rgba(16,185,129,0.55)]',
         ringLight: 'ring-emerald-300 dark:ring-emerald-700',
@@ -97,7 +97,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
     case 'cancelled':
       return {
         hex: getStatusColorHex('blocked'),
-        bgLight: 'bg-slate-50 dark:bg-slate-950/20',
+        bgLight: 'bg-slate-50 dark:bg-slate-950',
         borderLight: 'border-slate-200 dark:border-slate-800',
         borderSelected: 'border-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,0.35),0_8px_32px_-4px_rgba(100,116,139,0.55)]',
         ringLight: 'ring-slate-300 dark:ring-slate-700',
@@ -112,7 +112,7 @@ function getApprovalStatusColors(status: string | null): ApprovalColors {
     default:
       return {
         hex: getStatusColorHex('draft'),
-        bgLight: 'bg-violet-50 dark:bg-violet-950/20',
+        bgLight: 'bg-violet-50 dark:bg-violet-950',
         borderLight: 'border-violet-200 dark:border-violet-800',
         borderSelected: 'border-violet-500 shadow-[0_0_0_3px_rgba(139,92,246,0.35),0_8px_32px_-4px_rgba(139,92,246,0.55)]',
         ringLight: 'ring-violet-300 dark:ring-violet-700',

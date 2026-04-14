@@ -29,7 +29,7 @@ function getNodeColors(status: string): NodeColors {
     case 'pending':
       return {
         hex: getStatusColorHex('pending'),
-        bgLight: 'bg-blue-50 dark:bg-blue-950/20',
+        bgLight: 'bg-slate-100 dark:bg-background',
         borderNormal: 'border-blue-200 dark:border-blue-800',
         borderSelected: 'border-blue-500',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('pending').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('pending').replace(')', ' / 0.55)')}`,
@@ -38,7 +38,7 @@ function getNodeColors(status: string): NodeColors {
     case 'in_progress':
       return {
         hex: getStatusColorHex('in_progress'),
-        bgLight: 'bg-amber-50 dark:bg-amber-950/20',
+        bgLight: 'bg-slate-100 dark:bg-background',
         borderNormal: 'border-amber-200 dark:border-amber-800',
         borderSelected: 'border-amber-500',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('in_progress').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('in_progress').replace(')', ' / 0.55)')}`,
@@ -47,7 +47,7 @@ function getNodeColors(status: string): NodeColors {
     case 'completed':
       return {
         hex: getStatusColorHex('completed'),
-        bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
+        bgLight: 'bg-emerald-50 dark:bg-emerald-950',
         borderNormal: 'border-emerald-200 dark:border-emerald-800',
         borderSelected: 'border-emerald-500',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('completed').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('completed').replace(')', ' / 0.55)')}`,
@@ -56,7 +56,7 @@ function getNodeColors(status: string): NodeColors {
     case 'blocked':
       return {
         hex: getStatusColorHex('blocked'),
-        bgLight: 'bg-slate-50 dark:bg-slate-950/20',
+        bgLight: 'bg-slate-50 dark:bg-slate-950',
         borderNormal: 'border-slate-200 dark:border-slate-700',
         borderSelected: 'border-slate-400',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('blocked').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('blocked').replace(')', ' / 0.55)')}`,
@@ -65,7 +65,7 @@ function getNodeColors(status: string): NodeColors {
     case 'overdue':
       return {
         hex: getStatusColorHex('overdue'),
-        bgLight: 'bg-red-50 dark:bg-red-950/20',
+        bgLight: 'bg-red-50 dark:bg-red-950',
         borderNormal: 'border-red-200 dark:border-red-800',
         borderSelected: 'border-red-500',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('overdue').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('overdue').replace(')', ' / 0.55)')}`,
@@ -74,7 +74,7 @@ function getNodeColors(status: string): NodeColors {
     case 'draft':
       return {
         hex: getStatusColorHex('draft'),
-        bgLight: 'bg-purple-50 dark:bg-purple-950/20',
+        bgLight: 'bg-slate-100 dark:bg-background',
         borderNormal: 'border-purple-200 dark:border-purple-800',
         borderSelected: 'border-purple-500',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('draft').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('draft').replace(')', ' / 0.55)')}`,
@@ -83,7 +83,7 @@ function getNodeColors(status: string): NodeColors {
     default:
       return {
         hex: getStatusColorHex('no_task'),
-        bgLight: 'bg-slate-50 dark:bg-slate-950/20',
+        bgLight: 'bg-slate-50 dark:bg-slate-950',
         borderNormal: 'border-slate-200 dark:border-slate-700',
         borderSelected: 'border-slate-400',
         shadowSelected: `0 0 0 3px ${getStatusColorHex('no_task').replace(')', ' / 0.35)')}, 0 8px 32px -4px ${getStatusColorHex('no_task').replace(')', ' / 0.55)')}`,
