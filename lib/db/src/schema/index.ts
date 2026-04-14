@@ -6,3 +6,4 @@ export * from "./cards";
 export * from "./comments";
 export * from "./textElements";
 export * from "./attachments";
+export * from "./shapes";

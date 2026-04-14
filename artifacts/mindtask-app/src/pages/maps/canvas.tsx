@@ -6,12 +6,14 @@ import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdges
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
+import ShapeNode from "@/components/maps/ShapeNode";
 import DeletableEdge from "@/components/maps/DeletableEdge";
 import ApprovalNode from "@/components/maps/ApprovalNode";
 import ApprovalJoinNode from "@/components/maps/ApprovalJoinNode";
 import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus } from "@workspace/api-client-react";
+import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
+import type { ShapeResponse } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type, CheckSquare, Users, Image, Shapes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -24,7 +26,7 @@ interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   targetHandle?: string;
 }
 
-const nodeTypes = { mindmap: MindMapNode, textnode: TextNode, approvalnode: ApprovalNode, joinnode: ApprovalJoinNode };
+const nodeTypes = { mindmap: MindMapNode, textnode: TextNode, shapenode: ShapeNode, approvalnode: ApprovalNode, joinnode: ApprovalJoinNode };
 const edgeTypes = { deletable: DeletableEdge, approval: ApprovalEdge };
 
 const INACTIVE_STATUSES = new Set(['blocked', 'pending', 'draft']);
@@ -347,8 +349,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const [cardGhost, setCardGhost] = useState<{ x: number; y: number } | null>(null);
   const cardDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
+  const [shapeTool, setShapeTool] = useState<'line' | 'rect' | 'ellipse' | null>(null);
+  const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
+  const shapeDrawRef = useRef<{ startX: number; startY: number; flowX: number; flowY: number } | null>(null);
+  const [shapeGhost, setShapeGhost] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const shapeToolRef = useRef<'line' | 'rect' | 'ellipse' | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
-    query: { refetchInterval: 3000 },
+    query: { refetchInterval: 3000, throwOnError: false, retry: false },
   });
   const editingCardIdRef = useRef<string | null>(null);
   const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
@@ -366,6 +373,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [autoFocusCardId, setAutoFocusCardId] = useState<string | null>(null);
   const autoFocusCardIdRef = useRef<string | null>(null);
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
+  const highlightedEdgeIdRef = useRef<string | null>(null);
   const [pendingDeleteNodeIds, setPendingDeleteNodeIds] = useState<string[] | null>(null);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
@@ -381,6 +389,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   useEffect(() => { mapDataRef.current = mapData; }, [mapData]);
   useEffect(() => { selectedCardIdRef.current = selectedCardId; }, [selectedCardId]);
   useEffect(() => { pendingDeleteNodeIdsRef.current = pendingDeleteNodeIds; }, [pendingDeleteNodeIds]);
+  useEffect(() => { highlightedEdgeIdRef.current = highlightedEdgeId; }, [highlightedEdgeId]);
 
   useEffect(() => {
     if (focusOnLoadAppliedRef.current) return;
@@ -597,24 +606,70 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     },
   }), [workspaceId, mapId]);
 
+  const buildShapeNode = useCallback((shape: ShapeResponse): Node => ({
+    id: shape.id,
+    type: 'shapenode',
+    position: { x: shape.positionX, y: shape.positionY },
+    zIndex: -1,
+    data: {
+      type: shape.type,
+      positionX: shape.positionX,
+      positionY: shape.positionY,
+      width: shape.width,
+      height: shape.height,
+        rotation: shape.rotation ?? 0,
+      color: shape.color,
+      filled: shape.filled,
+      strokeStyle: shape.strokeStyle,
+      workspaceId,
+      mapId,
+      onBeforeMutate: () => pendingUpdatesRef.current.set(shape.id, Date.now()),
+    },
+    draggable: true,
+    selectable: true,
+    deletable: true,
+  }), [workspaceId, mapId]);
+
   const handleDeleteTextNode = useCallback((elementId: string) => {
     setNodes(prev => prev.filter(n => n.id !== elementId));
   }, [setNodes]);
 
+  const handleDeleteShapeNode = useCallback((shapeId: string) => {
+    setNodes(prev => prev.filter(n => n.id !== shapeId));
+  }, [setNodes]);
+
+  useEffect(() => { shapeToolRef.current = shapeTool; }, [shapeTool]);
+
+  useEffect(() => {
+    if (!shapeTool) return;
+    const handleDocKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShapeTool(null);
+        setShapeGhost(null);
+        shapeDrawRef.current = null;
+      }
+    };
+    document.addEventListener('keydown', handleDocKeyDown);
+    return () => document.removeEventListener('keydown', handleDocKeyDown);
+  }, [shapeTool]);
+
   useEffect(() => {
     if (!mapData) return;
 
-    const mapDataWithText = mapData as typeof mapData & { textElements?: Array<{
-      id: string;
-      mapId: string;
-      content: string;
-      positionX: number;
-      positionY: number;
-      width: number;
-      height: number;
-      fontSize: number;
-      color: string;
-    }> };
+    const mapDataWithText = mapData as typeof mapData & {
+      textElements?: Array<{
+        id: string;
+        mapId: string;
+        content: string;
+        positionX: number;
+        positionY: number;
+        width: number;
+        height: number;
+        fontSize: number;
+        color: string;
+      }>;
+      shapes?: ShapeResponse[];
+    };
 
     const terminalNodeMap = buildTerminalNodeMap(mapData.cards as ApprovalCardMeta[]);
 
@@ -703,9 +758,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         buildTextNode(el, handleDeleteTextNode)
       );
 
+      const shapeNodes: Node[] = (mapDataWithText.shapes ?? []).map(sh =>
+        buildShapeNode(sh)
+      );
+
       const joinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
 
-      setNodes([...initialNodes, ...textNodes, ...joinNodes]);
+      setNodes([...shapeNodes, ...initialNodes, ...textNodes, ...joinNodes]);
 
       const regularEdges: Edge[] = mapData.connections.map(c => {
         const src = parallelJoinParentIds.has(c.sourceCardId)
@@ -721,14 +780,17 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       setNodes(prev => {
         const serverCardIds = new Set(mapData.cards.map(c => c.id));
         const serverTextIds = new Set((mapDataWithText.textElements ?? []).map(el => el.id));
+        const serverShapeIds = new Set((mapDataWithText.shapes ?? []).map(sh => sh.id));
 
         const filtered = prev.filter(n => {
           if (n.type === 'textnode') return serverTextIds.has(n.id);
+          if (n.type === 'shapenode') return serverShapeIds.has(n.id);
           return serverCardIds.has(n.id);
         });
 
         const existingCardIds = new Set(filtered.filter(n => n.type === 'mindmap' || n.type === 'approvalnode').map(n => n.id));
         const existingTextIds = new Set(filtered.filter(n => n.type === 'textnode').map(n => n.id));
+        const existingShapeIds = new Set(filtered.filter(n => n.type === 'shapenode').map(n => n.id));
 
         const newCardNodes: Node[] = mapData.cards
           .filter(c => !existingCardIds.has(c.id))
@@ -755,6 +817,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           .filter(el => !existingTextIds.has(el.id))
           .map(el => buildTextNode(el, handleDeleteTextNode));
 
+        const newShapeNodes: Node[] = (mapDataWithText.shapes ?? [])
+          .filter(sh => !existingShapeIds.has(sh.id))
+          .map(sh => buildShapeNode(sh));
+
         const currentlyEditingId = editingCardIdRef.current;
         const now = Date.now();
         const PENDING_GUARD_MS = 5000;
@@ -768,6 +834,26 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               const serverEl = (mapDataWithText.textElements ?? []).find(el => el.id === n.id);
               if (!serverEl) return n;
               return n;
+            }
+            if (n.type === 'shapenode') {
+              const serverShape = (mapDataWithText.shapes ?? []).find(sh => sh.id === n.id);
+              if (!serverShape) return n;
+              if (pendingUpdatesRef.current.has(n.id)) return n;
+              return {
+                ...n,
+                position: { x: serverShape.positionX, y: serverShape.positionY },
+                data: {
+                  ...n.data,
+                  positionX: serverShape.positionX,
+                  positionY: serverShape.positionY,
+                  rotation: serverShape.rotation ?? 0,
+                  color: serverShape.color,
+                  filled: serverShape.filled,
+                  strokeStyle: serverShape.strokeStyle,
+                  width: serverShape.width,
+                  height: serverShape.height,
+                },
+              };
             }
             const s = mapData.cards.find(c => c.id === n.id);
             if (!s) return n;
@@ -784,6 +870,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             }
             return { ...n, data: { title: s.title, statusVisual: s.statusVisual, taskId: s.taskId, taskDueDate: s.taskDueDate ?? null, taskAssigneeName: s.taskAssigneeName ?? null, taskAssigneeId: (s as ApprovalCardMeta).taskAssigneeId ?? null, taskAssigneeAvatarUrl: s.taskAssigneeAvatarUrl ?? null, taskDescription: s.description ?? null, taskCompletedAt: s.taskCompletedAt ?? null, taskParentApprovalStatus: (s as ApprovalCardMeta).taskParentApprovalStatus ?? null, taskAttachmentCount: (s as ApprovalCardMeta).taskAttachmentCount ?? 0, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, onAutoFocusDone: handleAutoFocusDone, isTerminalNode } };
           }),
+          ...newShapeNodes,
           ...newCardNodes,
           ...newTextNodes,
           ...freshJoinNodes,
@@ -839,6 +926,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const updateTextMut = useUpdateTextElement();
   const deleteTextMut = useDeleteTextElement();
   const updateTaskStatusMut = useUpdateTaskStatus();
+  const createShapeMut = useCreateShape();
+  const updateShapeMut = useUpdateShape();
+  const deleteShapeMut = useDeleteShape();
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     // For parallel mode, prefer the join node position (to the right of the join circle)
@@ -968,8 +1058,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      // Text nodes, approval nodes, and join nodes are excluded from edge insertion logic
-      if (node.type === 'textnode' || node.type === 'approvalnode' || node.type === 'joinnode') return;
+      // Text nodes, shape nodes, approval nodes, and join nodes are excluded from edge insertion logic
+      if (node.type === 'textnode' || node.type === 'shapenode' || node.type === 'approvalnode' || node.type === 'joinnode') return;
 
       const currentEdges = edgesRef.current;
       const currentNodes = nodesRef.current;
@@ -1016,7 +1106,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         }
       }
 
-      if (found !== highlightedEdgeId) {
+      if (found !== highlightedEdgeIdRef.current) {
         setHighlightedEdgeId(found);
         setEdges(eds => eds.map(e => ({
           ...e,
@@ -1024,7 +1114,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         })));
       }
     },
-    [highlightedEdgeId, setEdges],
+    [setEdges],
   );
 
   const onNodeDragStop = useCallback(
@@ -1049,16 +1139,26 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         return;
       }
 
+      // If this is a shape node, use the shape update mutation
+      if (node.type === 'shapenode') {
+        pendingUpdatesRef.current.set(node.id, Date.now());
+        updateShapeMut.mutate({
+          workspaceId, mapId, shapeId: node.id,
+          data: { positionX: node.position.x, positionY: node.position.y },
+        });
+        return;
+      }
+
+      // Approval nodes and join nodes are not draggable to meaningful positions
+      if (node.type === 'approvalnode' || node.type === 'joinnode') return;
+
       // Always save position
       updateCardMut.mutate({
         workspaceId, mapId, cardId: node.id,
         data: { positionX: node.position.x, positionY: node.position.y },
       });
 
-      // Approval nodes and join nodes are not part of the edge-insertion flow
-      if (node.type === 'approvalnode' || node.type === 'joinnode') return;
-
-      const currentHighlightedEdgeId = highlightedEdgeId;
+      const currentHighlightedEdgeId = highlightedEdgeIdRef.current;
 
       // Clear highlight regardless
       setHighlightedEdgeId(null);
@@ -1166,7 +1266,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
       }
     },
-    [workspaceId, mapId, updateCardMut, updateTextMut, highlightedEdgeId, deleteConnMut, createConnMut, queryClient, mapData],
+    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, deleteConnMut, createConnMut, queryClient, mapData],
   );
 
   const onSelectionDragStop = useCallback(
@@ -1188,6 +1288,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             workspaceId, mapId, elementId: node.id,
             data: { positionX: node.position.x, positionY: node.position.y },
           });
+        } else if (node.type === 'shapenode') {
+          pendingUpdatesRef.current.set(node.id, Date.now());
+          updateShapeMut.mutate({
+            workspaceId, mapId, shapeId: node.id,
+            data: { positionX: node.position.x, positionY: node.position.y },
+          });
         } else {
           updateCardMut.mutate({
             workspaceId, mapId, cardId: node.id,
@@ -1196,13 +1302,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         }
       });
     },
-    [workspaceId, mapId, updateCardMut, updateTextMut],
+    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut],
   );
 
   const updateCardMutRef = useRef(updateCardMut);
   updateCardMutRef.current = updateCardMut;
   const updateTextMutRef = useRef(updateTextMut);
   updateTextMutRef.current = updateTextMut;
+  const updateShapeMutRef = useRef(updateShapeMut);
+  updateShapeMutRef.current = updateShapeMut;
 
   useEffect(() => {
     const handleUndoRedo = (e: KeyboardEvent) => {
@@ -1263,6 +1371,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             workspaceId, mapId, elementId: n.id,
             data: { positionX: pos.x, positionY: pos.y },
           });
+        } else if (n.type === 'shapenode') {
+          pendingUpdatesRef.current.set(n.id, Date.now());
+          updateShapeMutRef.current.mutate({
+            workspaceId, mapId, shapeId: n.id,
+            data: { positionX: pos.x, positionY: pos.y },
+          });
         } else if (n.type === 'mindmap' || n.type === 'approvalnode') {
           updateCardMutRef.current.mutate({
             workspaceId, mapId, cardId: n.id,
@@ -1280,11 +1394,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (params: Connection) => {
       if (!params.source || !params.target) return;
 
-      // Reject connections involving text or approval nodes; join nodes can be source but not target
+      // Reject connections involving text, shape, or approval nodes; join nodes can be source but not target
       const currentNodes = nodesRef.current;
       const sourceNode = currentNodes.find(n => n.id === params.source);
       const targetNode = currentNodes.find(n => n.id === params.target);
       if (sourceNode?.type === 'textnode' || targetNode?.type === 'textnode') return;
+      if (sourceNode?.type === 'shapenode' || targetNode?.type === 'shapenode') return;
       if (sourceNode?.type === 'approvalnode' || targetNode?.type === 'approvalnode') return;
       if (targetNode?.type === 'joinnode') return;
 
@@ -1393,7 +1508,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
       if (targetNodeId && targetNodeId !== fromNodeId) {
         const targetNode = nodesRef.current.find(n => n.id === targetNodeId);
-        if (!targetNode || targetNode.type === 'approvalnode' || targetNode.type === 'joinnode') return;
+        if (!targetNode || targetNode.type === 'approvalnode' || targetNode.type === 'joinnode' || targetNode.type === 'textnode' || targetNode.type === 'shapenode') return;
         const alreadyConnected = edgesRef.current.some(e => e.source === dbSourceId && e.target === targetNodeId);
         if (alreadyConnected) return;
         createConnMut.mutate(
@@ -1633,8 +1748,57 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     document.addEventListener('mouseup', handleMouseUp);
   }, [getViewport, screenToFlowPosition, createTextAt]);
 
+  const handleShapeDrawMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!shapeToolRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    shapeDrawRef.current = { startX: e.clientX, startY: e.clientY, flowX: flowPos.x, flowY: flowPos.y };
+    setShapeGhost({ x: e.clientX, y: e.clientY, w: 0, h: 0 });
+  }, [screenToFlowPosition]);
+
+  const handleShapeDrawMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!shapeDrawRef.current) return;
+    const { startX, startY } = shapeDrawRef.current;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const x = Math.min(e.clientX, startX);
+    const y = Math.min(e.clientY, startY);
+    const w = Math.abs(dx);
+    const h = shapeToolRef.current === 'line' ? 4 : Math.abs(dy);
+    setShapeGhost({ x, y, w, h });
+  }, []);
+
+  const handleShapeDrawMouseUp = useCallback((e: React.MouseEvent) => {
+    if (!shapeDrawRef.current) return;
+    const { flowX, flowY } = shapeDrawRef.current;
+    const tool = shapeToolRef.current;
+    if (!tool) return;
+    const flowEnd = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const posX = Math.min(flowX, flowEnd.x);
+    const posY = Math.min(flowY, flowEnd.y);
+    const rawW = Math.abs(flowEnd.x - flowX);
+    const rawH = Math.abs(flowEnd.y - flowY);
+    const w = tool === 'line' ? Math.max(80, rawW) : Math.max(40, rawW);
+    const h = tool === 'line' ? 4 : Math.max(20, rawH);
+    shapeDrawRef.current = null;
+    setShapeGhost(null);
+    setShapeTool(null);
+    createShapeMut.mutate(
+      { workspaceId, mapId, data: { type: tool, positionX: posX, positionY: posY, width: w, height: h } },
+      {
+        onSuccess: (shape) => {
+          const newNode = buildShapeNode(shape);
+          setNodes(prev => [newNode, ...prev]);
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+        },
+      },
+    );
+  }, [screenToFlowPosition, workspaceId, mapId, createShapeMut, buildShapeNode, setNodes, queryClient]);
+
   const onPaneClick = useCallback(() => {
     setSelectedCardId(null);
+    setShapeMenuOpen(false);
   }, []);
 
   const deleteCardMut = useDeleteCard();
@@ -1695,6 +1859,22 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           />
         )}
 
+        {shapeGhost && shapeGhost.w > 2 && (
+          <div className="pointer-events-none fixed z-[9998]" style={{ left: shapeGhost.x, top: shapeGhost.y, width: shapeGhost.w, height: Math.max(shapeGhost.h, 4) }}>
+            <svg width={shapeGhost.w} height={Math.max(shapeGhost.h, 4)} style={{ overflow: 'visible' }}>
+              {shapeTool === 'rect' && (
+                <rect x={1} y={1} width={shapeGhost.w - 2} height={Math.max(shapeGhost.h - 2, 2)} rx={4} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
+              )}
+              {shapeTool === 'ellipse' && (
+                <ellipse cx={shapeGhost.w / 2} cy={Math.max(shapeGhost.h, 4) / 2} rx={shapeGhost.w / 2 - 1} ry={Math.max(shapeGhost.h, 4) / 2 - 1} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
+              )}
+              {shapeTool === 'line' && (
+                <line x1={0} y1={2} x2={shapeGhost.w} y2={2} stroke="#6366f1" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />
+              )}
+            </svg>
+          </div>
+        )}
+
         {cardGhost && (
           <div
             className="pointer-events-none fixed z-[9999] border-2 border-dashed border-primary bg-primary/10 rounded-xl"
@@ -1750,16 +1930,46 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             <Image className="w-4 h-4 mr-2" />
             <span className="lowercase">Imagem</span>
           </Button>
-          <Button
-            disabled
-            variant="outline"
-            title="funcionalidade vindoura"
-            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
-          >
-            <Shapes className="w-4 h-4 mr-2" />
-            <span className="lowercase">Forma</span>
-          </Button>
+          <div className="relative">
+            <Button
+              variant={shapeMenuOpen || shapeTool ? "default" : "outline"}
+              title="Inserir forma geométrica"
+              className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer"
+              onClick={() => { setShapeMenuOpen(o => !o); setShapeTool(null); }}
+            >
+              <Shapes className="w-4 h-4 mr-2" />
+              <span className="lowercase">{shapeTool ?? 'Forma'}</span>
+            </Button>
+            {shapeMenuOpen && (
+              <div className="absolute bottom-12 left-0 bg-background border border-border/60 rounded-xl shadow-lg overflow-hidden z-50 min-w-[130px]">
+                {(['rect', 'ellipse', 'line'] as const).map(tool => (
+                  <button
+                    key={tool}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors lowercase flex items-center gap-2"
+                    onClick={() => { setShapeTool(tool); setShapeMenuOpen(false); }}
+                  >
+                    <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+                      {tool === 'rect' && <rect x="1" y="1" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />}
+                      {tool === 'ellipse' && <ellipse cx="9" cy="7" rx="8" ry="6" stroke="currentColor" strokeWidth="1.5" />}
+                      {tool === 'line' && <line x1="1" y1="7" x2="17" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+                    </svg>
+                    {tool === 'rect' ? 'retângulo' : tool === 'ellipse' ? 'elipse' : 'linha'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        {shapeTool && (
+          <div
+            className="absolute inset-0 z-20"
+            style={{ cursor: 'crosshair' }}
+            onMouseDown={handleShapeDrawMouseDown}
+            onMouseMove={handleShapeDrawMouseMove}
+            onMouseUp={handleShapeDrawMouseUp}
+          />
+        )}
 
         <div ref={reactFlowRef} className="flex-1 w-full h-full">
           <ReactFlow
@@ -1790,6 +2000,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
                 if (n.type === 'textnode') {
                   handleDeleteTextNode(n.id);
                   deleteTextMut.mutate({ workspaceId, mapId, elementId: n.id });
+                } else if (n.type === 'shapenode') {
+                  handleDeleteShapeNode(n.id);
+                  deleteShapeMut.mutate({ workspaceId, mapId, shapeId: n.id });
                 } else {
                   handleDeleteCard(n.id);
                 }

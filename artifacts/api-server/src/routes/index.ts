@@ -12,6 +12,7 @@ import recentMapsRouter from "./recentMaps";
 import storageRouter from "./storage";
 import sidebarRouter from "./sidebar";
 import textElementsRouter from "./textElements";
+import shapesRouter from "./shapes";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,7 @@ router.use("/workspaces/:workspaceId/maps/:mapId/cards", cardsRouter);
 router.use("/workspaces/:workspaceId/maps/:mapId/cards", commentsRouter);
 router.use("/workspaces/:workspaceId/maps/:mapId/connections", connectionsRouter);
 router.use("/workspaces/:workspaceId/maps/:mapId/text-elements", textElementsRouter);
+router.use("/workspaces/:workspaceId/maps/:mapId/shapes", shapesRouter);
 router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskCommentsRouter);
 router.use("/my-tasks", myTasksRouter);

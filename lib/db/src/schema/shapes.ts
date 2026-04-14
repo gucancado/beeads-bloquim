@@ -1,0 +1,53 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  doublePrecision,
+  boolean,
+} from "drizzle-orm/pg-core";
+import { z } from "zod/v4";
+import { maps } from "./maps";
+
+export const mapShapes = pgTable("map_shapes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  mapId: uuid("map_id")
+    .notNull()
+    .references(() => maps.id, { onDelete: "cascade" }),
+  type: text("type").notNull().default("rect"),
+  positionX: doublePrecision("position_x").notNull().default(0),
+  positionY: doublePrecision("position_y").notNull().default(0),
+  width: doublePrecision("width").notNull().default(200),
+  height: doublePrecision("height").notNull().default(120),
+  rotation: doublePrecision("rotation").notNull().default(0),
+  color: text("color").notNull().default("#6366f1"),
+  filled: boolean("filled").notNull().default(false),
+  strokeStyle: text("stroke_style").notNull().default("solid"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertMapShapeSchema = z.object({
+  type: z.enum(["line", "rect", "ellipse"]).optional().default("rect"),
+  positionX: z.number().optional().default(0),
+  positionY: z.number().optional().default(0),
+  width: z.number().optional().default(200),
+  height: z.number().optional().default(120),
+  rotation: z.number().optional().default(0),
+  color: z.string().optional().default("#6366f1"),
+  filled: z.boolean().optional().default(false),
+  strokeStyle: z.enum(["solid", "dashed"]).optional().default("solid"),
+});
+
+export const updateMapShapeSchema = z.object({
+  positionX: z.number().optional(),
+  positionY: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  rotation: z.number().optional(),
+  color: z.string().optional(),
+  filled: z.boolean().optional(),
+  strokeStyle: z.enum(["solid", "dashed"]).optional(),
+});
+
+export type MapShape = typeof mapShapes.$inferSelect;
