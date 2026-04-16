@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, signToken, AuthRequest } from "../middlewares/auth";
+import { loginLimiter, registerLimiter } from "../middlewares/rateLimit";
 import { z } from "zod";
 import { ObjectStorageService } from "../lib/objectStorage";
 
@@ -21,7 +22,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-router.post("/register", async (req, res) => {
+router.post("/register", registerLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
@@ -47,7 +48,7 @@ router.post("/register", async (req, res) => {
   });
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
