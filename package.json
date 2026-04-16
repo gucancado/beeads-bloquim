@@ -16,7 +16,9 @@
   "pnpm": {
     "overrides": {
       "react": "19.2.5",
-      "react-dom": "19.2.5"
+      "react-dom": "19.2.5",
+      "path-to-regexp": "^8.4.1",
+      "lodash": "^4.18.0"
     }
   }
 }
