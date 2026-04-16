@@ -1047,7 +1047,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         snapshot[n.id] = { x: n.position.x, y: n.position.y };
       }
       dragStartSnapshotRef.current = snapshot;
-      console.log('[undo] onNodeDragStart: snapshot captured for', Object.keys(snapshot).length, 'nodes');
     },
     [],
   );
@@ -1134,7 +1133,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const moved = !prevPos ||
           Math.abs(prevPos.x - node.position.x) > 0.5 ||
           Math.abs(prevPos.y - node.position.y) > 0.5;
-        console.log('[undo] onNodeDragStop: moved=', moved, 'prevPos=', prevPos, 'newPos=', node.position);
         if (moved) pushSnapshot(snapshot);
       }
 
@@ -1353,12 +1351,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         currentSnapshot[n.id] = { x: n.position.x, y: n.position.y };
       }
 
-      console.log('[undo] handleUndoRedo:', isUndo ? 'UNDO' : 'REDO', 'currentSnapshot keys:', Object.keys(currentSnapshot).length);
       const targetSnapshot = isUndo
         ? undo(currentSnapshot)
         : redo(currentSnapshot);
 
-      console.log('[undo] targetSnapshot:', targetSnapshot ? Object.keys(targetSnapshot).length + ' nodes' : 'null (empty history)');
       if (!targetSnapshot) return;
 
       setNodes(prev =>
@@ -1670,7 +1666,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         snapshot[n.id] = { x: n.position.x, y: n.position.y };
       }
       dragStartSnapshotRef.current = snapshot;
-      console.log('[undo] mousedown: snapshot captured for', Object.keys(snapshot).length, 'nodes');
     };
     el.addEventListener('mousedown', handleMouseDown);
     return () => el.removeEventListener('mousedown', handleMouseDown);
