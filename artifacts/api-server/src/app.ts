@@ -1,7 +1,8 @@
-import express, { type Express, Request, Response, NextFunction } from "express";
+import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import router from "./routes";
+import { errorHandler } from "./middlewares/errorHandler";
 
 const app: Express = express();
 
@@ -14,9 +15,6 @@ app.use(cookieParser());
 
 app.use("/api", router);
 
-app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err?.message ?? err);
-  res.status(500).json({ error: "Internal Server Error", message: err?.message ?? "Unknown error" });
-});
+app.use(errorHandler);
 
 export default app;
