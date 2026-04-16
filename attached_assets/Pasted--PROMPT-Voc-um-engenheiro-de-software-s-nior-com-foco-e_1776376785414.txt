@@ -1,0 +1,108 @@
+
+**PROMPT:**
+
+Você é um engenheiro de software sênior com foco em arquitetura, qualidade de código, segurança e escalabilidade.
+
+Sua tarefa é realizar uma **auditoria completa do código deste projeto**, identificando inconsistências, falhas e oportunidades de melhoria.
+
+Analise **todo o repositório**, incluindo frontend, backend, scripts, configurações e integrações.
+
+### Objetivo da análise
+
+Encontrar e explicar de forma clara:
+
+1. Problemas de engenharia
+2. Bugs potenciais e reais
+3. Inconsistências de arquitetura
+4. Problemas de performance
+5. Riscos de segurança
+6. Código redundante ou desnecessário
+7. Más práticas e code smells
+8. Problemas de legibilidade e manutenção
+9. Falhas de integração entre partes do sistema
+10. Pontos que podem quebrar em escala
+
+---
+
+### Forma de análise
+
+1. Comece com uma **visão geral da arquitetura do projeto**
+
+   * Como o sistema está organizado
+   * Principais tecnologias utilizadas
+   * Fluxo de dados entre as partes
+
+2. Em seguida, faça uma **análise por camada**
+
+   * Frontend
+   * Backend
+   * Banco de dados (se houver)
+   * Integrações externas
+   * Infra/configurações
+
+3. Depois, identifique problemas com este formato:
+
+Para cada problema encontrado:
+
+* Título curto
+* Categoria (bug, arquitetura, segurança, performance, etc)
+* Gravidade (baixa, média, alta, crítica)
+* Onde ocorre (arquivo, módulo ou padrão)
+* Explicação clara do problema
+* Impacto prático (o que pode acontecer)
+* Sugestão objetiva de correção
+
+---
+
+### Análises específicas obrigatórias
+
+Garanta que você avalie também:
+
+* Tipagem e validação de dados
+* Tratamento de erros
+* Uso de estados (frontend)
+* Requisições e chamadas assíncronas
+* Estrutura de pastas e modularização
+* Acoplamento e coesão
+* Reutilização de código
+* Logs e observabilidade
+* Testabilidade do código
+* Uso de variáveis de ambiente
+* Segurança (tokens, autenticação, exposição de dados)
+* Configurações sensíveis no código
+* Dependências desatualizadas ou problemáticas
+
+---
+
+### Caça a inconsistências
+
+Procure especialmente por:
+
+* Funções que fazem mais de uma coisa
+* Nomes inconsistentes
+* Padrões diferentes para o mesmo tipo de solução
+* Código duplicado
+* Lógicas conflitantes entre arquivos
+* Comentários que não refletem o código atual
+* Trechos mortos ou não utilizados
+
+---
+
+### Saída final
+
+Organize a resposta em 4 blocos:
+
+1. Resumo geral do estado do código (nível técnico)
+2. Principais riscos (top 5 problemas mais críticos)
+3. Lista detalhada de problemas (priorizada por gravidade)
+4. Sugestões estruturais de melhoria (arquitetura, padrões, organização)
+
+---
+
+### Regras importantes
+
+* Seja direto e técnico, evite generalidades
+* Não elogie o código, foque nos problemas
+* Não invente problemas, apenas aponte o que for consistente
+* Se algo não puder ser verificado, sinalize como "incerto"
+* Priorize impacto real sobre teoria
