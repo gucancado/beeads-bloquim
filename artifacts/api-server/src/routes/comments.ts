@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { taskComments, cards, tasks, users, workspaceMembers } from "@workspace/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -30,7 +30,7 @@ router.get(
         id: taskComments.id,
         taskId: taskComments.taskId,
         authorId: taskComments.authorId,
-        authorName: users.name,
+        authorName: sql<string>`coalesce(${users.name}, 'Usuário removido')`,
         authorAvatar: users.avatarUrl,
         content: taskComments.content,
         hidden: taskComments.hidden,
@@ -38,7 +38,7 @@ router.get(
         updatedAt: taskComments.updatedAt,
       })
       .from(taskComments)
-      .innerJoin(users, eq(taskComments.authorId, users.id))
+      .leftJoin(users, eq(taskComments.authorId, users.id))
       .where(eq(taskComments.taskId, card.taskId))
       .orderBy(asc(taskComments.createdAt));
 
@@ -140,7 +140,7 @@ taskRouter.get(
         id: taskComments.id,
         taskId: taskComments.taskId,
         authorId: taskComments.authorId,
-        authorName: users.name,
+        authorName: sql<string>`coalesce(${users.name}, 'Usuário removido')`,
         authorAvatar: users.avatarUrl,
         content: taskComments.content,
         hidden: taskComments.hidden,
@@ -148,7 +148,7 @@ taskRouter.get(
         updatedAt: taskComments.updatedAt,
       })
       .from(taskComments)
-      .innerJoin(users, eq(taskComments.authorId, users.id))
+      .leftJoin(users, eq(taskComments.authorId, users.id))
       .where(eq(taskComments.taskId, taskId))
       .orderBy(asc(taskComments.createdAt));
 

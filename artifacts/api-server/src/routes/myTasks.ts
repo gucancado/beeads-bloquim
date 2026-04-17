@@ -567,7 +567,7 @@ router.get("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
       id: taskComments.id,
       taskId: taskComments.taskId,
       authorId: taskComments.authorId,
-      authorName: users.name,
+      authorName: sql<string>`coalesce(${users.name}, 'Usuário removido')`,
       authorAvatar: users.avatarUrl,
       content: taskComments.content,
       hidden: taskComments.hidden,
@@ -575,7 +575,7 @@ router.get("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
       updatedAt: taskComments.updatedAt,
     })
     .from(taskComments)
-    .innerJoin(users, eq(taskComments.authorId, users.id))
+    .leftJoin(users, eq(taskComments.authorId, users.id))
     .where(eq(taskComments.taskId, taskId))
     .orderBy(asc(taskComments.createdAt));
 

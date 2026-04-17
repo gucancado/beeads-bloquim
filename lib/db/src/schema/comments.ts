@@ -8,8 +8,7 @@ export const taskComments = pgTable("task_comments", {
     .notNull()
     .references(() => tasks.id, { onDelete: "cascade" }),
   authorId: uuid("author_id")
-    .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "set null" }),
   content: text("content").notNull(),
   hidden: boolean("hidden").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
