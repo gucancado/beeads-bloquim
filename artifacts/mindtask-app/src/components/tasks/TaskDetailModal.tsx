@@ -158,14 +158,6 @@ export function TaskDetailModal({
     }
   }, [open]);
 
-  const { data: rawCard, isLoading: isCardLoading } = useGetCard(effectiveWorkspaceId, mapId ?? "", cardId ?? "", {
-    query: { enabled: isCardMode && open && !!cardId }
-  });
-
-  const card = rawCard as (Omit<typeof rawCard, "task"> & { task?: TaskResponseExtended | null }) | undefined;
-
-  const taskIdResolved: string | undefined = isCardMode ? (card?.task?.id ?? undefined) : (resolvedTaskId ?? undefined);
-
   const {
     showMore,
     setShowMore,
@@ -189,6 +181,14 @@ export function TaskDetailModal({
     setRecurrenceConfig,
     setShowRecurrencePanel,
   });
+
+  const { data: rawCard, isLoading: isCardLoading } = useGetCard(effectiveWorkspaceId, mapId ?? "", cardId ?? "", {
+    query: { enabled: isCardMode && open && !!cardId }
+  });
+
+  const card = rawCard as (Omit<typeof rawCard, "task"> & { task?: TaskResponseExtended | null }) | undefined;
+
+  const taskIdResolved: string | undefined = isCardMode ? (card?.task?.id ?? undefined) : (resolvedTaskId ?? undefined);
 
   // isStandalone is derived from the PROP, not effectiveWorkspaceId.
   // effectiveWorkspaceId can change mid-flight (once taskWorkspaceId resolves),
