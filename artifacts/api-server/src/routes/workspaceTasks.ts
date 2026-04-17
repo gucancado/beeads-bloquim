@@ -43,6 +43,13 @@ import {
   reorderApprovals,
   setApprovalMode,
 } from "../services/approvalCrudService";
+import {
+  listSubtasks,
+  replaceSubtasks,
+  createSubtask,
+  updateSubtask,
+  deleteSubtask,
+} from "../services/taskSubtasksService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -567,25 +574,12 @@ const updateSubtaskSchema = createSubtaskSchema.partial();
 
 router.get("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
-
-  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!task) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  const items = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
-  res.json(items);
+  const result = await listSubtasks(workspaceId, taskId);
+  res.status(result.status).json(result.body);
 });
 
 router.put("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
-
-  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!task) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
 
   const parsed = bulkSubtasksSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -593,38 +587,12 @@ router.put("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "edi
     return;
   }
 
-  const incoming = parsed.data.subtasks.filter(s => s.text.trim() !== "");
-
-  await db.delete(subtasks).where(eq(subtasks.taskId, taskId));
-
-  if (incoming.length > 0) {
-    await db.insert(subtasks).values(
-      incoming.map((s, idx) => ({
-        id: s.id,
-        taskId,
-        text: s.text.trim(),
-        completed: s.completed ?? false,
-        order: s.order ?? idx,
-      }))
-    );
-  }
-
-  const result = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
-  res.json(result);
+  const result = await replaceSubtasks(workspaceId, taskId, parsed.data.subtasks);
+  res.status(result.status).json(result.body);
 });
-
-const ensureTaskInWorkspace = async (workspaceId: string, taskId: string) => {
-  const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  return !!task;
-};
 
 router.post("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
-
-  if (!(await ensureTaskInWorkspace(workspaceId, taskId))) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
 
   const parsed = createSubtaskSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -632,26 +600,12 @@ router.post("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "ed
     return;
   }
 
-  const existing = await db.select({ order: subtasks.order }).from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order));
-  const nextOrder = parsed.data.order ?? (existing.length > 0 ? (existing[existing.length - 1].order + 1) : 0);
-
-  const [created] = await db.insert(subtasks).values({
-    taskId,
-    text: parsed.data.text,
-    completed: parsed.data.completed ?? false,
-    order: nextOrder,
-  }).returning();
-
-  res.status(201).json(created);
+  const result = await createSubtask(workspaceId, taskId, parsed.data);
+  res.status(result.status).json(result.body);
 });
 
 router.patch("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, subtaskId } = req.params;
-
-  if (!(await ensureTaskInWorkspace(workspaceId, taskId))) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
 
   const parsed = updateSubtaskSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -659,31 +613,14 @@ router.patch("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole([
     return;
   }
 
-  const [existing] = await db.select().from(subtasks).where(and(eq(subtasks.id, subtaskId), eq(subtasks.taskId, taskId))).limit(1);
-  if (!existing) {
-    res.status(404).json({ error: "Subtask not found" });
-    return;
-  }
-
-  const updateData: Record<string, any> = { updatedAt: new Date() };
-  if (parsed.data.text !== undefined) updateData.text = parsed.data.text;
-  if (parsed.data.completed !== undefined) updateData.completed = parsed.data.completed;
-  if (parsed.data.order !== undefined) updateData.order = parsed.data.order;
-
-  const [updated] = await db.update(subtasks).set(updateData).where(eq(subtasks.id, subtaskId)).returning();
-  res.json(updated);
+  const result = await updateSubtask(workspaceId, taskId, subtaskId, parsed.data);
+  res.status(result.status).json(result.body);
 });
 
 router.delete("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, subtaskId } = req.params;
-
-  if (!(await ensureTaskInWorkspace(workspaceId, taskId))) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  await db.delete(subtasks).where(and(eq(subtasks.id, subtaskId), eq(subtasks.taskId, taskId)));
-  res.json({ success: true });
+  const result = await deleteSubtask(workspaceId, taskId, subtaskId);
+  res.status(result.status).json(result.body);
 });
 
 // MAX_APPROVERS and getApprovalTaskStatus are now imported from
