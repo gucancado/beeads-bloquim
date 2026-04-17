@@ -35,6 +35,14 @@ import {
   approveApprovalTask,
   rejectApprovalTask,
 } from "../services/approvalActionService";
+import {
+  MAX_APPROVERS,
+  getApprovalTaskStatus,
+  addApprover,
+  deleteApprover,
+  reorderApprovals,
+  setApprovalMode,
+} from "../services/approvalCrudService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -678,24 +686,8 @@ router.delete("/:taskId/subtasks/:subtaskId", requireAuth, requireWorkspaceRole(
   res.json({ success: true });
 });
 
-const MAX_APPROVERS = 3;
-
-function getApprovalTaskStatus(parentStatus: string): TaskStatus {
-  switch (parentStatus) {
-    case "draft":
-      return "draft";
-    case "pending":
-      return "pending";
-    case "blocked":
-      return "blocked";
-    case "in_progress":
-      return "pending";
-    case "completed":
-      return "in_progress";
-    default:
-      return "pending";
-  }
-}
+// MAX_APPROVERS and getApprovalTaskStatus are now imported from
+// services/approvalCrudService (see top of file).
 
 router.get("/:taskId/approvals", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
@@ -737,208 +729,20 @@ const addApproverSchema = z.object({
 router.post("/:taskId/approvals", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
 
-  const [parentTask] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!parentTask) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  if (parentTask.isApprovalTask) {
-    res.status(400).json({ error: "Cannot add approvers to an approval task" });
-    return;
-  }
-
   const parsed = addApproverSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
     return;
   }
 
-  const { approverId, dueDate } = parsed.data;
-
-  const existing = await db
-    .select({ id: tasks.id, assignedTo: tasks.assignedTo })
-    .from(tasks)
-    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)));
-  if (existing.length >= MAX_APPROVERS) {
-    res.status(400).json({ error: `Maximum of ${MAX_APPROVERS} approvers allowed` });
-    return;
-  }
-
-  const alreadyApprover = existing.some(t => t.assignedTo === approverId);
-  if (alreadyApprover) {
-    res.status(400).json({ error: "This member is already an approver for this task" });
-    return;
-  }
-
-  const [approverMember] = await db
-    .select({ name: users.name, avatarUrl: users.avatarUrl })
-    .from(workspaceMembers)
-    .innerJoin(users, eq(users.id, workspaceMembers.userId))
-    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, approverId)))
-    .limit(1);
-  if (!approverMember) {
-    res.status(400).json({ error: "Approver must be a member of this workspace" });
-    return;
-  }
-
-  const nextOrder = existing.length;
-
-  // Capture chain state before inserting so we know the old terminal
-  const oldChainInfoAdd = await getApprovalChainInfo(taskId);
-  const oldTerminalCardIdAdd = oldChainInfoAdd
-    ? computeTerminalCardId(oldChainInfoAdd.approvalTasksSorted, oldChainInfoAdd.approvalCardByTaskId, oldChainInfoAdd.parentCardId, parentTask.approvalMode ?? 'sequential')
-    : null;
-
-  const approvalStatus = getApprovalTaskStatus(parentTask.status);
-  const dueDateValue = dueDate !== undefined
-    ? parseDateNoon(dueDate)
-    : (parentTask.dueDate ?? null);
-
-  const [approvalTask] = await db.insert(tasks).values({
-    workspaceId,
-    mapId: parentTask.mapId,
-    title: `aprovação: ${parentTask.title}`,
-    assignedTo: approverId,
-    dueDate: dueDateValue,
-    priority: "medium",
-    status: approvalStatus,
-    isApprovalTask: true,
-    parentTaskId: taskId,
-    approvalOrder: nextOrder,
-    overdue: computeOverdue(dueDateValue, approvalStatus),
-  }).returning();
-
-  let newApprovalCardId: string | undefined;
-  if (parentTask.mapId) {
-    const [parentCard] = await db
-      .select({ positionX: cards.positionX, positionY: cards.positionY })
-      .from(cards)
-      .where(eq(cards.taskId, taskId))
-      .limit(1);
-
-    const offsetX = 350 + nextOrder * 50;
-    const offsetY = 150 + nextOrder * 120;
-    const approvalX = parentCard ? parentCard.positionX + offsetX : offsetX;
-    const approvalY = parentCard ? parentCard.positionY + offsetY : offsetY;
-
-    const [insertedApprovalCard] = await db.insert(cards).values({
-      mapId: parentTask.mapId,
-      title: `aprovação: ${parentTask.title}`,
-      positionX: approvalX,
-      positionY: approvalY,
-      taskId: approvalTask.id,
-      statusVisual: toVisualStatus(approvalStatus, computeOverdue(dueDateValue, approvalStatus)),
-    }).returning({ id: cards.id });
-    newApprovalCardId = insertedApprovalCard?.id;
-  }
-
-  // Reroute downstream connections to the new terminal
-  if (oldChainInfoAdd && oldTerminalCardIdAdd && newApprovalCardId) {
-    const newApprovalTasks = [...oldChainInfoAdd.approvalTasksSorted, { id: approvalTask.id, approvalOrder: nextOrder }];
-    const newApprovalCardByTaskId = new Map(oldChainInfoAdd.approvalCardByTaskId);
-    newApprovalCardByTaskId.set(approvalTask.id, newApprovalCardId);
-    const newChainCardIds = new Set<string>([oldChainInfoAdd.parentCardId, ...newApprovalCardByTaskId.values()]);
-    const newTerminalCardId = computeTerminalCardId(newApprovalTasks, newApprovalCardByTaskId, oldChainInfoAdd.parentCardId, parentTask.approvalMode ?? 'sequential');
-    await rerouteDownstreamConnections(oldTerminalCardIdAdd, newTerminalCardId, newChainCardIds);
-  }
-
-  res.status(201).json({
-    id: approvalTask.id,
-    title: approvalTask.title,
-    status: approvalTask.status,
-    approvalOrder: approvalTask.approvalOrder,
-    approvalStatus: approvalTask.approvalStatus,
-    dueDate: approvalTask.dueDate,
-    assignedTo: approvalTask.assignedTo,
-    approverName: approverMember.name,
-    approverAvatarUrl: approverMember.avatarUrl,
-  });
+  const result = await addApprover(workspaceId, taskId, parsed.data);
+  res.status(result.status).json(result.body);
 });
 
 router.delete("/:taskId/approvals/:approvalTaskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, approvalTaskId } = req.params;
-
-  const [parentTask] = await db.select({ id: tasks.id, approvalMode: tasks.approvalMode }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!parentTask) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  const [approvalTask] = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(and(
-      eq(tasks.id, approvalTaskId),
-      eq(tasks.parentTaskId, taskId),
-      eq(tasks.isApprovalTask, true),
-      eq(tasks.workspaceId, workspaceId),
-    ))
-    .limit(1);
-  if (!approvalTask) {
-    res.status(404).json({ error: "Approval task not found" });
-    return;
-  }
-
-  // Capture chain state and identify downstream connections before deleting
-  const chainInfoDel = await getApprovalChainInfo(taskId);
-  const oldTerminalCardIdDel = chainInfoDel
-    ? computeTerminalCardId(chainInfoDel.approvalTasksSorted, chainInfoDel.approvalCardByTaskId, chainInfoDel.parentCardId, parentTask.approvalMode ?? 'sequential')
-    : null;
-  const deletedCardId = chainInfoDel?.approvalCardByTaskId.get(approvalTask.id);
-  const isTerminalBeingDeleted = deletedCardId && deletedCardId === oldTerminalCardIdDel;
-
-  // Save downstream targets from the deleted (terminal) card before CASCADE removes them
-  let downstreamTargets: Array<{ targetCardId: string; sourceHandle: string | null; targetHandle: string | null }> = [];
-  if (isTerminalBeingDeleted && deletedCardId && chainInfoDel) {
-    const conns = await db
-      .select({ targetCardId: cardConnections.targetCardId, sourceHandle: cardConnections.sourceHandle, targetHandle: cardConnections.targetHandle })
-      .from(cardConnections)
-      .where(eq(cardConnections.sourceCardId, deletedCardId));
-    downstreamTargets = conns.filter(c => !chainInfoDel.chainCardIds.has(c.targetCardId));
-  }
-
-  await db.delete(cards).where(eq(cards.taskId, approvalTask.id));
-  await db.delete(tasks).where(eq(tasks.id, approvalTask.id));
-
-  const remaining = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
-    .orderBy(asc(tasks.approvalOrder));
-
-  for (let i = 0; i < remaining.length; i++) {
-    await db.update(tasks).set({ approvalOrder: i }).where(eq(tasks.id, remaining[i].id));
-  }
-
-  // Reconnect downstream targets from new terminal (if deleted card was terminal)
-  if (isTerminalBeingDeleted && downstreamTargets.length > 0 && chainInfoDel) {
-    const remainingApprovalTasks = chainInfoDel.approvalTasksSorted.filter(t => t.id !== approvalTask.id);
-    const remainingApprovalCardByTaskId = new Map(chainInfoDel.approvalCardByTaskId);
-    remainingApprovalCardByTaskId.delete(approvalTask.id);
-    const newTerminalCardId = computeTerminalCardId(remainingApprovalTasks, remainingApprovalCardByTaskId, chainInfoDel.parentCardId, parentTask.approvalMode ?? 'sequential');
-    const [terminalCardRow] = await db.select({ mapId: cards.mapId }).from(cards).where(eq(cards.id, newTerminalCardId)).limit(1);
-    if (terminalCardRow) {
-      for (const t of downstreamTargets) {
-        const [existing] = await db
-          .select({ id: cardConnections.id })
-          .from(cardConnections)
-          .where(and(eq(cardConnections.sourceCardId, newTerminalCardId), eq(cardConnections.targetCardId, t.targetCardId)))
-          .limit(1);
-        if (!existing) {
-          await db.insert(cardConnections).values({
-            mapId: terminalCardRow.mapId,
-            sourceCardId: newTerminalCardId,
-            targetCardId: t.targetCardId,
-            sourceHandle: t.sourceHandle,
-            targetHandle: t.targetHandle,
-          });
-        }
-      }
-    }
-  }
-
-  res.json({ success: true });
+  const result = await deleteApprover(workspaceId, taskId, approvalTaskId);
+  res.status(result.status).json(result.body);
 });
 
 const reorderApprovalsSchema = z.object({
@@ -948,54 +752,14 @@ const reorderApprovalsSchema = z.object({
 router.put("/:taskId/approvals/reorder", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
 
-  const [parentTask] = await db.select({ id: tasks.id, approvalMode: tasks.approvalMode }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!parentTask) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
   const parsed = reorderApprovalsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error" });
     return;
   }
 
-  const existingApprovals = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)));
-
-  const existingIds = new Set(existingApprovals.map(t => t.id));
-  const orderedIds = parsed.data.orderedIds;
-
-  const hasDuplicates = new Set(orderedIds).size !== orderedIds.length;
-  const sameSet = orderedIds.length === existingIds.size && orderedIds.every(id => existingIds.has(id));
-  if (hasDuplicates || !sameSet) {
-    res.status(400).json({ error: "orderedIds must contain exactly the approval task IDs for this task, without duplicates" });
-    return;
-  }
-
-  // Capture chain state before reordering to know the old terminal
-  const chainInfoReorder = await getApprovalChainInfo(taskId);
-  const mode = parentTask.approvalMode ?? 'sequential';
-  const oldTerminalCardIdReorder = chainInfoReorder
-    ? computeTerminalCardId(chainInfoReorder.approvalTasksSorted, chainInfoReorder.approvalCardByTaskId, chainInfoReorder.parentCardId, mode)
-    : null;
-
-  for (let i = 0; i < orderedIds.length; i++) {
-    await db.update(tasks)
-      .set({ approvalOrder: i })
-      .where(and(eq(tasks.id, orderedIds[i]), eq(tasks.parentTaskId, taskId)));
-  }
-
-  // Compute new terminal after reorder and reroute downstream connections
-  if (chainInfoReorder && oldTerminalCardIdReorder) {
-    const newOrderedApprovalTasks = orderedIds.map((id, i) => ({ id, approvalOrder: i }));
-    const newTerminalCardId = computeTerminalCardId(newOrderedApprovalTasks, chainInfoReorder.approvalCardByTaskId, chainInfoReorder.parentCardId, mode);
-    await rerouteDownstreamConnections(oldTerminalCardIdReorder, newTerminalCardId, chainInfoReorder.chainCardIds);
-  }
-
-  res.json({ success: true });
+  const result = await reorderApprovals(workspaceId, taskId, parsed.data.orderedIds);
+  res.status(result.status).json(result.body);
 });
 
 const approvalDecisionSchema = z.object({
@@ -1060,32 +824,8 @@ router.patch("/:taskId/approval-mode", requireAuth, requireWorkspaceRole(["admin
     return;
   }
 
-  const newMode = parsed.data.approvalMode;
-
-  // Capture chain state and old terminal before changing mode
-  const [currentTask] = await db.select({ approvalMode: tasks.approvalMode }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  const chainInfoMode = currentTask ? await getApprovalChainInfo(taskId) : null;
-  const oldTerminalCardIdMode = chainInfoMode
-    ? computeTerminalCardId(chainInfoMode.approvalTasksSorted, chainInfoMode.approvalCardByTaskId, chainInfoMode.parentCardId, currentTask!.approvalMode ?? 'sequential')
-    : null;
-
-  const [updated] = await db.update(tasks)
-    .set({ approvalMode: newMode, updatedAt: new Date() })
-    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId)))
-    .returning({ id: tasks.id, approvalMode: tasks.approvalMode });
-
-  if (!updated) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  // Reroute downstream connections if the terminal changed due to mode switch
-  if (chainInfoMode && oldTerminalCardIdMode) {
-    const newTerminalCardId = computeTerminalCardId(chainInfoMode.approvalTasksSorted, chainInfoMode.approvalCardByTaskId, chainInfoMode.parentCardId, newMode);
-    await rerouteDownstreamConnections(oldTerminalCardIdMode, newTerminalCardId, chainInfoMode.chainCardIds);
-  }
-
-  res.json(updated);
+  const result = await setApprovalMode(workspaceId, taskId, parsed.data.approvalMode);
+  res.status(result.status).json(result.body);
 });
 
 const CARD_WIDTH = 240;
