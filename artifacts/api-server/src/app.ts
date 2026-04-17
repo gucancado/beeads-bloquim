@@ -1,14 +1,17 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import router from "./routes";
 import { errorHandler } from "./middlewares/errorHandler";
+import { corsOptions } from "./lib/cors";
 
 const app: Express = express();
 
 app.set("trust proxy", 1);
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
