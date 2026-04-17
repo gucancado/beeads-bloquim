@@ -38,23 +38,3 @@ defaultBucketID = "replit-objstore-28d3becc-6924-4227-96b6-52d26d2c4ee0"
 
 [userenv.production]
 ALLOWED_ORIGINS = "https://visual-task-flow.replit.app"
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
-externalPort = 80
-
-[[ports]]
-localPort = 8082
-externalPort = 3003
-
-[[ports]]
-localPort = 24117
-externalPort = 3000
-
-[[ports]]
-localPort = 24118
-externalPort = 3002
