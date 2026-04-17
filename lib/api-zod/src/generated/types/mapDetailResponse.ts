@@ -7,6 +7,8 @@
  */
 import type { CardResponse } from "./cardResponse";
 import type { ConnectionResponse } from "./connectionResponse";
+import type { ShapeResponse } from "./shapeResponse";
+import type { TextElementResponse } from "./textElementResponse";
 
 export interface MapDetailResponse {
   id: string;
@@ -17,4 +19,6 @@ export interface MapDetailResponse {
   updatedAt: Date;
   cards: CardResponse[];
   connections: ConnectionResponse[];
+  textElements: TextElementResponse[];
+  shapes: ShapeResponse[];
 }

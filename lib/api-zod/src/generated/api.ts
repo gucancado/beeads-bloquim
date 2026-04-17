@@ -353,6 +353,42 @@ export const GetMapResponse = zod.object({
       createdAt: zod.date(),
     }),
   ),
+  textElements: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      mapId: zod.string().uuid(),
+      content: zod.string(),
+      positionX: zod.number(),
+      positionY: zod.number(),
+      width: zod.number(),
+      height: zod.number(),
+      fontSize: zod.number(),
+      color: zod.string(),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
+  shapes: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      mapId: zod.string().uuid(),
+      type: zod.enum(["line", "rect", "ellipse"]),
+      positionX: zod.number(),
+      positionY: zod.number(),
+      width: zod.number(),
+      height: zod.number(),
+      rotation: zod.number(),
+      color: zod.string(),
+      filled: zod.boolean(),
+      strokeStyle: zod.enum(["solid", "dashed"]),
+      x1: zod.number().nullish(),
+      y1: zod.number().nullish(),
+      x2: zod.number().nullish(),
+      y2: zod.number().nullish(),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
 });
 
 /**
@@ -797,6 +833,182 @@ export const DeleteTaskAttachmentParams = zod.object({
 });
 
 export const DeleteTaskAttachmentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary List all shapes on a map
+ */
+export const ListShapesParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+});
+
+export const ListShapesResponseItem = zod.object({
+  id: zod.string().uuid(),
+  mapId: zod.string().uuid(),
+  type: zod.enum(["line", "rect", "ellipse"]),
+  positionX: zod.number(),
+  positionY: zod.number(),
+  width: zod.number(),
+  height: zod.number(),
+  rotation: zod.number(),
+  color: zod.string(),
+  filled: zod.boolean(),
+  strokeStyle: zod.enum(["solid", "dashed"]),
+  x1: zod.number().nullish(),
+  y1: zod.number().nullish(),
+  x2: zod.number().nullish(),
+  y2: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListShapesResponse = zod.array(ListShapesResponseItem);
+
+/**
+ * @summary Create a shape on a map
+ */
+export const CreateShapeParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+});
+
+export const CreateShapeBody = zod.object({
+  type: zod.enum(["line", "rect", "ellipse"]).optional(),
+  positionX: zod.number().optional(),
+  positionY: zod.number().optional(),
+  width: zod.number().optional(),
+  height: zod.number().optional(),
+  rotation: zod.number().optional(),
+  color: zod.string().optional(),
+  filled: zod.boolean().optional(),
+  strokeStyle: zod.enum(["solid", "dashed"]).optional(),
+  x1: zod.number().nullish(),
+  y1: zod.number().nullish(),
+  x2: zod.number().nullish(),
+  y2: zod.number().nullish(),
+});
+
+/**
+ * @summary Update a shape
+ */
+export const UpdateShapeParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+  shapeId: zod.coerce.string().uuid(),
+});
+
+export const UpdateShapeBody = zod.object({
+  positionX: zod.number().optional(),
+  positionY: zod.number().optional(),
+  width: zod.number().optional(),
+  height: zod.number().optional(),
+  rotation: zod.number().optional(),
+  color: zod.string().optional(),
+  filled: zod.boolean().optional(),
+  strokeStyle: zod.enum(["solid", "dashed"]).optional(),
+  x1: zod.number().nullish(),
+  y1: zod.number().nullish(),
+  x2: zod.number().nullish(),
+  y2: zod.number().nullish(),
+});
+
+export const UpdateShapeResponse = zod.object({
+  id: zod.string().uuid(),
+  mapId: zod.string().uuid(),
+  type: zod.enum(["line", "rect", "ellipse"]),
+  positionX: zod.number(),
+  positionY: zod.number(),
+  width: zod.number(),
+  height: zod.number(),
+  rotation: zod.number(),
+  color: zod.string(),
+  filled: zod.boolean(),
+  strokeStyle: zod.enum(["solid", "dashed"]),
+  x1: zod.number().nullish(),
+  y1: zod.number().nullish(),
+  x2: zod.number().nullish(),
+  y2: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a shape
+ */
+export const DeleteShapeParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+  shapeId: zod.coerce.string().uuid(),
+});
+
+export const DeleteShapeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Create a text element on a map
+ */
+export const CreateTextElementParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+});
+
+export const CreateTextElementBody = zod.object({
+  positionX: zod.number().optional(),
+  positionY: zod.number().optional(),
+  width: zod.number().optional(),
+  height: zod.number().optional(),
+  fontSize: zod.number().optional(),
+  color: zod.string().optional(),
+  content: zod.string().optional(),
+});
+
+/**
+ * @summary Update a text element
+ */
+export const UpdateTextElementParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+  elementId: zod.coerce.string().uuid(),
+});
+
+export const UpdateTextElementBody = zod.object({
+  content: zod.string().optional(),
+  positionX: zod.number().optional(),
+  positionY: zod.number().optional(),
+  width: zod.number().optional(),
+  height: zod.number().optional(),
+  fontSize: zod.number().optional(),
+  color: zod.string().optional(),
+});
+
+export const UpdateTextElementResponse = zod.object({
+  id: zod.string().uuid(),
+  mapId: zod.string().uuid(),
+  content: zod.string(),
+  positionX: zod.number(),
+  positionY: zod.number(),
+  width: zod.number(),
+  height: zod.number(),
+  fontSize: zod.number(),
+  color: zod.string(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a text element
+ */
+export const DeleteTextElementParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+  elementId: zod.coerce.string().uuid(),
+});
+
+export const DeleteTextElementResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
 });

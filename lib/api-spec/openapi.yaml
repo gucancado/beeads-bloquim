@@ -21,6 +21,10 @@ tags:
     description: Task management
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: shapes
+    description: Drawable shapes on a mind map (rectangles, ellipses, lines)
+  - name: text-elements
+    description: Free-form text elements on a mind map
 
 paths:
   /healthz:
@@ -999,6 +1003,262 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /workspaces/{workspaceId}/maps/{mapId}/shapes:
+    get:
+      operationId: listShapes
+      tags: [shapes]
+      summary: List all shapes on a map
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Array of shapes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShapeResponse"
+        "404":
+          description: Map not found in workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createShape
+      tags: [shapes]
+      summary: Create a shape on a map
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShapeRequest"
+      responses:
+        "201":
+          description: Shape created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShapeResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Map not found in workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/shapes/{shapeId}:
+    put:
+      operationId: updateShape
+      tags: [shapes]
+      summary: Update a shape
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: shapeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateShapeRequest"
+      responses:
+        "200":
+          description: Updated shape
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShapeResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Shape or map not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteShape
+      tags: [shapes]
+      summary: Delete a shape
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: shapeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Map not found in workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/text-elements:
+    post:
+      operationId: createTextElement
+      tags: [text-elements]
+      summary: Create a text element on a map
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTextElementRequest"
+      responses:
+        "201":
+          description: Text element created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextElementResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Map not found in workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/maps/{mapId}/text-elements/{elementId}:
+    put:
+      operationId: updateTextElement
+      tags: [text-elements]
+      summary: Update a text element
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: elementId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTextElementRequest"
+      responses:
+        "200":
+          description: Updated text element
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextElementResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Text element or map not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTextElement
+      tags: [text-elements]
+      summary: Delete a text element
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mapId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: elementId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Map not found in workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /storage/uploads/request-url:
     post:
       tags: [Storage]
@@ -1289,7 +1549,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ConnectionResponse"
-      required: [id, workspaceId, name, createdBy, createdAt, updatedAt, cards, connections]
+        textElements:
+          type: array
+          items:
+            $ref: "#/components/schemas/TextElementResponse"
+        shapes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShapeResponse"
+      required: [id, workspaceId, name, createdBy, createdAt, updatedAt, cards, connections, textElements, shapes]
 
     CreateCardRequest:
       type: object
@@ -1678,3 +1946,216 @@ components:
           description: Normalized object path (e.g. /objects/uploads/uuid). Store this in your database.
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
+
+    ShapeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [line, rect, ellipse]
+        positionX:
+          type: number
+        positionY:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        rotation:
+          type: number
+        color:
+          type: string
+        filled:
+          type: boolean
+        strokeStyle:
+          type: string
+          enum: [solid, dashed]
+        x1:
+          type: number
+          nullable: true
+        y1:
+          type: number
+          nullable: true
+        x2:
+          type: number
+          nullable: true
+        y2:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        [
+          id,
+          mapId,
+          type,
+          positionX,
+          positionY,
+          width,
+          height,
+          rotation,
+          color,
+          filled,
+          strokeStyle,
+          createdAt,
+          updatedAt,
+        ]
+
+    CreateShapeRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [line, rect, ellipse]
+        positionX:
+          type: number
+        positionY:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        rotation:
+          type: number
+        color:
+          type: string
+        filled:
+          type: boolean
+        strokeStyle:
+          type: string
+          enum: [solid, dashed]
+        x1:
+          type: number
+          nullable: true
+        y1:
+          type: number
+          nullable: true
+        x2:
+          type: number
+          nullable: true
+        y2:
+          type: number
+          nullable: true
+
+    UpdateShapeRequest:
+      type: object
+      properties:
+        positionX:
+          type: number
+        positionY:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        rotation:
+          type: number
+        color:
+          type: string
+        filled:
+          type: boolean
+        strokeStyle:
+          type: string
+          enum: [solid, dashed]
+        x1:
+          type: number
+          nullable: true
+        y1:
+          type: number
+          nullable: true
+        x2:
+          type: number
+          nullable: true
+        y2:
+          type: number
+          nullable: true
+
+    TextElementResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mapId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        positionX:
+          type: number
+        positionY:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        fontSize:
+          type: integer
+        color:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        [
+          id,
+          mapId,
+          content,
+          positionX,
+          positionY,
+          width,
+          height,
+          fontSize,
+          color,
+          createdAt,
+          updatedAt,
+        ]
+
+    CreateTextElementRequest:
+      type: object
+      properties:
+        positionX:
+          type: number
+        positionY:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        fontSize:
+          type: integer
+        color:
+          type: string
+        content:
+          type: string
+
+    UpdateTextElementRequest:
+      type: object
+      properties:
+        content:
+          type: string
+        positionX:
+          type: number
+        positionY:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        fontSize:
+          type: integer
+        color:
+          type: string

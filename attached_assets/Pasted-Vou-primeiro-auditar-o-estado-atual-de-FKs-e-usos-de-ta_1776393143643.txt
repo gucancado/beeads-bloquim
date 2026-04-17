@@ -1,0 +1,96 @@
+Vou primeiro auditar o estado atual de FKs e usos de task_comments.author_id antes de planejar.
+Tenho o panorama completo. Vou executar T2.6 com mudança cirúrgica: schema, migration, SQL direto, e ajuste mínimo no código (leftJoin + fallback).
+
+1) Schema Drizzle
+2) Migration SQL file + apply directly
+Migração aplicada com sucesso. Agora ajusto o código para tolerar authorId nulo nas leituras.
+
+3) Ajuste de código (innerJoin → leftJoin + fallback)
+Bom — sql já estava importado em myTasks.ts. Agora restart do server, typecheck e re-run dos smoke tests para validar.
+Checked system logs
+Faltou importar unique no schema. Corrigindo:
+Server up. Roda typecheck + smoke tests:
+Os erros de typecheck são pré-existentes (faltam exports em lib/db/dist/ desatualizado — referem-se a users/maps/cards/tasks que não toquei). Runtime OK, smoke tests 4/4 passed. Vou confirmar que é pré-existente e regerar o dist:
+Tudo verificado. T2.6 entregue.
+
+1. Arquivos alterados
+Arquivo	Mudança
+lib/db/src/schema/comments.ts	authorId: removido .notNull(), FK agora onDelete: "set null"
+lib/db/src/schema/workspaces.ts	Import unique adicionado; uniqueIndex → unique em workspace_members
+lib/db/drizzle/0019_t26_integrity.sql	Migration nova (SQL idempotente)
+artifacts/api-server/src/routes/comments.ts	2× innerJoin(users) → leftJoin; authorName agora coalesce(users.name, 'Usuário removido'); + sql no import drizzle
+artifacts/api-server/src/routes/myTasks.ts	1× innerJoin(users) → leftJoin na rota de comentários do executor; idem fallback
+2. Migration 0019_t26_integrity.sql
+-- 1) task_comments.author_id: NOT NULL → nullable + ON DELETE SET NULL
+ALTER TABLE "task_comments" DROP CONSTRAINT IF EXISTS "task_comments_author_id_users_id_fk";
+ALTER TABLE "task_comments" ALTER COLUMN "author_id" DROP NOT NULL;
+ALTER TABLE "task_comments" ADD CONSTRAINT "task_comments_author_id_users_id_fk"
+  FOREIGN KEY ("author_id") REFERENCES "users"("id") ON DELETE SET NULL;
+-- 2) workspace_members: promove unique index existente a UNIQUE constraint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+    WHERE conname = 'idx_workspace_members_workspace_user'
+      AND conrelid = 'workspace_members'::regclass) THEN
+    ALTER TABLE "workspace_members"
+      ADD CONSTRAINT "idx_workspace_members_workspace_user"
+      UNIQUE USING INDEX "idx_workspace_members_workspace_user";
+  END IF;
+END $$;
+Aplicada via SQL direto (não drizzle-kit push) por ser cirúrgica e usar USING INDEX (sintaxe que drizzle-kit não introspecta). Verificação pós-aplicação:
+
+task_comments_author_id_users_id_fk: FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+task_comments.author_id: is_nullable = YES
+workspace_members idx_workspace_members_workspace_user: contype='u' UNIQUE (workspace_id, user_id)
+O índice idx_workspace_members_workspace_user continua existindo (foi reaproveitado, não recriado — sem rebuild) e agora aparece também em pg_constraint como contype='u'.
+
+3. Comportamento antes vs depois
+task_comments.author_id
+Cenário	Antes	Depois
+Deletar usuário com comentários	❌ Bloqueado (ERROR: violates foreign key constraint)	✅ Sucesso; comentários preservados com author_id = NULL
+Listar comentários de autor deletado	(impossível chegar aqui)	Aparecem com authorName = "Usuário removido", authorId = null, authorAvatar = null
+Inserir comentário	OK (sempre via req.user.userId)	OK (idêntico — notNull no insert ainda garantido pelo middleware de auth)
+Tipo TS gerado por Drizzle	authorId: string	authorId: string | null
+workspace_members uniqueness
+Cenário	Antes	Depois
+Inserir (workspace_id, user_id) duplicado	❌ Bloqueado (via unique index)	❌ Bloqueado (mesmo comportamento — agora via UNIQUE constraint nomeada)
+Visibilidade em pg_constraint	Ausente (só em pg_indexes)	Presente como contype='u'
+Reconhecimento por ferramentas (DBeaver, pgAdmin, Drizzle Studio)	Como índice apenas	Como constraint formal de integridade
+Performance de lookup (workspace_id, user_id)	Idêntica	Idêntica (mesmo índice físico)
+4. Riscos de aplicação
+Risco	Avaliação	Mitigação
+Comentários órfãos pré-existentes	✅ Zero risco — query de auditoria retornou 0 orphan_comments antes de aplicar	N/A
+Duplicatas em workspace_members	✅ Zero risco — o uniqueIndex da T2.1 já garantia isso. Verificação GROUP BY ... HAVING COUNT(*)>1 retornou vazio	N/A
+Frontend renderizar authorName: null	✅ Mitigado — API faz coalesce → 'Usuário removido'. O contrato (authorName: string) permanece estável para o cliente	Já incluído nesta entrega
+authorId: null no payload novo	⚠️ Frontend que faça === userId para "is author" passará a comparar null === userId (falso), o que é o comportamento correto	Sem ação necessária; comparações já são ===
+Sumiço dos comentários quando autor é deletado	✅ Resolvido pela troca para leftJoin (com innerJoin os comentários sumiriam silenciosamente)	Já incluído
+Drizzle push futuro tentando "ajustar" workspace_members	⚠️ Baixo — schema agora declara unique(...) que casa com a constraint formal	Schema sincronizado; não rodar drizzle-kit push agora
+Migration não-idempotente	✅ Mitigado — DROP CONSTRAINT IF EXISTS, DO $$ ... IF NOT EXISTS na constraint	Pode reaplicar sem erro
+5. Como validar
+# 1) typecheck (api-server)
+pnpm --filter @workspace/api-server run typecheck
+# ⚠️ Há erros pré-existentes em workspaces.ts/scheduler.ts referentes a 'lib/db/dist/'
+#    desatualizado. Não foram introduzidos por esta tarefa (não toquei users/maps/cards/tasks).
+# 2) suíte smoke
+pnpm --filter @workspace/api-server run test
+# → Test Files 2 passed (2) | Tests 4 passed (4)  ✅
+# 3) integridade no DB
+psql $DATABASE_URL -c "
+  SELECT conname, pg_get_constraintdef(oid)
+  FROM pg_constraint
+  WHERE conrelid IN ('task_comments'::regclass, 'workspace_members'::regclass)
+  ORDER BY conrelid::text, contype;"
+# 4) teste manual end-to-end de SET NULL (em DB de dev, não prod):
+#    BEGIN;
+#    INSERT INTO users (id, email, password_hash, name) VALUES (gen_random_uuid(), 'tmp@x', 'x', 'tmp') RETURNING id;
+#    -- crie um comentário com esse author_id
+#    -- DELETE FROM users WHERE id = ...;  → não deve falhar
+#    -- SELECT author_id FROM task_comments WHERE id = ...;  → NULL
+#    ROLLBACK;
+6. Observações sobre dados existentes
+task_comments: 0 comentários órfãos antes da migração — não havia inconsistência latente. A mudança apenas remove um foot-gun futuro.
+workspace_members: 0 duplicatas. A constraint formal apenas torna o invariante já existente (pelo unique index da T2.1) explícito e visível em ferramentas/ORM.
+lib/db/dist/: O typecheck do api-server tem erros pré-existentes apontando para lib/db/dist/ desatualizado. Não relacionado à T2.6 (erros mencionam users, maps, cards, tasks — não toquei nesses módulos). Runtime não é afetado pois package.json do @workspace/db exporta direto de ./src/. Sugiro endereçar isso em uma tarefa separada de housekeeping (ex.: deletar a pasta dist/ órfã, já que o pacote nem tem script de build).
+Sem necessidade de backfill de dados.
+Sem necessidade de window de manutenção — todas as alterações são metadata-only (sem rewrites de tabela). ALTER COLUMN ... DROP NOT NULL em PostgreSQL é uma operação O(1) (apenas atualiza pg_attribute).
+Para deploy em produção: aplicar a migration 0019 antes de subir o novo código (a ordem é segura — código antigo continua funcionando porque notNull no app só afeta inserts, e inserts continuam fornecendo authorId).
+Pronto para revisão. Aguardo seu ok antes de prosseguir

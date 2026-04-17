@@ -174,6 +174,57 @@ export interface ConnectionResponse {
   createdAt: string;
 }
 
+export interface TextElementResponse {
+  id: string;
+  mapId: string;
+  content: string;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ShapeResponseType =
+  (typeof ShapeResponseType)[keyof typeof ShapeResponseType];
+
+export const ShapeResponseType = {
+  line: "line",
+  rect: "rect",
+  ellipse: "ellipse",
+} as const;
+
+export type ShapeResponseStrokeStyle =
+  (typeof ShapeResponseStrokeStyle)[keyof typeof ShapeResponseStrokeStyle];
+
+export const ShapeResponseStrokeStyle = {
+  solid: "solid",
+  dashed: "dashed",
+} as const;
+
+export interface ShapeResponse {
+  id: string;
+  mapId: string;
+  type: ShapeResponseType;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  rotation: number;
+  color: string;
+  filled: boolean;
+  strokeStyle: ShapeResponseStrokeStyle;
+  x1?: number | null;
+  y1?: number | null;
+  x2?: number | null;
+  y2?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MapDetailResponse {
   id: string;
   workspaceId: string;
@@ -183,6 +234,8 @@ export interface MapDetailResponse {
   updatedAt: string;
   cards: CardResponse[];
   connections: ConnectionResponse[];
+  textElements: TextElementResponse[];
+  shapes: ShapeResponse[];
 }
 
 export interface CreateCardRequest {
@@ -338,6 +391,82 @@ export interface UploadUrlResponse {
   /** Normalized object path (e.g. /objects/uploads/uuid). Store this in your database. */
   objectPath: string;
   metadata?: UploadUrlRequest;
+}
+
+export type CreateShapeRequestType =
+  (typeof CreateShapeRequestType)[keyof typeof CreateShapeRequestType];
+
+export const CreateShapeRequestType = {
+  line: "line",
+  rect: "rect",
+  ellipse: "ellipse",
+} as const;
+
+export type CreateShapeRequestStrokeStyle =
+  (typeof CreateShapeRequestStrokeStyle)[keyof typeof CreateShapeRequestStrokeStyle];
+
+export const CreateShapeRequestStrokeStyle = {
+  solid: "solid",
+  dashed: "dashed",
+} as const;
+
+export interface CreateShapeRequest {
+  type?: CreateShapeRequestType;
+  positionX?: number;
+  positionY?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  color?: string;
+  filled?: boolean;
+  strokeStyle?: CreateShapeRequestStrokeStyle;
+  x1?: number | null;
+  y1?: number | null;
+  x2?: number | null;
+  y2?: number | null;
+}
+
+export type UpdateShapeRequestStrokeStyle =
+  (typeof UpdateShapeRequestStrokeStyle)[keyof typeof UpdateShapeRequestStrokeStyle];
+
+export const UpdateShapeRequestStrokeStyle = {
+  solid: "solid",
+  dashed: "dashed",
+} as const;
+
+export interface UpdateShapeRequest {
+  positionX?: number;
+  positionY?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  color?: string;
+  filled?: boolean;
+  strokeStyle?: UpdateShapeRequestStrokeStyle;
+  x1?: number | null;
+  y1?: number | null;
+  x2?: number | null;
+  y2?: number | null;
+}
+
+export interface CreateTextElementRequest {
+  positionX?: number;
+  positionY?: number;
+  width?: number;
+  height?: number;
+  fontSize?: number;
+  color?: string;
+  content?: string;
+}
+
+export interface UpdateTextElementRequest {
+  content?: string;
+  positionX?: number;
+  positionY?: number;
+  width?: number;
+  height?: number;
+  fontSize?: number;
+  color?: string;
 }
 
 export type GetMyTasksParams = {

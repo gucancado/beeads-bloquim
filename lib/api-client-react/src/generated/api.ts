@@ -27,7 +27,9 @@ import type {
   CreateCardRequest,
   CreateConnectionRequest,
   CreateMapRequest,
+  CreateShapeRequest,
   CreateTaskRequest,
+  CreateTextElementRequest,
   CreateWorkspaceRequest,
   DashboardResponse,
   ErrorResponse,
@@ -37,13 +39,17 @@ import type {
   MapDetailResponse,
   MapResponse,
   RegisterRequest,
+  ShapeResponse,
   SuccessResponse,
   TaskResponse,
   TaskWithContextResponse,
+  TextElementResponse,
   UpdateCardRequest,
   UpdateMemberRoleRequest,
+  UpdateShapeRequest,
   UpdateTaskDetailsRequest,
   UpdateTaskStatusRequest,
+  UpdateTextElementRequest,
   UploadUrlRequest,
   UploadUrlResponse,
   UserResponse,
@@ -3372,6 +3378,730 @@ export const useDeleteTaskAttachment = <
   TContext
 > => {
   return useMutation(getDeleteTaskAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary List all shapes on a map
+ */
+export const getListShapesUrl = (workspaceId: string, mapId: string) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/shapes`;
+};
+
+export const listShapes = async (
+  workspaceId: string,
+  mapId: string,
+  options?: RequestInit,
+): Promise<ShapeResponse[]> => {
+  return customFetch<ShapeResponse[]>(getListShapesUrl(workspaceId, mapId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListShapesQueryKey = (workspaceId: string, mapId: string) => {
+  return [`/api/workspaces/${workspaceId}/maps/${mapId}/shapes`] as const;
+};
+
+export const getListShapesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listShapes>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  workspaceId: string,
+  mapId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listShapes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListShapesQueryKey(workspaceId, mapId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listShapes>>> = ({
+    signal,
+  }) => listShapes(workspaceId, mapId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(workspaceId && mapId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listShapes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListShapesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listShapes>>
+>;
+export type ListShapesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List all shapes on a map
+ */
+
+export function useListShapes<
+  TData = Awaited<ReturnType<typeof listShapes>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  workspaceId: string,
+  mapId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listShapes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListShapesQueryOptions(workspaceId, mapId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a shape on a map
+ */
+export const getCreateShapeUrl = (workspaceId: string, mapId: string) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/shapes`;
+};
+
+export const createShape = async (
+  workspaceId: string,
+  mapId: string,
+  createShapeRequest: CreateShapeRequest,
+  options?: RequestInit,
+): Promise<ShapeResponse> => {
+  return customFetch<ShapeResponse>(getCreateShapeUrl(workspaceId, mapId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createShapeRequest),
+  });
+};
+
+export const getCreateShapeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createShape>>,
+    TError,
+    { workspaceId: string; mapId: string; data: BodyType<CreateShapeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createShape>>,
+  TError,
+  { workspaceId: string; mapId: string; data: BodyType<CreateShapeRequest> },
+  TContext
+> => {
+  const mutationKey = ["createShape"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createShape>>,
+    { workspaceId: string; mapId: string; data: BodyType<CreateShapeRequest> }
+  > = (props) => {
+    const { workspaceId, mapId, data } = props ?? {};
+
+    return createShape(workspaceId, mapId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateShapeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createShape>>
+>;
+export type CreateShapeMutationBody = BodyType<CreateShapeRequest>;
+export type CreateShapeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a shape on a map
+ */
+export const useCreateShape = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createShape>>,
+    TError,
+    { workspaceId: string; mapId: string; data: BodyType<CreateShapeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createShape>>,
+  TError,
+  { workspaceId: string; mapId: string; data: BodyType<CreateShapeRequest> },
+  TContext
+> => {
+  return useMutation(getCreateShapeMutationOptions(options));
+};
+
+/**
+ * @summary Update a shape
+ */
+export const getUpdateShapeUrl = (
+  workspaceId: string,
+  mapId: string,
+  shapeId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/shapes/${shapeId}`;
+};
+
+export const updateShape = async (
+  workspaceId: string,
+  mapId: string,
+  shapeId: string,
+  updateShapeRequest: UpdateShapeRequest,
+  options?: RequestInit,
+): Promise<ShapeResponse> => {
+  return customFetch<ShapeResponse>(
+    getUpdateShapeUrl(workspaceId, mapId, shapeId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateShapeRequest),
+    },
+  );
+};
+
+export const getUpdateShapeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateShape>>,
+    TError,
+    {
+      workspaceId: string;
+      mapId: string;
+      shapeId: string;
+      data: BodyType<UpdateShapeRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateShape>>,
+  TError,
+  {
+    workspaceId: string;
+    mapId: string;
+    shapeId: string;
+    data: BodyType<UpdateShapeRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateShape"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateShape>>,
+    {
+      workspaceId: string;
+      mapId: string;
+      shapeId: string;
+      data: BodyType<UpdateShapeRequest>;
+    }
+  > = (props) => {
+    const { workspaceId, mapId, shapeId, data } = props ?? {};
+
+    return updateShape(workspaceId, mapId, shapeId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateShapeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateShape>>
+>;
+export type UpdateShapeMutationBody = BodyType<UpdateShapeRequest>;
+export type UpdateShapeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a shape
+ */
+export const useUpdateShape = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateShape>>,
+    TError,
+    {
+      workspaceId: string;
+      mapId: string;
+      shapeId: string;
+      data: BodyType<UpdateShapeRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateShape>>,
+  TError,
+  {
+    workspaceId: string;
+    mapId: string;
+    shapeId: string;
+    data: BodyType<UpdateShapeRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateShapeMutationOptions(options));
+};
+
+/**
+ * @summary Delete a shape
+ */
+export const getDeleteShapeUrl = (
+  workspaceId: string,
+  mapId: string,
+  shapeId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/shapes/${shapeId}`;
+};
+
+export const deleteShape = async (
+  workspaceId: string,
+  mapId: string,
+  shapeId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDeleteShapeUrl(workspaceId, mapId, shapeId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteShapeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteShape>>,
+    TError,
+    { workspaceId: string; mapId: string; shapeId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteShape>>,
+  TError,
+  { workspaceId: string; mapId: string; shapeId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteShape"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteShape>>,
+    { workspaceId: string; mapId: string; shapeId: string }
+  > = (props) => {
+    const { workspaceId, mapId, shapeId } = props ?? {};
+
+    return deleteShape(workspaceId, mapId, shapeId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteShapeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteShape>>
+>;
+
+export type DeleteShapeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a shape
+ */
+export const useDeleteShape = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteShape>>,
+    TError,
+    { workspaceId: string; mapId: string; shapeId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteShape>>,
+  TError,
+  { workspaceId: string; mapId: string; shapeId: string },
+  TContext
+> => {
+  return useMutation(getDeleteShapeMutationOptions(options));
+};
+
+/**
+ * @summary Create a text element on a map
+ */
+export const getCreateTextElementUrl = (workspaceId: string, mapId: string) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/text-elements`;
+};
+
+export const createTextElement = async (
+  workspaceId: string,
+  mapId: string,
+  createTextElementRequest: CreateTextElementRequest,
+  options?: RequestInit,
+): Promise<TextElementResponse> => {
+  return customFetch<TextElementResponse>(
+    getCreateTextElementUrl(workspaceId, mapId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createTextElementRequest),
+    },
+  );
+};
+
+export const getCreateTextElementMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTextElement>>,
+    TError,
+    {
+      workspaceId: string;
+      mapId: string;
+      data: BodyType<CreateTextElementRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTextElement>>,
+  TError,
+  {
+    workspaceId: string;
+    mapId: string;
+    data: BodyType<CreateTextElementRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["createTextElement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTextElement>>,
+    {
+      workspaceId: string;
+      mapId: string;
+      data: BodyType<CreateTextElementRequest>;
+    }
+  > = (props) => {
+    const { workspaceId, mapId, data } = props ?? {};
+
+    return createTextElement(workspaceId, mapId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTextElementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTextElement>>
+>;
+export type CreateTextElementMutationBody = BodyType<CreateTextElementRequest>;
+export type CreateTextElementMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a text element on a map
+ */
+export const useCreateTextElement = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTextElement>>,
+    TError,
+    {
+      workspaceId: string;
+      mapId: string;
+      data: BodyType<CreateTextElementRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createTextElement>>,
+  TError,
+  {
+    workspaceId: string;
+    mapId: string;
+    data: BodyType<CreateTextElementRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getCreateTextElementMutationOptions(options));
+};
+
+/**
+ * @summary Update a text element
+ */
+export const getUpdateTextElementUrl = (
+  workspaceId: string,
+  mapId: string,
+  elementId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/text-elements/${elementId}`;
+};
+
+export const updateTextElement = async (
+  workspaceId: string,
+  mapId: string,
+  elementId: string,
+  updateTextElementRequest: UpdateTextElementRequest,
+  options?: RequestInit,
+): Promise<TextElementResponse> => {
+  return customFetch<TextElementResponse>(
+    getUpdateTextElementUrl(workspaceId, mapId, elementId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateTextElementRequest),
+    },
+  );
+};
+
+export const getUpdateTextElementMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTextElement>>,
+    TError,
+    {
+      workspaceId: string;
+      mapId: string;
+      elementId: string;
+      data: BodyType<UpdateTextElementRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTextElement>>,
+  TError,
+  {
+    workspaceId: string;
+    mapId: string;
+    elementId: string;
+    data: BodyType<UpdateTextElementRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateTextElement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTextElement>>,
+    {
+      workspaceId: string;
+      mapId: string;
+      elementId: string;
+      data: BodyType<UpdateTextElementRequest>;
+    }
+  > = (props) => {
+    const { workspaceId, mapId, elementId, data } = props ?? {};
+
+    return updateTextElement(
+      workspaceId,
+      mapId,
+      elementId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTextElementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTextElement>>
+>;
+export type UpdateTextElementMutationBody = BodyType<UpdateTextElementRequest>;
+export type UpdateTextElementMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a text element
+ */
+export const useUpdateTextElement = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTextElement>>,
+    TError,
+    {
+      workspaceId: string;
+      mapId: string;
+      elementId: string;
+      data: BodyType<UpdateTextElementRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTextElement>>,
+  TError,
+  {
+    workspaceId: string;
+    mapId: string;
+    elementId: string;
+    data: BodyType<UpdateTextElementRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateTextElementMutationOptions(options));
+};
+
+/**
+ * @summary Delete a text element
+ */
+export const getDeleteTextElementUrl = (
+  workspaceId: string,
+  mapId: string,
+  elementId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/text-elements/${elementId}`;
+};
+
+export const deleteTextElement = async (
+  workspaceId: string,
+  mapId: string,
+  elementId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDeleteTextElementUrl(workspaceId, mapId, elementId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteTextElementMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTextElement>>,
+    TError,
+    { workspaceId: string; mapId: string; elementId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTextElement>>,
+  TError,
+  { workspaceId: string; mapId: string; elementId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteTextElement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTextElement>>,
+    { workspaceId: string; mapId: string; elementId: string }
+  > = (props) => {
+    const { workspaceId, mapId, elementId } = props ?? {};
+
+    return deleteTextElement(workspaceId, mapId, elementId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTextElementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTextElement>>
+>;
+
+export type DeleteTextElementMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a text element
+ */
+export const useDeleteTextElement = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTextElement>>,
+    TError,
+    { workspaceId: string; mapId: string; elementId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTextElement>>,
+  TError,
+  { workspaceId: string; mapId: string; elementId: string },
+  TContext
+> => {
+  return useMutation(getDeleteTextElementMutationOptions(options));
 };
 
 /**
