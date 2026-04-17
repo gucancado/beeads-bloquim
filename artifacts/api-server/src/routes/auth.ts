@@ -7,6 +7,11 @@ import { requireAuth, signToken, AuthRequest } from "../middlewares/auth";
 import { loginLimiter, registerLimiter } from "../middlewares/rateLimit";
 import { z } from "zod";
 import { ObjectStorageService } from "../lib/objectStorage";
+import {
+  AUTH_COOKIE_NAME,
+  authCookieOptions,
+  clearAuthCookieOptions,
+} from "../lib/cookies";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -42,6 +47,8 @@ router.post("/register", registerLimiter, async (req, res) => {
 
   const token = signToken({ userId: user.id, email: user.email });
 
+  res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
+
   res.status(201).json({
     user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
     token,
@@ -71,6 +78,8 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   const token = signToken({ userId: user.id, email: user.email });
 
+  res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
+
   res.json({
     user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
     token,
@@ -78,6 +87,7 @@ router.post("/login", loginLimiter, async (req, res) => {
 });
 
 router.post("/logout", (_req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME, clearAuthCookieOptions);
   res.json({ success: true, message: "Logged out" });
 });
 
