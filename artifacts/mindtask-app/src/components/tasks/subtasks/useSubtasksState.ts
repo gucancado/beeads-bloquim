@@ -37,13 +37,21 @@ export function useSubtasksState({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const subtasksEndpoint = effectiveWorkspaceId
-    ? `/api/workspaces/${effectiveWorkspaceId}/tasks/${taskIdResolved}/subtasks`
-    : `/api/my-tasks/${taskIdResolved}/subtasks`;
+  const buildSubtasksEndpoint = (id: string) =>
+    effectiveWorkspaceId
+      ? `/api/workspaces/${effectiveWorkspaceId}/tasks/${id}/subtasks`
+      : `/api/my-tasks/${id}/subtasks`;
+
+  const subtasksQueryKey = taskIdResolved
+    ? [buildSubtasksEndpoint(taskIdResolved)]
+    : ["subtasks-disabled", effectiveWorkspaceId];
 
   const { data: subtasksData } = useQuery<SubtaskItem[]>({
-    queryKey: [subtasksEndpoint],
-    queryFn: () => customFetch(subtasksEndpoint),
+    queryKey: subtasksQueryKey,
+    queryFn: () => {
+      if (!taskIdResolved) return Promise.resolve([] as SubtaskItem[]);
+      return customFetch(buildSubtasksEndpoint(taskIdResolved));
+    },
     enabled: open && !!taskIdResolved,
   });
 
@@ -59,10 +67,10 @@ export function useSubtasksState({
   }, [pendingFocusId, subtasks]);
 
   const saveSubtasksMutation = useMutation({
-    mutationFn: (items: SubtaskItem[]) =>
-      customFetch(subtasksEndpoint, {
+    mutationFn: (payload: { taskId: string; items: SubtaskItem[] }) =>
+      customFetch(buildSubtasksEndpoint(payload.taskId), {
         method: "PUT",
-        body: JSON.stringify({ subtasks: items.map((s, idx) => ({ id: s.id.startsWith("local-") ? undefined : s.id, text: s.text, completed: s.completed, order: idx })) }),
+        body: JSON.stringify({ subtasks: payload.items.map((s, idx) => ({ id: s.id.startsWith("local-") ? undefined : s.id, text: s.text, completed: s.completed, order: idx })) }),
       }),
     onSuccess: (data: SubtaskItem[]) => {
       setSubtasks(prev => {
@@ -71,6 +79,11 @@ export function useSubtasksState({
       });
     },
   });
+
+  const fireSave = (items: SubtaskItem[]) => {
+    if (!taskIdResolved) return;
+    saveSubtasksMutation.mutate({ taskId: taskIdResolved, items });
+  };
 
   const addSubtask = (afterId?: string) => {
     const newId = generateLocalId();
@@ -97,7 +110,7 @@ export function useSubtasksState({
     const updated = subtasks.map(s => s.id === id ? { ...s, completed: !s.completed } : s);
     setSubtasks(updated);
     markDirty();
-    if (taskIdResolved) saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
+    fireSave(updated.filter(s => s.text.trim() !== ""));
   };
 
   const handleBlur = (id: string) => {
@@ -105,9 +118,9 @@ export function useSubtasksState({
     if (subtask && subtask.text.trim() === "") {
       const updated = subtasks.filter(s => s.id !== id);
       setSubtasks(updated);
-      if (taskIdResolved) saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
-    } else if (taskIdResolved) {
-      saveSubtasksMutation.mutate(subtasks.filter(s => s.text.trim() !== ""));
+      fireSave(updated.filter(s => s.text.trim() !== ""));
+    } else {
+      fireSave(subtasks.filter(s => s.text.trim() !== ""));
     }
   };
 
@@ -118,7 +131,7 @@ export function useSubtasksState({
         e.preventDefault();
         const updated = subtasks.filter(s => s.id !== id);
         setSubtasks(updated);
-        if (taskIdResolved) saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
+        fireSave(updated.filter(s => s.text.trim() !== ""));
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -133,14 +146,12 @@ export function useSubtasksState({
       const newIndex = subtasks.findIndex(s => s.id === over.id);
       const reordered = arrayMove(subtasks, oldIndex, newIndex);
       setSubtasks(reordered);
-      if (taskIdResolved) saveSubtasksMutation.mutate(reordered.filter(s => s.text.trim() !== ""));
+      fireSave(reordered.filter(s => s.text.trim() !== ""));
     }
   };
 
   const flushPending = () => {
-    if (taskIdResolved) {
-      saveSubtasksMutation.mutate(subtasks.filter(s => s.text.trim() !== ""));
-    }
+    fireSave(subtasks.filter(s => s.text.trim() !== ""));
   };
 
   return {
