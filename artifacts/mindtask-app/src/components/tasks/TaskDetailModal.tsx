@@ -33,6 +33,7 @@ import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
 import { TaskAssociationSelector } from "@/components/tasks/association/TaskAssociationSelector";
+import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";
 import { useTaskAssociation } from "@/components/tasks/association/useTaskAssociation";
 import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
@@ -709,62 +710,19 @@ export function TaskDetailModal({
 
               {/* Title + actions */}
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {parentApprovalStatus && (
-                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full lowercase border ${
-                      parentApprovalStatus === 'approved'
-                        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
-                        : parentApprovalStatus === 'rejected'
-                        ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
-                        : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        parentApprovalStatus === 'approved' ? 'bg-emerald-500' :
-                        parentApprovalStatus === 'rejected' ? 'bg-red-500' : 'bg-amber-500'
-                      }`} />
-                      {parentApprovalStatus === 'in_approval' ? 'em aprovação' :
-                       parentApprovalStatus === 'approved' ? 'aprovada' : 'reprovada'}
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1.5 ml-auto flex-wrap justify-end">
-                    {isEditing && isTaskReady && TASK_STATUS_ORDER.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleStatusChange(opt.value)}
-                        className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all lowercase ${
-                          status === opt.value
-                            ? opt.activeClass
-                            : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                    {isEditing && !isStandalone && !!effectiveWorkspaceId && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleDuplicate}
-                        disabled={isDuplicating}
-                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
-                        title="duplicar tarefa"
-                      >
-                        {isDuplicating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
-                      </Button>
-                    )}
-                    {isEditing && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowDelete(true)}
-                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                        title={isCardMode ? "deletar card" : "excluir tarefa"}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                <TaskHeaderActions
+                  parentApprovalStatus={parentApprovalStatus}
+                  isEditing={isEditing}
+                  isTaskReady={isTaskReady}
+                  isStandalone={isStandalone}
+                  isCardMode={isCardMode}
+                  effectiveWorkspaceId={effectiveWorkspaceId}
+                  status={status}
+                  isDuplicating={isDuplicating}
+                  onStatusChange={handleStatusChange}
+                  onDuplicate={handleDuplicate}
+                  onDelete={() => setShowDelete(true)}
+                />
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Título</label>
                   <Input
