@@ -7,6 +7,9 @@ import {
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
 import { requireAuth, optionalAuth, AuthRequest } from "../middlewares/auth";
+import { logger } from "../lib/logger";
+
+const log = logger.child({ module: "storage" });
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -66,7 +69,7 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: AuthRequest
       }),
     );
   } catch (error) {
-    console.error("Error generating upload URL:", error);
+    log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
 });
@@ -100,7 +103,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
       res.end();
     }
   } catch (error) {
-    console.error("Error serving public object:", error);
+    log.error({ err: error }, "Error serving public object");
     res.status(500).json({ error: "Failed to serve public object" });
   }
 });
@@ -155,11 +158,11 @@ router.get("/storage/objects/*path", optionalAuth, async (req: Request, res: Res
     }
   } catch (error) {
     if (error instanceof ObjectNotFoundError) {
-      console.warn("Object not found:", error);
+      log.warn({ err: error }, "Object not found");
       res.status(404).json({ error: "Object not found" });
       return;
     }
-    console.error("Error serving object:", error);
+    log.error({ err: error }, "Error serving object");
     res.status(500).json({ error: "Failed to serve object" });
   }
 });

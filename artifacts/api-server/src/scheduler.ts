@@ -3,6 +3,9 @@ import { tasks, cards } from "@workspace/db/schema";
 import { eq, and, lt, ne, isNotNull, notExists, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getTodayLocal } from "./lib/overdue";
+import { logger } from "./lib/logger";
+
+const schedulerLogger = logger.child({ module: "scheduler" });
 
 export async function syncOverdueFlags() {
   const now = new Date();
@@ -62,7 +65,13 @@ export async function syncOverdueFlags() {
   }
 
   if (toOverdue.length > 0 || toClear.length > 0 || completedOverdue.length > 0) {
-    console.log(`[scheduler] overdue sync: +${toOverdue.length} flagged, ${toClear.length + completedOverdue.length} cleared`);
+    schedulerLogger.info(
+      {
+        flagged: toOverdue.length,
+        cleared: toClear.length + completedOverdue.length,
+      },
+      "overdue sync",
+    );
   }
 }
 
@@ -84,15 +93,20 @@ export async function cleanupOrphanTasks() {
   const ids = orphans.map((o) => o.id);
   await db.delete(tasks).where(inArray(tasks.id, ids));
 
-  console.log(`[startup] cleaned up ${orphans.length} orphan task(s) with no corresponding card`);
+  schedulerLogger.info(
+    { orphansCleaned: orphans.length },
+    "startup orphan task cleanup",
+  );
 }
 
 export function startScheduler() {
+  const onErr = (err: unknown) =>
+    schedulerLogger.error({ err }, "scheduler task failed");
   // Clean up orphan tasks once on startup
-  cleanupOrphanTasks().catch(console.error);
+  cleanupOrphanTasks().catch(onErr);
   // Run immediately on startup
-  syncOverdueFlags().catch(console.error);
+  syncOverdueFlags().catch(onErr);
   // Then every 5 minutes
-  setInterval(() => syncOverdueFlags().catch(console.error), 5 * 60 * 1000);
-  console.log("[scheduler] overdue sync started (every 5 min)");
+  setInterval(() => syncOverdueFlags().catch(onErr), 5 * 60 * 1000);
+  schedulerLogger.info({ intervalMs: 5 * 60 * 1000 }, "overdue sync started");
 }

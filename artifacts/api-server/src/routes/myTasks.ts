@@ -5,6 +5,9 @@ import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { logger } from "../lib/logger";
+
+const log = logger.child({ module: "myTasks" });
 import { computeOverdue } from "../lib/overdue";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
@@ -811,7 +814,7 @@ router.get("/:taskId/attachments/:attachmentId/download", requireAuth, async (re
       res.end();
     }
   } catch (error) {
-    console.error("Error downloading attachment:", error);
+    log.error({ err: error }, "Error downloading attachment");
     return res.status(500).json({ error: "Failed to download attachment" });
   }
 });

@@ -48,7 +48,10 @@ export const corsOptions: CorsOptions = {
       return;
     }
 
-    console.warn(`[cors] blocked origin: ${origin}`);
+    // Lazy require to avoid circular import at module load
+    void import("./logger").then(({ logger }) =>
+      logger.warn({ origin }, "cors blocked origin"),
+    );
     callback(null, false);
   },
   credentials: true,

@@ -4,6 +4,9 @@ import { db } from "@workspace/db";
 import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, signToken, AuthRequest } from "../middlewares/auth";
+import { logger } from "../lib/logger";
+
+const log = logger.child({ module: "auth" });
 import { loginLimiter, registerLimiter } from "../middlewares/rateLimit";
 import { z } from "zod";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -142,7 +145,7 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
           visibility: "public",
         });
       } catch (err) {
-        console.error("Failed to set ACL for avatar object:", err);
+        log.error({ err }, "Failed to set ACL for avatar object");
         res.status(400).json({ error: "Invalid avatar", message: "Could not associate the uploaded file. Please try uploading again." });
         return;
       }

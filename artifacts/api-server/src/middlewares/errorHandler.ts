@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { ApiError } from "../lib/errors";
+import { logger } from "../lib/logger";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -42,7 +43,15 @@ export function errorHandler(
 
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
-  console.error(`[ERROR] ${req.method} ${req.path}:`, message, stack ?? "");
+  logger.error(
+    {
+      reqId: req.id,
+      method: req.method,
+      path: req.originalUrl ?? req.path,
+      err: { message, stack },
+    },
+    "unhandled request error",
+  );
 
   res.status(500).json({
     error: "Internal Server Error",
