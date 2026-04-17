@@ -37,6 +37,7 @@ import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";
 import { useTaskAssociation } from "@/components/tasks/association/useTaskAssociation";
 import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { useAutoCreateTask } from "@/components/tasks/useAutoCreateTask";
+import { useTaskDetailForm } from "@/components/tasks/useTaskDetailForm";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
 
 interface TaskResponseExtended extends TaskResponse {
@@ -126,25 +127,20 @@ export function TaskDetailModal({
   const { data: me } = useGetMe({ query: { enabled: open } });
   const currentUserId = me?.id ?? "";
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [assignedTo, setAssignedTo] = useState("unassigned");
-  const [priority, setPriority] = useState<string>("medium");
-  const [dueDate, setDueDate] = useState("");
-  const [status, setStatus] = useState<string>("pending");
   const [showDelete, setShowDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
-  const [showRecurrencePanel, setShowRecurrencePanel] = useState(false);
-  const initializedForTaskRef = useRef<string | null>(null);
   const [dialogContentEl, setDialogContentEl] = useState<HTMLDivElement | null>(null);
   const dialogContentCallbackRef = useCallback((el: HTMLDivElement | null) => setDialogContentEl(el), []);
 
-  // Forward refs to bridge auto-create <-> association <-> invalidateTask without TDZ.
+  // Forward refs to bridge auto-create <-> association <-> form <-> invalidateTask without TDZ.
   const setTaskWorkspaceIdRef = useRef<(v: string | null) => void>(() => {});
   const invalidateTaskRef = useRef<() => void>(() => {});
+  const setTitleRef = useRef<(v: string) => void>(() => {});
+  const setAssignedToRef = useRef<(v: string) => void>(() => {});
+  const setIsRecurringRef = useRef<(v: boolean) => void>(() => {});
+  const setRecurrenceConfigRef = useRef<(v: RecurrenceConfig | null) => void>(() => {});
+  const setShowRecurrencePanelRef = useRef<(v: boolean) => void>(() => {});
 
   const auto = useAutoCreateTask({
     open,
@@ -152,8 +148,8 @@ export function TaskDetailModal({
     taskId,
     propWorkspaceId,
     currentUserId,
-    setTitle,
-    setAssignedTo,
+    setTitle: (v) => setTitleRef.current(v),
+    setAssignedTo: (v) => setAssignedToRef.current(v),
     setTaskWorkspaceId: (v) => setTaskWorkspaceIdRef.current(v),
     invalidateTask: () => invalidateTaskRef.current(),
     onAutoCreated,
@@ -163,14 +159,6 @@ export function TaskDetailModal({
   const resolvedTaskId = taskId || auto.autoCreatedTaskId;
 
   const markDirty = () => { if (auto.autoCreatedTaskId) auto.setAutoCreateDirty(true); };
-
-  useEffect(() => {
-    if (!open) {
-      setIsRecurring(false);
-      setRecurrenceConfig(null);
-      setShowRecurrencePanel(false);
-    }
-  }, [open]);
 
   const {
     showMore,
@@ -190,10 +178,10 @@ export function TaskDetailModal({
     open,
     isCardMode,
     markDirty,
-    setAssignedTo,
-    setIsRecurring,
-    setRecurrenceConfig,
-    setShowRecurrencePanel,
+    setAssignedTo: (v) => setAssignedToRef.current(v),
+    setIsRecurring: (v) => setIsRecurringRef.current(v),
+    setRecurrenceConfig: (v) => setRecurrenceConfigRef.current(v),
+    setShowRecurrencePanel: (v) => setShowRecurrencePanelRef.current(v),
   });
 
   setTaskWorkspaceIdRef.current = setTaskWorkspaceId;
@@ -242,6 +230,51 @@ export function TaskDetailModal({
   const taskNotFound = !isTaskLoading && !!taskError && !task;
   const taskErrorStatus = taskError && typeof (taskError as { status?: unknown }).status === "number" ? (taskError as { status: number }).status : 0;
 
+  const {
+    title, setTitle,
+    description, setDescription,
+    assignedTo, setAssignedTo,
+    priority, setPriority,
+    dueDate, setDueDate,
+    status, setStatus,
+    isRecurring, setIsRecurring,
+    recurrenceConfig, setRecurrenceConfig,
+    showRecurrencePanel, setShowRecurrencePanel,
+  } = useTaskDetailForm({
+    open,
+    isCardMode,
+    card,
+    task,
+    resolvedTaskId,
+    isEditing,
+    setTaskWorkspaceId,
+    setTaskMapId,
+  });
+
+  setTitleRef.current = setTitle;
+  setAssignedToRef.current = setAssignedTo;
+  setIsRecurringRef.current = setIsRecurring;
+  setRecurrenceConfigRef.current = setRecurrenceConfig;
+  setShowRecurrencePanelRef.current = setShowRecurrencePanel;
+
+  // Visual cleanup of recurrence UI when modal closes (kept in modal as external concern).
+  useEffect(() => {
+    if (!open) {
+      setIsRecurring(false);
+      setRecurrenceConfig(null);
+      setShowRecurrencePanel(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Reset subtasks alongside form reset (kept in modal because subtasks live elsewhere).
+  useEffect(() => {
+    if (!isCardMode && !isEditing) {
+      setSubtasks([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCardMode, isEditing]);
+
   const { data: cardModeMembers } = useListWorkspaceMembers(effectiveWorkspaceId, {
     query: { enabled: open && isCardMode }
   });
@@ -255,59 +288,6 @@ export function TaskDetailModal({
   const members: WorkspaceMemberResponse[] | undefined = isCardMode ? cardModeMembers : taskModeMembers;
 
   const isAdmin = (members?.find((m) => m.userId === currentUserId)?.role === "admin") || false;
-
-  useEffect(() => {
-    if (isCardMode && card) {
-      setTitle(card.title);
-      setDescription(card.description ?? "");
-      if (card.task) {
-        setPriority(card.task.priority);
-        setStatus(card.task.status);
-        setAssignedTo(card.task.assignedTo ?? "unassigned");
-        setDueDate(card.task.dueDate ? card.task.dueDate.slice(0, 10) : "");
-      } else {
-        setPriority("medium");
-        setStatus("pending");
-        setAssignedTo("unassigned");
-        setDueDate("");
-      }
-    }
-  }, [card, isCardMode]);
-
-  useEffect(() => {
-    if (!isCardMode) {
-      if (task && isEditing && task.id === resolvedTaskId) {
-        if (initializedForTaskRef.current !== resolvedTaskId) {
-          initializedForTaskRef.current = resolvedTaskId;
-          setTitle(task.title ?? "");
-          setDescription(task.description ?? "");
-          setAssignedTo(task.assignedTo ?? "unassigned");
-          setPriority(task.priority ?? "medium");
-          setDueDate(task.dueDate ? task.dueDate.split("T")[0] : "");
-          setStatus(task.status ?? "pending");
-          setTaskWorkspaceId(task.workspaceId ?? null);
-          setTaskMapId(task.mapId ?? null);
-          setIsRecurring(task.isRecurring ?? false);
-          setRecurrenceConfig(task.recurrenceConfig ?? null);
-          if (task.isRecurring && task.recurrenceConfig) {
-            setShowRecurrencePanel(true);
-          }
-        }
-      } else if (!isEditing) {
-        initializedForTaskRef.current = null;
-        setTitle("");
-        setDescription("");
-        setAssignedTo("unassigned");
-        setPriority("medium");
-        setDueDate("");
-        setStatus("pending");
-        setSubtasks([]);
-        setIsRecurring(false);
-        setRecurrenceConfig(null);
-        setShowRecurrencePanel(false);
-      }
-    }
-  }, [task, isEditing, open, isCardMode, resolvedTaskId]);
 
   const invalidateCard = () => {
     if (!mapId || !cardId) return;
