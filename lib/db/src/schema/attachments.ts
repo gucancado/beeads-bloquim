@@ -4,6 +4,7 @@ import {
   timestamp,
   uuid,
   integer,
+  index,
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
@@ -23,7 +24,14 @@ export const attachmentLinks = pgTable("attachment_links", {
   entityType: text("entity_type").notNull(),
   entityId: uuid("entity_id").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_attachment_links_entity").on(
+    table.entityType,
+    table.entityId,
+    table.createdAt,
+  ),
+  index("idx_attachment_links_file_upload").on(table.fileUploadId),
+]);
 
 export type FileUpload = typeof fileUploads.$inferSelect;
 export type AttachmentLink = typeof attachmentLinks.$inferSelect;

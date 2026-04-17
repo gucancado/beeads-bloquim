@@ -7,8 +7,10 @@ import {
   boolean,
   integer,
   jsonb,
+  index,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { users } from "./users";
@@ -91,7 +93,25 @@ export const tasks = pgTable("tasks", {
   recurrenceConfig: jsonb("recurrence_config").$type<RecurrenceConfig>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_tasks_workspace_status_due").on(
+    table.workspaceId,
+    table.status,
+    table.dueDate,
+  ),
+  index("idx_tasks_assigned_to").on(table.assignedTo),
+  index("idx_tasks_parent")
+    .on(table.parentTaskId)
+    .where(sql`${table.parentTaskId} IS NOT NULL`),
+  index("idx_tasks_overdue_scan")
+    .on(table.dueDate)
+    .where(
+      sql`${table.status} NOT IN ('completed','draft') AND ${table.overdue} = false`,
+    ),
+  index("idx_tasks_map")
+    .on(table.mapId)
+    .where(sql`${table.mapId} IS NOT NULL`),
+]);
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
@@ -119,7 +139,9 @@ export const subtasks = pgTable("subtasks", {
   order: integer("order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_subtasks_task_order").on(table.taskId, table.order),
+]);
 
 export const insertSubtaskSchema = createInsertSchema(subtasks).omit({
   id: true,
@@ -151,6 +173,8 @@ export const taskActivities = pgTable("task_activities", {
   type: taskActivityTypeEnum("type").notNull(),
   metadata: jsonb("metadata").$type<Record<string, string | null>>().notNull().default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_task_activities_task_created").on(table.taskId, table.createdAt),
+]);
 
 export type TaskActivity = typeof taskActivities.$inferSelect;

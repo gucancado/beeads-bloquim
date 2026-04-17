@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, boolean, integer, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, boolean, integer, primaryKey, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { users } from "./users";
@@ -20,17 +20,27 @@ export const workspaces = pgTable("workspaces", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const workspaceMembers = pgTable("workspace_members", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  role: workspaceRoleEnum("role").notNull().default("executor"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const workspaceMembers = pgTable(
+  "workspace_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: workspaceRoleEnum("role").notNull().default("executor"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_workspace_members_workspace_user").on(
+      table.workspaceId,
+      table.userId,
+    ),
+    index("idx_workspace_members_user").on(table.userId),
+  ],
+);
 
 export const userWorkspaceOrder = pgTable(
   "user_workspace_order",

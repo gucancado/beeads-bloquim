@@ -6,7 +6,9 @@ import {
   doublePrecision,
   pgEnum,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { maps } from "./maps";
@@ -37,7 +39,12 @@ export const cards = pgTable("cards", {
   taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_cards_map").on(table.mapId),
+  index("idx_cards_task")
+    .on(table.taskId)
+    .where(sql`${table.taskId} IS NOT NULL`),
+]);
 
 export const cardConnections = pgTable("card_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -53,9 +60,14 @@ export const cardConnections = pgTable("card_connections", {
   sourceHandle: text("source_handle"),
   targetHandle: text("target_handle"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  uniqueConnection: unique("card_connections_source_target_unique").on(table.sourceCardId, table.targetCardId),
-}));
+}, (table) => [
+  unique("card_connections_source_target_unique").on(
+    table.sourceCardId,
+    table.targetCardId,
+  ),
+  index("idx_card_connections_map").on(table.mapId),
+  index("idx_card_connections_target").on(table.targetCardId),
+]);
 
 export const insertCardSchema = createInsertSchema(cards).omit({
   id: true,

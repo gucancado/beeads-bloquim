@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, boolean, primaryKey, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { workspaces } from "./workspaces";
@@ -16,7 +16,9 @@ export const maps = pgTable("maps", {
     .references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_maps_workspace").on(table.workspaceId),
+]);
 
 export const insertMapSchema = createInsertSchema(maps).omit({
   id: true,
@@ -39,7 +41,13 @@ export const userMapAccess = pgTable(
       .references(() => maps.id, { onDelete: "cascade" }),
     lastAccessedAt: timestamp("last_accessed_at").notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.mapId] })],
+  (t) => [
+    primaryKey({ columns: [t.userId, t.mapId] }),
+    index("idx_user_map_access_user_recent").on(
+      t.userId,
+      t.lastAccessedAt.desc(),
+    ),
+  ],
 );
 
 export type UserMapAccess = typeof userMapAccess.$inferSelect;
