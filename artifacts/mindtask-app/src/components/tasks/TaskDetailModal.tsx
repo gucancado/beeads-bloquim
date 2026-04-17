@@ -6,7 +6,7 @@ import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, Briefcase, ChevronDown, LayoutDashboard } from "lucide-react";
+import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, Briefcase, ChevronDown, LayoutDashboard } from "lucide-react";
 import { RecurrencePanel } from "@/components/tasks/RecurrencePanel";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
@@ -30,24 +30,10 @@ import { AttachmentsSection } from "@/components/tasks/AttachmentsSection";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
-import { SortableSubtask, type SubtaskItem } from "@/components/tasks/subtasks/SortableSubtask";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
+import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
+import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  KeyboardSensor,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
 
 interface TaskResponseExtended extends TaskResponse {
   overdue?: boolean;
@@ -108,10 +94,6 @@ interface TaskDetailModalProps {
   onDuplicated?: (newTaskId: string, newCardId: string | null) => void;
 }
 
-function generateLocalId() {
-  return `local-${Math.random().toString(36).slice(2)}`;
-}
-
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -152,8 +134,6 @@ export function TaskDetailModal({
   const [showDelete, setShowDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
-  const [localSubtasks, setLocalSubtasks] = useState<SubtaskItem[]>([]);
-  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
   const [taskMapId, setTaskMapId] = useState<string | null>(null);
@@ -161,7 +141,6 @@ export function TaskDetailModal({
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
   const [showRecurrencePanel, setShowRecurrencePanel] = useState(false);
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const initializedForTaskRef = useRef<string | null>(null);
   const [dialogContentEl, setDialogContentEl] = useState<HTMLDivElement | null>(null);
   const dialogContentCallbackRef = useCallback((el: HTMLDivElement | null) => setDialogContentEl(el), []);
@@ -201,11 +180,6 @@ export function TaskDetailModal({
     }
   }, [open]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
   const { data: rawCard, isLoading: isCardLoading } = useGetCard(effectiveWorkspaceId, mapId ?? "", cardId ?? "", {
     query: { enabled: isCardMode && open && !!cardId }
   });
@@ -213,6 +187,25 @@ export function TaskDetailModal({
   const card = rawCard as (Omit<typeof rawCard, "task"> & { task?: TaskResponseExtended | null }) | undefined;
 
   const taskIdResolved: string | undefined = isCardMode ? (card?.task?.id ?? undefined) : (resolvedTaskId ?? undefined);
+
+  const {
+    subtasks,
+    setSubtasks,
+    sensors,
+    inputRefs,
+    addSubtask,
+    handleChange,
+    handleToggle,
+    handleBlur,
+    handleKeyDown,
+    handleDragEnd,
+    flushPending,
+  } = useSubtasksState({
+    taskIdResolved,
+    effectiveWorkspaceId,
+    open,
+    markDirty,
+  });
 
   const { data: task, isLoading: isTaskLoading, error: taskError } = useQuery<WorkspaceTask>({
     queryKey: isStandalone
@@ -238,27 +231,6 @@ export function TaskDetailModal({
   const members: WorkspaceMemberResponse[] | undefined = isCardMode ? cardModeMembers : taskModeMembers;
 
   const isAdmin = (members?.find((m) => m.userId === currentUserId)?.role === "admin") || false;
-
-  const subtasksEndpoint = effectiveWorkspaceId
-    ? `/api/workspaces/${effectiveWorkspaceId}/tasks/${taskIdResolved}/subtasks`
-    : `/api/my-tasks/${taskIdResolved}/subtasks`;
-
-  const { data: subtasksData } = useQuery<SubtaskItem[]>({
-    queryKey: [subtasksEndpoint],
-    queryFn: () => customFetch(subtasksEndpoint),
-    enabled: open && !!taskIdResolved,
-  });
-
-  useEffect(() => {
-    if (subtasksData) setLocalSubtasks(subtasksData);
-  }, [subtasksData]);
-
-  useEffect(() => {
-    if (pendingFocusId && inputRefs.current[pendingFocusId]) {
-      inputRefs.current[pendingFocusId]?.focus();
-      setPendingFocusId(null);
-    }
-  }, [pendingFocusId, localSubtasks]);
 
   useEffect(() => {
     if (isCardMode && card) {
@@ -305,7 +277,7 @@ export function TaskDetailModal({
         setPriority("medium");
         setDueDate("");
         setStatus("pending");
-        setLocalSubtasks([]);
+        setSubtasks([]);
         setIsRecurring(false);
         setRecurrenceConfig(null);
         setShowRecurrencePanel(false);
@@ -328,20 +300,6 @@ export function TaskDetailModal({
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${effectiveWorkspaceId}/tasks`] });
     }
   };
-
-  const saveSubtasksMutation = useMutation({
-    mutationFn: (items: SubtaskItem[]) =>
-      customFetch(subtasksEndpoint, {
-        method: "PUT",
-        body: JSON.stringify({ subtasks: items.map((s, idx) => ({ id: s.id.startsWith("local-") ? undefined : s.id, text: s.text, completed: s.completed, order: idx })) }),
-      }),
-    onSuccess: (data: SubtaskItem[]) => {
-      setLocalSubtasks(prev => {
-        const newLocal = prev.filter(s => s.id.startsWith("local-") && s.text.trim() === "");
-        return [...data, ...newLocal];
-      });
-    },
-  });
 
   const updateCardMut = useUpdateCard();
   const updateTaskDetailsMut = useUpdateTaskDetails();
@@ -545,9 +503,7 @@ export function TaskDetailModal({
       payload.assignedTo = assignedTo === "unassigned" ? null : assignedTo;
     }
     saveMutation.mutate({ body: payload, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-    if (taskIdResolved) {
-      saveSubtasksMutation.mutate(localSubtasks.filter(s => s.text.trim() !== ""));
-    }
+    flushPending();
   };
 
   const handleStatusChange = (newStatus: string) => {
@@ -649,71 +605,6 @@ export function TaskDetailModal({
       }
     }
     onClose();
-  };
-
-  const addSubtask = (afterId?: string) => {
-    const newId = generateLocalId();
-    setLocalSubtasks(prev => {
-      if (afterId) {
-        const idx = prev.findIndex(s => s.id === afterId);
-        const insertAt = idx >= 0 ? idx + 1 : prev.length;
-        const next = [...prev];
-        next.splice(insertAt, 0, { id: newId, text: "", completed: false, order: insertAt });
-        return next;
-      }
-      return [...prev, { id: newId, text: "", completed: false, order: prev.length }];
-    });
-    setPendingFocusId(newId);
-    markDirty();
-  };
-
-  const handleSubtaskChange = (id: string, text: string) => {
-    setLocalSubtasks(prev => prev.map(s => s.id === id ? { ...s, text } : s));
-    markDirty();
-  };
-
-  const handleSubtaskToggle = (id: string) => {
-    const updated = localSubtasks.map(s => s.id === id ? { ...s, completed: !s.completed } : s);
-    setLocalSubtasks(updated);
-    markDirty();
-    if (taskIdResolved) saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
-  };
-
-  const handleSubtaskBlur = (id: string) => {
-    const subtask = localSubtasks.find(s => s.id === id);
-    if (subtask && subtask.text.trim() === "") {
-      const updated = localSubtasks.filter(s => s.id !== id);
-      setLocalSubtasks(updated);
-      if (taskIdResolved) saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
-    } else if (taskIdResolved) {
-      saveSubtasksMutation.mutate(localSubtasks.filter(s => s.text.trim() !== ""));
-    }
-  };
-
-  const handleSubtaskKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, id: string) => {
-    if (e.key === "Backspace") {
-      const subtask = localSubtasks.find(s => s.id === id);
-      if (subtask && subtask.text === "") {
-        e.preventDefault();
-        const updated = localSubtasks.filter(s => s.id !== id);
-        setLocalSubtasks(updated);
-        if (taskIdResolved) saveSubtasksMutation.mutate(updated.filter(s => s.text.trim() !== ""));
-      }
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      addSubtask(id);
-    }
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIndex = localSubtasks.findIndex(s => s.id === active.id);
-      const newIndex = localSubtasks.findIndex(s => s.id === over.id);
-      const reordered = arrayMove(localSubtasks, oldIndex, newIndex);
-      setLocalSubtasks(reordered);
-      if (taskIdResolved) saveSubtasksMutation.mutate(reordered.filter(s => s.text.trim() !== ""));
-    }
   };
 
   const isOverdue = isCardMode
@@ -1095,37 +986,17 @@ export function TaskDetailModal({
                       </div>
                     </div>
 
-                    <div>
-                      <div className="flex items-center mb-1.5">
-                        <button
-                          onClick={() => addSubtask()}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted"
-                          title="Adicionar subtarefa"
-                        >
-                          <ListChecks className="w-3.5 h-3.5" />
-                          <span className="lowercase">subtarefas +</span>
-                        </button>
-                      </div>
-                      {localSubtasks.length > 0 && (
-                        <div className="bg-muted/30 rounded-xl px-2 py-1.5 space-y-0.5">
-                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={localSubtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                              {localSubtasks.map(subtask => (
-                                <SortableSubtask
-                                  key={subtask.id}
-                                  subtask={subtask}
-                                  onChange={handleSubtaskChange}
-                                  onToggle={handleSubtaskToggle}
-                                  onBlur={handleSubtaskBlur}
-                                  onKeyDown={handleSubtaskKeyDown}
-                                  inputRef={(el) => { inputRefs.current[subtask.id] = el; }}
-                                />
-                              ))}
-                            </SortableContext>
-                          </DndContext>
-                        </div>
-                      )}
-                    </div>
+                    <SubtasksList
+                      subtasks={subtasks}
+                      sensors={sensors}
+                      inputRefs={inputRefs}
+                      onAdd={() => addSubtask()}
+                      onChange={handleChange}
+                      onToggle={handleToggle}
+                      onBlur={handleBlur}
+                      onKeyDown={handleKeyDown}
+                      onDragEnd={handleDragEnd}
+                    />
 
                     {/* Description */}
                     <div>
