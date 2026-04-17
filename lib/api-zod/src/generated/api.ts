@@ -41,7 +41,6 @@ export const LoginResponse = zod.object({
     createdAt: zod.date(),
     avatarUrl: zod.string().nullish(),
   }),
-  token: zod.string(),
 });
 
 /**

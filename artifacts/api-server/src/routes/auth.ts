@@ -51,7 +51,6 @@ router.post("/register", registerLimiter, async (req, res) => {
 
   res.status(201).json({
     user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
-    token,
   });
 });
 
@@ -82,7 +81,6 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   res.json({
     user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
-    token,
   });
 });
 

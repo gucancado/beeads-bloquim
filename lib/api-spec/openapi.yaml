@@ -1122,9 +1122,7 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/UserResponse"
-        token:
-          type: string
-      required: [user, token]
+      required: [user]
 
     CreateWorkspaceRequest:
       type: object

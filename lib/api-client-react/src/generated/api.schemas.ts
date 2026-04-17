@@ -82,7 +82,6 @@ export interface UserResponse {
 
 export interface AuthResponse {
   user: UserResponse;
-  token: string;
 }
 
 export interface CreateWorkspaceRequest {
