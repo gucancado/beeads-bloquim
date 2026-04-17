@@ -24,6 +24,13 @@ import {
   toVisualStatus,
   syncCardVisual,
 } from "../services/taskVisualSyncService";
+import {
+  taskBelongsToWorkspace,
+  listTaskAttachments,
+  createTaskAttachment,
+  deleteTaskAttachment,
+  getTaskAttachmentForDownload,
+} from "../services/taskAttachmentsService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -1533,29 +1540,12 @@ const createAttachmentSchema = z.object({
 router.get("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
 
-  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!taskExists) {
+  if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
 
-  const attachments = await db
-    .select({
-      id: attachmentLinks.id,
-      fileUploadId: fileUploads.id,
-      objectPath: fileUploads.objectPath,
-      fileName: fileUploads.fileName,
-      fileSize: fileUploads.fileSize,
-      mimeType: fileUploads.mimeType,
-      uploadedBy: fileUploads.uploadedBy,
-      createdAt: attachmentLinks.createdAt,
-    })
-    .from(attachmentLinks)
-    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
-    .where(and(eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
-    .orderBy(asc(attachmentLinks.createdAt));
-
-  res.json(attachments);
+  res.json(await listTaskAttachments(taskId));
 });
 
 router.post("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -1568,70 +1558,27 @@ router.post("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", 
     return;
   }
 
-  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!taskExists) {
+  if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
 
-  const { objectPath, fileName, fileSize, mimeType } = parsed.data;
-
-  const [fileUpload] = await db.insert(fileUploads).values({
-    objectPath,
-    fileName,
-    fileSize,
-    mimeType,
-    uploadedBy: actorId,
-  }).returning();
-
-  const [link] = await db.insert(attachmentLinks).values({
-    fileUploadId: fileUpload.id,
-    entityType: "task",
-    entityId: taskId,
-  }).returning();
-
-  res.status(201).json({
-    id: link.id,
-    fileUploadId: fileUpload.id,
-    objectPath: fileUpload.objectPath,
-    fileName: fileUpload.fileName,
-    fileSize: fileUpload.fileSize,
-    mimeType: fileUpload.mimeType,
-    uploadedBy: fileUpload.uploadedBy,
-    createdAt: link.createdAt,
-  });
+  const created = await createTaskAttachment(taskId, actorId, parsed.data);
+  res.status(201).json(created);
 });
 
 router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, attachmentId } = req.params;
 
-  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!taskExists) {
+  if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
 
-  const [link] = await db
-    .select({ id: attachmentLinks.id, fileUploadId: attachmentLinks.fileUploadId })
-    .from(attachmentLinks)
-    .where(and(eq(attachmentLinks.id, attachmentId), eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
-    .limit(1);
-
-  if (!link) {
+  const deleted = await deleteTaskAttachment(taskId, attachmentId);
+  if (!deleted) {
     res.status(404).json({ error: "Attachment not found" });
     return;
-  }
-
-  await db.delete(attachmentLinks).where(eq(attachmentLinks.id, link.id));
-
-  const [otherLinks] = await db
-    .select({ id: attachmentLinks.id })
-    .from(attachmentLinks)
-    .where(eq(attachmentLinks.fileUploadId, link.fileUploadId))
-    .limit(1);
-
-  if (!otherLinks) {
-    await db.delete(fileUploads).where(eq(fileUploads.id, link.fileUploadId));
   }
 
   res.json({ success: true });
@@ -1642,24 +1589,12 @@ const objectStorageService = new ObjectStorageService();
 router.get("/:taskId/attachments/:attachmentId/download", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, attachmentId } = req.params;
 
-  const [taskExists] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!taskExists) {
+  if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
 
-  const [attachment] = await db
-    .select({
-      id: attachmentLinks.id,
-      objectPath: fileUploads.objectPath,
-      fileName: fileUploads.fileName,
-      mimeType: fileUploads.mimeType,
-    })
-    .from(attachmentLinks)
-    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
-    .where(and(eq(attachmentLinks.id, attachmentId), eq(attachmentLinks.entityType, "task"), eq(attachmentLinks.entityId, taskId)))
-    .limit(1);
-
+  const attachment = await getTaskAttachmentForDownload(taskId, attachmentId);
   if (!attachment) {
     res.status(404).json({ error: "Attachment not found" });
     return;
