@@ -32,6 +32,8 @@ import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
+import { TaskAssociationSelector } from "@/components/tasks/association/TaskAssociationSelector";
+import { useTaskAssociation } from "@/components/tasks/association/useTaskAssociation";
 import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
 
@@ -134,9 +136,6 @@ export function TaskDetailModal({
   const [showDelete, setShowDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
-  const [showMore, setShowMore] = useState(false);
-  const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
-  const [taskMapId, setTaskMapId] = useState<string | null>(null);
   const [autoCreateDirty, setAutoCreateDirty] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
@@ -145,34 +144,12 @@ export function TaskDetailModal({
   const [dialogContentEl, setDialogContentEl] = useState<HTMLDivElement | null>(null);
   const dialogContentCallbackRef = useCallback((el: HTMLDivElement | null) => setDialogContentEl(el), []);
 
-  const effectiveWorkspaceId = propWorkspaceId || taskWorkspaceId || "";
-  // isStandalone is derived from the PROP, not effectiveWorkspaceId.
-  // effectiveWorkspaceId can change mid-flight (once taskWorkspaceId resolves),
-  // which would switch the query key and trigger a 403 workspace fetch for
-  // users who are assigned a task but not workspace members.
-  const isStandalone = !propWorkspaceId;
 
   const markDirty = () => { if (autoCreatedTaskId) setAutoCreateDirty(true); };
-
-  const { data: userWorkspaces } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["/api/workspaces"],
-    queryFn: () => customFetch("/api/workspaces"),
-    enabled: open && !isCardMode,
-  });
-
-  const { data: workspaceMaps } = useQuery<{ id: string; name: string; hidden: boolean }[]>({
-    queryKey: [`/api/workspaces/${effectiveWorkspaceId}/maps`],
-    queryFn: () => customFetch(`/api/workspaces/${effectiveWorkspaceId}/maps`),
-    enabled: open && !!effectiveWorkspaceId && !isCardMode,
-    select: (data) => data.filter(m => !m.hidden),
-  });
 
   useEffect(() => {
     if (!open) {
       setAutoCreatedTaskId(null);
-      setTaskWorkspaceId(null);
-      setTaskMapId(null);
-      setShowMore(false);
       setAutoCreateDirty(false);
       setIsRecurring(false);
       setRecurrenceConfig(null);
@@ -187,6 +164,36 @@ export function TaskDetailModal({
   const card = rawCard as (Omit<typeof rawCard, "task"> & { task?: TaskResponseExtended | null }) | undefined;
 
   const taskIdResolved: string | undefined = isCardMode ? (card?.task?.id ?? undefined) : (resolvedTaskId ?? undefined);
+
+  const {
+    showMore,
+    setShowMore,
+    setTaskWorkspaceId,
+    taskMapId,
+    setTaskMapId,
+    effectiveWorkspaceId,
+    userWorkspaces,
+    workspaceMaps,
+    changeWorkspace,
+    changeMap,
+  } = useTaskAssociation({
+    resolvedTaskId,
+    propWorkspaceId,
+    currentUserId,
+    open,
+    isCardMode,
+    markDirty,
+    setAssignedTo,
+    setIsRecurring,
+    setRecurrenceConfig,
+    setShowRecurrencePanel,
+  });
+
+  // isStandalone is derived from the PROP, not effectiveWorkspaceId.
+  // effectiveWorkspaceId can change mid-flight (once taskWorkspaceId resolves),
+  // which would switch the query key and trigger a 403 workspace fetch for
+  // users who are assigned a task but not workspace members.
+  const isStandalone = !propWorkspaceId;
 
   const {
     subtasks,
@@ -777,101 +784,17 @@ export function TaskDetailModal({
                 </div>
 
                 {!isCardMode && isEditing && (
-                  <div>
-                    {!showMore && (
-                      <button
-                        type="button"
-                        onClick={() => setShowMore(true)}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-1 py-0.5 rounded lowercase"
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                        mais
-                      </button>
-                    )}
-                    {showMore && (
-                      <div className="mt-2 grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
-                            <Briefcase className="w-3 h-3" /> Espaço de trabalho
-                          </label>
-                          <Select
-                            value={effectiveWorkspaceId || "none"}
-                            onValueChange={v => {
-                              const newWsId = v === "none" ? null : v;
-                              if (resolvedTaskId) {
-                                customFetch(`/api/my-tasks/${resolvedTaskId}/association`, {
-                                  method: "PATCH",
-                                  body: JSON.stringify({ workspaceId: newWsId, mapId: null }),
-                                }).then(() => {
-                                  setTaskWorkspaceId(newWsId);
-                                  setTaskMapId(null);
-                                  markDirty();
-                                  if (!newWsId) {
-                                    setAssignedTo(currentUserId);
-                                  }
-                                  invalidateTask();
-                                  queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${resolvedTaskId}`] });
-                                  if (newWsId) {
-                                    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${newWsId}/tasks`] });
-                                    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${newWsId}/tasks/${resolvedTaskId}`] });
-                                  }
-                                }).catch(() => toast({ title: "Erro ao alterar workspace", variant: "destructive" }));
-                              }
-                            }}
-                            disabled={!!propWorkspaceId}
-                          >
-                            <SelectTrigger className="bg-background rounded-xl h-10">
-                              <SelectValue placeholder="Nenhum" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none"><span className="lowercase">Nenhum</span></SelectItem>
-                              {userWorkspaces?.map((ws) => (
-                                <SelectItem key={ws.id} value={ws.id}>{ws.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
-                            <LayoutDashboard className="w-3 h-3" /> Plano
-                          </label>
-                          <Select
-                            value={taskMapId || "none"}
-                            onValueChange={v => {
-                              const newMapId = v === "none" ? null : v;
-                              if (resolvedTaskId) {
-                                customFetch(`/api/my-tasks/${resolvedTaskId}/association`, {
-                                  method: "PATCH",
-                                  body: JSON.stringify({ mapId: newMapId }),
-                                }).then(() => {
-                                  setTaskMapId(newMapId);
-                                  markDirty();
-                                  // Clear recurrence when associating with a map
-                                  if (newMapId) {
-                                    setIsRecurring(false);
-                                    setRecurrenceConfig(null);
-                                    setShowRecurrencePanel(false);
-                                  }
-                                  invalidateTask();
-                                }).catch(() => toast({ title: "Erro ao alterar plano", variant: "destructive" }));
-                              }
-                            }}
-                            disabled={!effectiveWorkspaceId}
-                          >
-                            <SelectTrigger className="bg-background rounded-xl h-10">
-                              <SelectValue placeholder="Nenhum" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none"><span className="lowercase">Nenhum</span></SelectItem>
-                              {workspaceMaps?.map((m) => (
-                                <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <TaskAssociationSelector
+                    showMore={showMore}
+                    onExpand={() => setShowMore(true)}
+                    effectiveWorkspaceId={effectiveWorkspaceId}
+                    taskMapId={taskMapId}
+                    propWorkspaceId={propWorkspaceId}
+                    userWorkspaces={userWorkspaces}
+                    workspaceMaps={workspaceMaps}
+                    onWorkspaceChange={changeWorkspace}
+                    onMapChange={changeMap}
+                  />
                 )}
               </div>
 
