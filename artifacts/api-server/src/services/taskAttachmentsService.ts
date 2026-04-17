@@ -43,6 +43,31 @@ export async function taskBelongsToWorkspace(
   return Boolean(row);
 }
 
+export interface TaskOwnership {
+  assignedTo: string | null;
+  workspaceId: string | null;
+}
+
+/**
+ * Returns ownership info for a task, or `null` if the task does not exist.
+ * Used by the personal-task attachment routes (`/api/my-tasks`) to decide
+ * between 404 (no task), 403 (task belongs to someone else) and 400 (task
+ * is a workspace task and must use the workspace endpoint).
+ */
+export async function getTaskOwnership(
+  taskId: string,
+): Promise<TaskOwnership | null> {
+  const [row] = await db
+    .select({
+      assignedTo: tasks.assignedTo,
+      workspaceId: tasks.workspaceId,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  return row ?? null;
+}
+
 /** Lists attachments for a task in upload order (oldest first). */
 export async function listTaskAttachments(
   taskId: string,
