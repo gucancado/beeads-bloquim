@@ -19,28 +19,13 @@ import {
   computeTerminalCardId,
   rerouteDownstreamConnections,
 } from "../services/approvalChainService";
+import {
+  parseDateNoon,
+  toVisualStatus,
+  syncCardVisual,
+} from "../services/taskVisualSyncService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
-
-function parseDateNoon(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const dateOnly = value.slice(0, 10);
-  return new Date(dateOnly + "T12:00:00.000Z");
-}
-
-function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft" | "no_task" {
-  if (overdue && status !== "completed" && status !== "blocked" && status !== "draft") return "overdue";
-  const validStatuses = ["pending", "in_progress", "completed", "overdue", "blocked", "draft"] as const;
-  type ValidStatus = typeof validStatuses[number];
-  return validStatuses.includes(status as ValidStatus) ? (status as ValidStatus) : "pending";
-}
-
-async function syncCardVisual(taskId: string, status: string, overdue: boolean) {
-  const visual = toVisualStatus(status, overdue);
-  await db.update(cards)
-    .set({ statusVisual: visual, updatedAt: new Date() })
-    .where(eq(cards.taskId, taskId));
-}
 
 const router: IRouter = Router({ mergeParams: true });
 

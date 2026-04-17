@@ -6,6 +6,7 @@ import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
+import { toVisualStatus } from "../services/taskVisualSyncService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -44,13 +45,6 @@ const updateTaskDetailsSchema = z.object({
   dueDate: z.string().datetime().nullable().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
-
-function toVisualStatus(status: string, overdue: boolean): "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft" | "no_task" {
-  if (overdue && status !== "completed" && status !== "blocked" && status !== "draft") return "overdue";
-  const validStatuses = ["pending", "in_progress", "completed", "overdue", "blocked", "draft"] as const;
-  type ValidStatus = typeof validStatuses[number];
-  return validStatuses.includes(status as ValidStatus) ? (status as ValidStatus) : "pending";
-}
 
 function getApprovalTaskStatusForCards(parentStatus: string): TaskStatus {
   switch (parentStatus) {

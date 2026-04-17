@@ -13,6 +13,7 @@ import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { parseDateNoon } from "../services/taskVisualSyncService";
 
 const router: IRouter = Router();
 
@@ -191,11 +192,6 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   return res.json(taskList);
 });
 
-function parseDateNoon(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const dateOnly = value.slice(0, 10);
-  return new Date(dateOnly + "T12:00:00.000Z");
-}
 
 const recurrenceConfigSchema = z.object({
   type: z.enum(["daily", "weekly", "monthly", "yearly", "periodic", "custom"]),
