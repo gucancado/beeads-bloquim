@@ -25,17 +25,12 @@ export interface TaskActivityItem {
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
-function authHeaders(): HeadersInit {
-  const token = localStorage.getItem("mindtask_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
       ...(init.headers ?? {}),
     },
   });

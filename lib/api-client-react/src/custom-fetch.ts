@@ -283,10 +283,7 @@ export async function customFetch<T = unknown>(
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
   }
 
-  const token = typeof localStorage !== "undefined" ? localStorage.getItem("mindtask_token") : null;
-  const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, authHeaders, headersInit);
+  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
   if (
     typeof init.body === "string" &&
@@ -302,7 +299,7 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, { ...init, method, headers, credentials: "include" });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

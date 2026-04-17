@@ -276,13 +276,10 @@ export default function WorkspaceDetailPage() {
 
   const renameMutation = useMutation({
     mutationFn: async (newName: string) => {
-      const token = localStorage.getItem("mindtask_token");
       const res = await fetch(`/api/workspaces/${workspaceId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
       });
       if (!res.ok) throw new Error("Failed to rename workspace");
@@ -300,13 +297,10 @@ export default function WorkspaceDetailPage() {
 
   const colorMutation = useMutation({
     mutationFn: async (colorIndex: number | null) => {
-      const token = localStorage.getItem("mindtask_token");
       const res = await fetch(`/api/workspaces/${workspaceId}/color`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ colorIndex }),
       });
       if (!res.ok) throw new Error("Failed to update color");

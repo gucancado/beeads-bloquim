@@ -316,12 +316,11 @@ function WorkspaceCard({ ws, showHidden }: {
 }
 
 function useSidebarOrder() {
-  const token = localStorage.getItem("mindtask_token");
   return useQuery<Array<{ id: string }>>({
     queryKey: ["/api/sidebar/workspaces"],
     queryFn: async () => {
       const res = await fetch("/api/sidebar/workspaces", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch sidebar order");
       return res.json();

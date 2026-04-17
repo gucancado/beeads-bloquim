@@ -17,10 +17,7 @@ export default function LoginPage() {
 
   const loginMutation = useLogin({
     mutation: {
-      onSuccess: (data) => {
-        if (data?.token) {
-          localStorage.setItem("mindtask_token", data.token);
-        }
+      onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
         setLocation("/my-tasks");
       },

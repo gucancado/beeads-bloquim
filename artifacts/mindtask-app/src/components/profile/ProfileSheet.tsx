@@ -81,13 +81,11 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
 
     setIsUploadingAvatar(true);
     try {
-      const token = localStorage.getItem("mindtask_token");
-
       const urlRes = await fetch("/api/storage/uploads/request-url", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           name: file.name,

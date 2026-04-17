@@ -26,13 +26,10 @@ function validateFile(file: File): string | null {
 }
 
 async function uploadFileWithAuth(file: File): Promise<{ objectPath: string } | null> {
-  const token = localStorage.getItem("mindtask_token");
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
   const urlRes = await fetch("/api/storage/uploads/request-url", {
     method: "POST",
-    headers,
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
   });
 
@@ -147,11 +144,8 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
   }, [deleteAttachmentMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
 
   const handleDownload = useCallback((attachment: AttachmentResponse) => {
-    const token = localStorage.getItem("mindtask_token");
     const url = `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachment.id}/download`;
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    fetch(url, { headers })
+    fetch(url, { credentials: "include" })
       .then(res => {
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         return res.blob();
@@ -256,11 +250,8 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<Attachments
   }, [deleteMut, taskId, queryClient, attachmentsKey, toast]);
 
   const handleDownload = useCallback((attachment: AttachmentResponse) => {
-    const token = localStorage.getItem("mindtask_token");
     const url = `/api/my-tasks/${taskId}/attachments/${attachment.id}/download`;
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    fetch(url, { headers })
+    fetch(url, { credentials: "include" })
       .then(res => {
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         return res.blob();

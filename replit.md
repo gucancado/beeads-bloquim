@@ -14,7 +14,7 @@ Plataforma web de planejamento e gestão de tarefas baseada em mapas mentais. Pe
 - **Backend**: Express 5
 - **Banco de dados**: PostgreSQL + Drizzle ORM
 - **Validação**: Zod (zod/v4), drizzle-zod
-- **Auth**: JWT via jsonwebtoken + bcryptjs (token em localStorage key "mindtask_token")
+- **Auth**: JWT via jsonwebtoken + bcryptjs (cookie HttpOnly `token`; backend ainda aceita `Authorization: Bearer` por compatibilidade)
 - **Estado**: Zustand + React Query (via Orval codegen)
 - **Canvas**: ReactFlow (com ReactFlowProvider, custom nodes MindMapNode)
 - **Gráficos**: Recharts
@@ -144,7 +144,7 @@ lib/
 
 - TypeScript errors em `@workspace/api-client-react` são de módulo (tsc), não runtime (Vite/tsx ignoram)
 - Proxy de rotas: Replit roteia `/api/*` → porta 8080, `/*` → porta 24117
-- Autenticação: JWT em `localStorage.getItem("mindtask_token")`, injetado por `customFetch`
+- Autenticação: JWT em cookie HttpOnly `token` (SameSite=Lax, Secure em prod, 7 dias). Frontend usa `credentials: "include"` em todas as chamadas. Backend ainda aceita `Authorization: Bearer` (Fase D removerá).
 - O `customFetch` em `lib/api-client-react/src/custom-fetch.ts` é chamado por todos os hooks gerados
 
 ## Comandos

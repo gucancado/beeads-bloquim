@@ -22,9 +22,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const logoutMutation = useLogout({
     mutation: {
       onSuccess: () => {
-        localStorage.removeItem("mindtask_token");
+        try { localStorage.removeItem("mindtask_token"); } catch {}
         window.location.href = "/login";
-      }
+      },
+      onError: () => {
+        try { localStorage.removeItem("mindtask_token"); } catch {}
+        window.location.href = "/login";
+      },
     }
   });
 
