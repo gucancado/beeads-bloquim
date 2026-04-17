@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, Briefcase, ChevronDown, LayoutDashboard, Repeat } from "lucide-react";
+import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, ListChecks, Briefcase, ChevronDown, LayoutDashboard } from "lucide-react";
 import { RecurrencePanel } from "@/components/tasks/RecurrencePanel";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
@@ -33,6 +32,7 @@ import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { SortableSubtask, type SubtaskItem } from "@/components/tasks/subtasks/SortableSubtask";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
+import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
 import {
   DndContext,
   closestCenter,
@@ -1037,68 +1037,41 @@ export function TaskDetailModal({
                             }}
                             className={`rounded-xl h-10 text-sm flex-1 min-w-0 ${isOverdue ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : "bg-background"}`}
                           />
-                          {!isCardMode && (() => {
-                            const hasMapId = !!(mapId || taskMapId);
-                            const isDisabled = hasMapId;
-                            return (
-                              <Popover
-                                open={showRecurrencePanel}
-                                onOpenChange={(open) => {
-                                  if (isDisabled) return;
-                                  if (open && !showRecurrencePanel) {
-                                    setShowRecurrencePanel(true);
-                                    if (!recurrenceConfig) {
-                                      const defaultCfg: RecurrenceConfig = { type: "weekly", weekDays: [1] };
-                                      setRecurrenceConfig(defaultCfg);
-                                      setIsRecurring(true);
-                                      if (isEditing && resolvedTaskId) {
-                                        saveMutation.mutate({ body: { isRecurring: true, recurrenceConfig: defaultCfg }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                                      }
+                          {!isCardMode && (
+                            <RecurrencePopover
+                              disabled={!!(mapId || taskMapId)}
+                              open={showRecurrencePanel}
+                              onOpenChange={(open) => {
+                                if (mapId || taskMapId) return;
+                                if (open && !showRecurrencePanel) {
+                                  setShowRecurrencePanel(true);
+                                  if (!recurrenceConfig) {
+                                    const defaultCfg: RecurrenceConfig = { type: "weekly", weekDays: [1] };
+                                    setRecurrenceConfig(defaultCfg);
+                                    setIsRecurring(true);
+                                    if (isEditing && resolvedTaskId) {
+                                      saveMutation.mutate({ body: { isRecurring: true, recurrenceConfig: defaultCfg }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                                     }
-                                  } else if (!open) {
-                                    setShowRecurrencePanel(false);
                                   }
-                                }}
-                              >
-                                <PopoverTrigger asChild>
-                                  <button
-                                    type="button"
-                                    disabled={isDisabled}
-                                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all shrink-0 ${
-                                      isDisabled
-                                        ? "opacity-40 cursor-not-allowed border-border bg-background text-muted-foreground"
-                                        : isRecurring
-                                          ? "border-primary bg-primary/10 text-primary hover:bg-primary/20"
-                                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                                    }`}
-                                    title={isDisabled ? "não é possível ter tarefas recorrentes em um plano" : isRecurring && recurrenceConfig ? `repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[recurrenceConfig.type]}` : "configurar repetição"}
-                                  >
-                                    <Repeat className="w-4 h-4" />
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  align="end"
-                                  className="w-auto p-0 rounded-xl"
-                                  onOpenAutoFocus={(e) => e.preventDefault()}
-                                >
-                                  <RecurrencePanel
-                                    value={recurrenceConfig}
-                                    onChange={(cfg) => {
-                                      setRecurrenceConfig(cfg);
-                                      setIsRecurring(!!cfg);
-                                      markDirty();
-                                      if (!cfg) {
-                                        setShowRecurrencePanel(false);
-                                      }
-                                      if (isEditing && resolvedTaskId) {
-                                        saveMutation.mutate({ body: { isRecurring: !!cfg, recurrenceConfig: cfg ?? null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                                      }
-                                    }}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            );
-                          })()}
+                                } else if (!open) {
+                                  setShowRecurrencePanel(false);
+                                }
+                              }}
+                              isRecurring={isRecurring}
+                              value={recurrenceConfig}
+                              onChange={(cfg) => {
+                                setRecurrenceConfig(cfg);
+                                setIsRecurring(!!cfg);
+                                markDirty();
+                                if (!cfg) {
+                                  setShowRecurrencePanel(false);
+                                }
+                                if (isEditing && resolvedTaskId) {
+                                  saveMutation.mutate({ body: { isRecurring: !!cfg, recurrenceConfig: cfg ?? null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                }
+                              }}
+                            />
+                          )}
                         </div>
                       </div>
 
