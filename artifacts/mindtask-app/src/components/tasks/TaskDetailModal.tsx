@@ -3,11 +3,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, Trash2, Copy, Flag, Calendar, User, AlertTriangle, Briefcase, ChevronDown, LayoutDashboard } from "lucide-react";
-import { RecurrencePanel } from "@/components/tasks/RecurrencePanel";
+import { Loader2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 import { useToast } from "@/hooks/use-toast";
@@ -32,7 +28,7 @@ import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
-import { TaskAssociationSelector } from "@/components/tasks/association/TaskAssociationSelector";
+import { TaskAssociationChips } from "@/components/tasks/association/TaskAssociationChips";
 import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";
 import { useTaskAssociation } from "@/components/tasks/association/useTaskAssociation";
 import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
@@ -161,8 +157,6 @@ export function TaskDetailModal({
   const markDirty = () => { if (auto.autoCreatedTaskId) auto.setAutoCreateDirty(true); };
 
   const {
-    showMore,
-    setShowMore,
     setTaskWorkspaceId,
     taskMapId,
     setTaskMapId,
@@ -582,7 +576,7 @@ export function TaskDetailModal({
         <DialogContent
           ref={dialogContentCallbackRef}
           hideClose
-          className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-y-auto max-h-[90vh] rounded-2xl"
+          className="w-full max-w-2xl p-0 flex flex-col gap-0 overflow-hidden max-h-[90vh] rounded-2xl"
           onInteractOutside={(e) => {
             e.preventDefault();
             if (showDelete || isDeleting || deleteCardMut.isPending) return;
@@ -595,6 +589,7 @@ export function TaskDetailModal({
           <DialogDescription className="sr-only">
             {isCardMode ? "Detalhes do card selecionado" : "Formulário de tarefa"}
           </DialogDescription>
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
           {auto.autoCreateError ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3">
               <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -649,17 +644,28 @@ export function TaskDetailModal({
                 <TaskHeaderActions
                   parentApprovalStatus={parentApprovalStatus}
                   isEditing={isEditing}
-                  isTaskReady={isTaskReady}
                   isStandalone={isStandalone}
                   isCardMode={isCardMode}
                   effectiveWorkspaceId={effectiveWorkspaceId}
-                  status={status}
                   isDuplicating={isDuplicating}
-                  onStatusChange={handleStatusChange}
                   onDuplicate={handleDuplicate}
                   onDelete={() => setShowDelete(true)}
+                  leftSlot={
+                    isEditing ? (
+                      <TaskAssociationChips
+                        effectiveWorkspaceId={effectiveWorkspaceId}
+                        taskMapId={isCardMode ? (mapId ?? null) : taskMapId}
+                        propWorkspaceId={propWorkspaceId}
+                        userWorkspaces={userWorkspaces}
+                        workspaceMaps={workspaceMaps}
+                        onWorkspaceChange={changeWorkspace}
+                        onMapChange={changeMap}
+                        mapDisabled={isCardMode}
+                      />
+                    ) : null
+                  }
                 />
-                <div>
+                <div className="mt-2">
                   <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Título</label>
                   <Input
                     value={title}
@@ -676,20 +682,6 @@ export function TaskDetailModal({
                     placeholder="Nome da tarefa"
                   />
                 </div>
-
-                {!isCardMode && isEditing && (
-                  <TaskAssociationSelector
-                    showMore={showMore}
-                    onExpand={() => setShowMore(true)}
-                    effectiveWorkspaceId={effectiveWorkspaceId}
-                    taskMapId={taskMapId}
-                    propWorkspaceId={propWorkspaceId}
-                    userWorkspaces={userWorkspaces}
-                    workspaceMaps={workspaceMaps}
-                    onWorkspaceChange={changeWorkspace}
-                    onMapChange={changeMap}
-                  />
-                )}
               </div>
 
               <div className="border-t pt-4">
@@ -880,6 +872,31 @@ export function TaskDetailModal({
               )}
             </div>
           )}
+          </div>
+          {!auto.autoCreateError &&
+            !taskNotFound &&
+            !isLoading &&
+            !(isCardMode && !card) &&
+            !(isCardMode && card?.task?.isApprovalTask) &&
+            !(!isCardMode && task?.isApprovalTask) &&
+            isEditing &&
+            isTaskReady && (
+              <div className="border-t bg-background px-5 py-3 flex items-center justify-center gap-1.5 flex-wrap shrink-0">
+                {TASK_STATUS_ORDER.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleStatusChange(opt.value)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all lowercase focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      status === opt.value
+                        ? opt.activeClass
+                        : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
         </DialogContent>
       </Dialog>
 

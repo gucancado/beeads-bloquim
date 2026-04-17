@@ -32,22 +32,21 @@ export function useTaskAssociation({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [showMore, setShowMore] = useState(false);
   const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
   const [taskMapId, setTaskMapId] = useState<string | null>(null);
 
   const effectiveWorkspaceId = propWorkspaceId || taskWorkspaceId || "";
 
-  const { data: userWorkspaces } = useQuery<{ id: string; name: string }[]>({
+  const { data: userWorkspaces } = useQuery<{ id: string; name: string; colorIndex?: number | null }[]>({
     queryKey: ["/api/workspaces"],
     queryFn: () => customFetch("/api/workspaces"),
-    enabled: open && !isCardMode,
+    enabled: open,
   });
 
   const { data: workspaceMaps } = useQuery<{ id: string; name: string; hidden: boolean }[]>({
     queryKey: [`/api/workspaces/${effectiveWorkspaceId}/maps`],
     queryFn: () => customFetch(`/api/workspaces/${effectiveWorkspaceId}/maps`),
-    enabled: open && !!effectiveWorkspaceId && !isCardMode,
+    enabled: open && !!effectiveWorkspaceId,
     select: (data) => data.filter(m => !m.hidden),
   });
 
@@ -98,8 +97,6 @@ export function useTaskAssociation({
   };
 
   return {
-    showMore,
-    setShowMore,
     taskWorkspaceId,
     setTaskWorkspaceId,
     taskMapId,
