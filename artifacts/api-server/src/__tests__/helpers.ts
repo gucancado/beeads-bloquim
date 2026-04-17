@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import request, { type Agent } from "supertest";
 import { db } from "@workspace/db";
-import { users } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { users, workspaces } from "@workspace/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 
 export type TestUser = {
@@ -55,4 +55,14 @@ export async function registerAndLogin(): Promise<{
 export async function deleteUser(userId: string): Promise<void> {
   if (!userId) return;
   await db.delete(users).where(eq(users.id, userId));
+}
+
+/**
+ * Deletes the given workspaces. Schema cascades through to maps, members,
+ * cards, connections, tasks, approvals, attachments and activities, so this
+ * is enough to clean up everything a smoke test created on a workspace.
+ */
+export async function deleteWorkspaces(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.delete(workspaces).where(inArray(workspaces.id, ids));
 }

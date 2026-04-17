@@ -31,6 +31,10 @@ import {
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
 } from "../services/taskAttachmentsService";
+import {
+  approveApprovalTask,
+  rejectApprovalTask,
+} from "../services/approvalActionService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -1007,190 +1011,20 @@ router.post("/:taskId/approve", requireAuth, requireWorkspaceRole(["admin", "edi
     return;
   }
 
-  const [approvalTask] = await db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId), eq(tasks.isApprovalTask, true)))
-    .limit(1);
-
-  if (!approvalTask) {
+  const result = await approveApprovalTask(
+    workspaceId,
+    taskId,
+    req.user!.userId,
+    parsed.data.comment ?? null,
+  );
+  if (!result) {
     res.status(404).json({ error: "Approval task not found" });
     return;
   }
-
-  const comment = parsed.data.comment ?? null;
-
-  const [updated] = await db
-    .update(tasks)
-    .set({
-      status: "completed",
-      approvalStatus: "approved",
-      approvalComment: comment,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(tasks.id, taskId))
-    .returning();
-
-  await syncCardVisual(taskId, updated.status, !!updated.overdue);
-
-  const [actorUserApprove] = await db.select({ name: users.name }).from(users).where(eq(users.id, req.user!.userId)).limit(1);
-
-  await db.insert(taskActivities).values({
-    taskId,
-    actorId: req.user!.userId,
-    type: "task_approved",
-    metadata: {
-      actorName: actorUserApprove?.name ?? null,
-      comment: comment,
-    },
-  });
-
-  if (approvalTask.parentTaskId) {
-    await db.insert(taskActivities).values({
-      taskId: approvalTask.parentTaskId,
-      actorId: req.user!.userId,
-      type: "approval_comment",
-      metadata: {
-        actorName: actorUserApprove?.name ?? null,
-        decision: "approved",
-        comment: comment,
-        approvalTaskTitle: approvalTask.title,
-      },
-    });
-
-    // Check if all sibling approval tasks are now approved.
-    // Use both status=completed AND approvalStatus=approved to be cycle-safe:
-    // a sibling may have approvalStatus="approved" from a previous cycle if the parent was reset.
-    const allSiblings = await db
-      .select({ id: tasks.id, status: tasks.status, approvalStatus: tasks.approvalStatus, approvalOrder: tasks.approvalOrder, dueDate: tasks.dueDate })
-      .from(tasks)
-      .where(and(eq(tasks.parentTaskId, approvalTask.parentTaskId), eq(tasks.isApprovalTask, true)))
-      .orderBy(asc(tasks.approvalOrder));
-
-    const [parentTaskForMode] = await db
-      .select({ approvalMode: tasks.approvalMode })
-      .from(tasks)
-      .where(eq(tasks.id, approvalTask.parentTaskId))
-      .limit(1);
-    const parentApprovalMode = parentTaskForMode?.approvalMode ?? "sequential";
-
-    const allApproved = allSiblings.every(
-      (t) => t.id === taskId
-        ? true
-        : (t.status === "completed" && t.approvalStatus === "approved")
-    );
-
-    if (!allApproved && parentApprovalMode === "sequential") {
-      // In sequential mode, after one approver completes, activate the next pending task in order.
-      const nextPending = allSiblings.find(
-        (t) => t.id !== taskId && t.status === "pending" && (t.approvalOrder ?? 0) > (approvalTask.approvalOrder ?? -1)
-      );
-      if (nextPending) {
-        const nextOverdue = computeOverdue(nextPending.dueDate, "in_progress");
-        await db.update(tasks)
-          .set({ status: "in_progress", overdue: nextOverdue, updatedAt: new Date() })
-          .where(eq(tasks.id, nextPending.id));
-        await syncCardVisual(nextPending.id, "in_progress", nextOverdue);
-      }
-    }
-
-    if (allApproved) {
-      // Set parentApprovalStatus to "approved" on the parent task
-      await db.update(tasks)
-        .set({ parentApprovalStatus: "approved", updatedAt: new Date() })
-        .where(eq(tasks.id, approvalTask.parentTaskId));
-
-      // Trigger downstream activation from the terminal card of the approval chain.
-      // Downstream connections are re-routed to the terminal approval card when approvers
-      // are added/reordered, so we must activate from there (not the parent card).
-      const chainInfo = await getApprovalChainInfo(approvalTask.parentTaskId);
-      const terminalCardId = chainInfo
-        ? computeTerminalCardId(chainInfo.approvalTasksSorted, chainInfo.approvalCardByTaskId, chainInfo.parentCardId, parentApprovalMode)
-        : null;
-
-      if (terminalCardId) {
-        // Find all outgoing connections from right handle of the terminal card
-        const outgoingConnections = await db
-          .select()
-          .from(cardConnections)
-          .where(and(
-            eq(cardConnections.sourceCardId, terminalCardId),
-            eq(cardConnections.sourceHandle, "source-right"),
-          ));
-
-        for (const conn of outgoingConnections) {
-          const [targetCard] = await db
-            .select()
-            .from(cards)
-            .where(eq(cards.id, conn.targetCardId))
-            .limit(1);
-
-          if (!targetCard?.taskId) continue;
-
-          const [targetTask] = await db
-            .select()
-            .from(tasks)
-            .where(eq(tasks.id, targetCard.taskId))
-            .limit(1);
-
-          if (!targetTask || targetTask.status !== "pending") continue;
-
-          const prerequisites = await db
-            .select()
-            .from(cardConnections)
-            .where(and(
-              eq(cardConnections.targetCardId, conn.targetCardId),
-              eq(cardConnections.targetHandle, "target-left"),
-            ));
-
-          let allPrerequisitesDone = true;
-          for (const prereq of prerequisites) {
-            const [prereqCard] = await db
-              .select()
-              .from(cards)
-              .where(eq(cards.id, prereq.sourceCardId))
-              .limit(1);
-
-            if (!prereqCard?.taskId) {
-              allPrerequisitesDone = false;
-              break;
-            }
-
-            const [prereqTask] = await db
-              .select()
-              .from(tasks)
-              .where(eq(tasks.id, prereqCard.taskId))
-              .limit(1);
-
-            if (!prereqTask || (prereqTask.status !== "completed" && prereqTask.status !== "blocked")) {
-              allPrerequisitesDone = false;
-              break;
-            }
-          }
-
-          if (!allPrerequisitesDone) continue;
-
-          const childOverdue = computeOverdue(targetTask.dueDate, "in_progress");
-          const childVisual = toVisualStatus("in_progress", childOverdue);
-
-          await db
-            .update(tasks)
-            .set({ status: "in_progress", overdue: childOverdue, updatedAt: new Date() })
-            .where(eq(tasks.id, targetCard.taskId));
-
-          await db
-            .update(cards)
-            .set({ statusVisual: childVisual, updatedAt: new Date() })
-            .where(eq(cards.id, conn.targetCardId));
-        }
-      }
-    }
-  }
-
-  res.json(updated);
+  res.json(result.updated);
 });
 
+// (legacy inline approve body kept below by mistake — replaced by service call above)
 router.post("/:taskId/reject", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
 
@@ -1200,104 +1034,17 @@ router.post("/:taskId/reject", requireAuth, requireWorkspaceRole(["admin", "edit
     return;
   }
 
-  const [approvalTask] = await db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId), eq(tasks.isApprovalTask, true)))
-    .limit(1);
-
-  if (!approvalTask) {
+  const result = await rejectApprovalTask(
+    workspaceId,
+    taskId,
+    req.user!.userId,
+    parsed.data.comment ?? null,
+  );
+  if (!result) {
     res.status(404).json({ error: "Approval task not found" });
     return;
   }
-
-  const comment = parsed.data.comment ?? null;
-
-  const [updated] = await db
-    .update(tasks)
-    .set({
-      status: "pending",
-      approvalStatus: "rejected",
-      approvalComment: comment,
-      completedAt: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(tasks.id, taskId))
-    .returning();
-
-  await syncCardVisual(taskId, updated.status, !!updated.overdue);
-
-  const [actorUserReject] = await db.select({ name: users.name }).from(users).where(eq(users.id, req.user!.userId)).limit(1);
-
-  await db.insert(taskActivities).values({
-    taskId,
-    actorId: req.user!.userId,
-    type: "task_rejected",
-    metadata: {
-      actorName: actorUserReject?.name ?? null,
-      comment: comment,
-    },
-  });
-
-  if (approvalTask.parentTaskId) {
-    const [parentTask] = await db
-      .select({ id: tasks.id, status: tasks.status, dueDate: tasks.dueDate })
-      .from(tasks)
-      .where(eq(tasks.id, approvalTask.parentTaskId))
-      .limit(1);
-
-    // Set parentApprovalStatus to "rejected" and return parent to "in_progress"
-    const parentOverdue = computeOverdue(parentTask?.dueDate ?? null, "in_progress");
-    const parentUpdateData: Record<string, any> = {
-      parentApprovalStatus: "rejected",
-      updatedAt: new Date(),
-    };
-    if (parentTask && parentTask.status !== "in_progress") {
-      parentUpdateData.status = "in_progress";
-      parentUpdateData.overdue = parentOverdue;
-    }
-    await db.update(tasks)
-      .set(parentUpdateData)
-      .where(eq(tasks.id, approvalTask.parentTaskId));
-
-    if (parentUpdateData.status === "in_progress") {
-      await syncCardVisual(approvalTask.parentTaskId, "in_progress", parentOverdue);
-    }
-
-    // Reset all sibling approval task decisions (except the rejected one which keeps its decision)
-    // so that in the next cycle all approvers must re-approve from a clean state.
-    const siblingApprovalTasks = await db
-      .select({ id: tasks.id, overdue: tasks.overdue })
-      .from(tasks)
-      .where(and(
-        eq(tasks.parentTaskId, approvalTask.parentTaskId),
-        eq(tasks.isApprovalTask, true),
-        ne(tasks.id, taskId),
-      ));
-    const siblingIds = siblingApprovalTasks.map(s => s.id);
-    if (siblingIds.length > 0) {
-      await db.update(tasks)
-        .set({ approvalStatus: null, approvalComment: null, status: "pending", completedAt: null, updatedAt: new Date() })
-        .where(inArray(tasks.id, siblingIds));
-      for (const sibling of siblingApprovalTasks) {
-        await syncCardVisual(sibling.id, "pending", !!sibling.overdue);
-      }
-    }
-
-    await db.insert(taskActivities).values({
-      taskId: approvalTask.parentTaskId,
-      actorId: req.user!.userId,
-      type: "approval_comment",
-      metadata: {
-        actorName: actorUserReject?.name ?? null,
-        decision: "rejected",
-        comment: comment,
-        approvalTaskTitle: approvalTask.title,
-      },
-    });
-  }
-
-  res.json(updated);
+  res.json(result.updated);
 });
 
 const patchApprovalModeSchema = z.object({

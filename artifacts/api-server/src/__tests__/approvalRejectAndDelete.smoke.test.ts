@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { registerAndLogin, deleteUser } from "./helpers";
+import { registerAndLogin, deleteUser, deleteWorkspaces } from "./helpers";
 
 /**
  * Behavioral coverage for the two approval branches that the existing
@@ -19,8 +19,10 @@ import { registerAndLogin, deleteUser } from "./helpers";
  */
 describe("approval reject + delete-terminal smoke", () => {
   const createdUserIds: string[] = [];
+  const createdWorkspaceIds: string[] = [];
 
   afterAll(async () => {
+    await deleteWorkspaces(createdWorkspaceIds);
     for (const id of createdUserIds) await deleteUser(id);
   });
 
@@ -36,6 +38,7 @@ describe("approval reject + delete-terminal smoke", () => {
       .send({ name: "Reject WS", colorIndex: 0 });
     expect(wsRes.status).toBe(201);
     const workspaceId = wsRes.body.id as string;
+    createdWorkspaceIds.push(workspaceId);
 
     const inv = await adminAgent
       .post(`/api/workspaces/${workspaceId}/members`)
@@ -143,6 +146,7 @@ describe("approval reject + delete-terminal smoke", () => {
       .send({ name: "DeleteTerminal WS", colorIndex: 0 });
     expect(wsRes.status).toBe(201);
     const workspaceId = wsRes.body.id as string;
+    createdWorkspaceIds.push(workspaceId);
 
     for (const u of [approver2, approver3]) {
       const r = await adminAgent

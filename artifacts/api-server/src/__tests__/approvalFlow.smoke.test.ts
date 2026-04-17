@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { registerAndLogin, deleteUser } from "./helpers";
+import { registerAndLogin, deleteUser, deleteWorkspaces } from "./helpers";
 
 /**
  * Approval-chain smoke tests.
@@ -17,8 +17,10 @@ import { registerAndLogin, deleteUser } from "./helpers";
  */
 describe("approval flow smoke", () => {
   const createdUserIds: string[] = [];
+  const createdWorkspaceIds: string[] = [];
 
   afterAll(async () => {
+    await deleteWorkspaces(createdWorkspaceIds);
     for (const id of createdUserIds) await deleteUser(id);
   });
 
@@ -36,6 +38,7 @@ describe("approval flow smoke", () => {
       .send({ name: "Approvals WS", colorIndex: 0 });
     expect(wsRes.status).toBe(201);
     const workspaceId = wsRes.body.id as string;
+    createdWorkspaceIds.push(workspaceId);
 
     // invite second user as editor so they're a workspace member
     const inviteRes = await adminAgent
@@ -150,6 +153,7 @@ describe("approval flow smoke", () => {
       .send({ name: "Reorder WS", colorIndex: 0 });
     expect(wsRes.status).toBe(201);
     const workspaceId = wsRes.body.id as string;
+    createdWorkspaceIds.push(workspaceId);
 
     for (const u of [approver2, approver3]) {
       const inv = await adminAgent
