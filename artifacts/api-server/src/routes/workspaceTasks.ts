@@ -14,6 +14,11 @@ import { computeOverdue } from "../lib/overdue";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { ObjectStorageService } from "../lib/objectStorage";
+import {
+  getApprovalChainInfo,
+  computeTerminalCardId,
+  rerouteDownstreamConnections,
+} from "../services/approvalChainService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -35,91 +40,6 @@ async function syncCardVisual(taskId: string, status: string, overdue: boolean) 
   await db.update(cards)
     .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.taskId, taskId));
-}
-
-interface ApprovalChainInfo {
-  parentCardId: string;
-  approvalTasksSorted: { id: string; approvalOrder: number }[];
-  approvalCardByTaskId: Map<string, string>;
-  chainCardIds: Set<string>;
-}
-
-async function getApprovalChainInfo(taskId: string): Promise<ApprovalChainInfo | null> {
-  const [parentCard] = await db
-    .select({ id: cards.id })
-    .from(cards)
-    .where(eq(cards.taskId, taskId))
-    .limit(1);
-  if (!parentCard) return null;
-
-  const approvalTasksSorted = await db
-    .select({ id: tasks.id, approvalOrder: tasks.approvalOrder })
-    .from(tasks)
-    .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
-    .orderBy(asc(tasks.approvalOrder));
-
-  const approvalCardByTaskId = new Map<string, string>();
-  if (approvalTasksSorted.length > 0) {
-    const approvalCards = await db
-      .select({ id: cards.id, taskId: cards.taskId })
-      .from(cards)
-      .where(inArray(cards.taskId, approvalTasksSorted.map(t => t.id)));
-    for (const c of approvalCards) {
-      if (c.taskId) approvalCardByTaskId.set(c.taskId, c.id);
-    }
-  }
-
-  const chainCardIds = new Set<string>([parentCard.id, ...approvalCardByTaskId.values()]);
-  return { parentCardId: parentCard.id, approvalTasksSorted, approvalCardByTaskId, chainCardIds };
-}
-
-function computeTerminalCardId(
-  approvalTasksSorted: { id: string; approvalOrder: number }[],
-  approvalCardByTaskId: Map<string, string>,
-  parentCardId: string,
-  mode: string,
-): string {
-  if (approvalTasksSorted.length === 0) return parentCardId;
-  if (approvalTasksSorted.length === 1) {
-    return approvalCardByTaskId.get(approvalTasksSorted[0].id) ?? parentCardId;
-  }
-  if (mode === 'sequential') {
-    const last = approvalTasksSorted[approvalTasksSorted.length - 1];
-    return approvalCardByTaskId.get(last.id) ?? parentCardId;
-  }
-  return parentCardId;
-}
-
-async function rerouteDownstreamConnections(
-  oldTerminalCardId: string,
-  newTerminalCardId: string,
-  chainCardIds: Set<string>,
-): Promise<void> {
-  if (oldTerminalCardId === newTerminalCardId) return;
-  const conns = await db
-    .select({ id: cardConnections.id, targetCardId: cardConnections.targetCardId, sourceHandle: cardConnections.sourceHandle, targetHandle: cardConnections.targetHandle })
-    .from(cardConnections)
-    .where(eq(cardConnections.sourceCardId, oldTerminalCardId));
-  const downstream = conns.filter(c => !chainCardIds.has(c.targetCardId));
-  if (downstream.length === 0) return;
-
-  for (const conn of downstream) {
-    const [existing] = await db
-      .select({ id: cardConnections.id })
-      .from(cardConnections)
-      .where(and(
-        eq(cardConnections.sourceCardId, newTerminalCardId),
-        eq(cardConnections.targetCardId, conn.targetCardId),
-      ))
-      .limit(1);
-    if (existing) {
-      await db.delete(cardConnections).where(eq(cardConnections.id, conn.id));
-    } else {
-      await db.update(cardConnections)
-        .set({ sourceCardId: newTerminalCardId })
-        .where(eq(cardConnections.id, conn.id));
-    }
-  }
 }
 
 const router: IRouter = Router({ mergeParams: true });
