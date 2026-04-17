@@ -53,6 +53,19 @@ export function useComments(workspaceId: string, mapId: string, cardId: string |
   });
 }
 
+function invalidateWorkspaceCounts(qc: ReturnType<typeof useQueryClient>, workspaceId: string) {
+  qc.invalidateQueries({
+    predicate: (query) => {
+      const k = query.queryKey?.[0];
+      if (typeof k !== "string") return false;
+      return (
+        k === `/api/workspaces/${workspaceId}/tasks` ||
+        k.startsWith(`/api/workspaces/${workspaceId}/maps/`)
+      );
+    },
+  });
+}
+
 export function useCreateComment(workspaceId: string, mapId: string, cardId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -63,6 +76,7 @@ export function useCreateComment(workspaceId: string, mapId: string, cardId: str
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`comments`, workspaceId, mapId, cardId] });
+      invalidateWorkspaceCounts(qc, workspaceId);
     },
   });
 }
@@ -77,6 +91,7 @@ export function useToggleCommentHidden(workspaceId: string, mapId: string, cardI
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`comments`, workspaceId, mapId, cardId] });
+      invalidateWorkspaceCounts(qc, workspaceId);
     },
   });
 }
@@ -103,6 +118,7 @@ export function useCreateTaskComment(workspaceId: string, taskId: string) {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`task-comments`, workspaceId, taskId] });
+      invalidateWorkspaceCounts(qc, workspaceId);
     },
   });
 }
@@ -117,6 +133,7 @@ export function useToggleTaskCommentHidden(workspaceId: string, taskId: string) 
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`task-comments`, workspaceId, taskId] });
+      invalidateWorkspaceCounts(qc, workspaceId);
     },
   });
 }

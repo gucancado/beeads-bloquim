@@ -80,13 +80,16 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskApprovalOrder: tasks.approvalOrder,
       taskParentApprovalStatus: tasks.parentApprovalStatus,
       taskAttachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
+      taskSubtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
+      taskSubtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
+      taskCommentCount: sql<number>`((SELECT COUNT(*) FROM task_comments WHERE task_id = ${tasks.id}) + (SELECT COUNT(*) FROM task_comments tc JOIN tasks ct ON ct.id = tc.task_id WHERE ct.parent_task_id = ${tasks.id} AND ct.is_approval_task = true))`,
     })
     .from(cards)
     .leftJoin(tasks, eq(tasks.id, cards.taskId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
     .where(eq(cards.mapId, mapId));
 
-  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, ...c }) => ({
+  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, taskSubtaskCount, taskSubtaskCompletedCount, taskCommentCount, ...c }) => ({
     ...c,
     taskDueDate: taskDueDate ?? null,
     taskAssigneeName: taskAssigneeName ?? null,
@@ -101,6 +104,9 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     taskApprovalOrder: taskApprovalOrder ?? null,
     taskParentApprovalStatus: taskParentApprovalStatus ?? null,
     taskAttachmentCount: Number(taskAttachmentCount ?? 0),
+    taskSubtaskCount: Number(taskSubtaskCount ?? 0),
+    taskSubtaskCompletedCount: Number(taskSubtaskCompletedCount ?? 0),
+    taskCommentCount: Number(taskCommentCount ?? 0),
   }));
 
   const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));

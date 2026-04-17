@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import {
   KeyboardSensor,
@@ -66,6 +66,8 @@ export function useSubtasksState({
     }
   }, [pendingFocusId, subtasks]);
 
+  const queryClient = useQueryClient();
+
   const saveSubtasksMutation = useMutation({
     mutationFn: (payload: { taskId: string; items: SubtaskItem[] }) =>
       customFetch(buildSubtasksEndpoint(payload.taskId), {
@@ -77,6 +79,21 @@ export function useSubtasksState({
         const newLocal = prev.filter(s => s.id.startsWith("local-") && s.text.trim() === "");
         return [...data, ...newLocal];
       });
+      // Refresh task lists and any map views so subtask progress indicators stay current.
+      if (effectiveWorkspaceId) {
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const k = query.queryKey?.[0];
+            if (typeof k !== "string") return false;
+            return (
+              k === `/api/workspaces/${effectiveWorkspaceId}/tasks` ||
+              k.startsWith(`/api/workspaces/${effectiveWorkspaceId}/maps/`)
+            );
+          },
+        });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
+      }
     },
   });
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex, formatDueDate } from '@/lib/utils';
 import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized } from '@/lib/taskStatusConstants';
-import { Maximize2, Calendar, User, Plus, Paperclip } from 'lucide-react';
+import { Maximize2, Calendar, User, Plus, Paperclip, ListChecks, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorkspaceMembers } from '@workspace/api-client-react';
@@ -106,6 +106,9 @@ interface MindMapNodeProps {
     taskCompletedAt?: string | null;
     taskParentApprovalStatus?: string | null;
     taskAttachmentCount?: number | null;
+    taskSubtaskCount?: number | null;
+    taskSubtaskCompletedCount?: number | null;
+    taskCommentCount?: number | null;
     workspaceId?: string;
     mapId?: string;
     onOpen?: (id: string) => void;
@@ -424,6 +427,29 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             <span className={`text-[10px] text-gray-400 transition-colors duration-300 ${mutedTextColor}`}>
               {statusText}
             </span>
+            {((data.taskSubtaskCount != null && data.taskSubtaskCount > 0) ||
+              (data.taskCommentCount != null && data.taskCommentCount > 0)) && (
+              <div className="ml-auto inline-flex items-center gap-2 flex-shrink-0">
+                {data.taskSubtaskCount != null && data.taskSubtaskCount > 0 && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 text-[10px] text-gray-400 flex-shrink-0 transition-colors duration-300 ${mutedTextColor}`}
+                    title={`${data.taskSubtaskCompletedCount ?? 0} de ${data.taskSubtaskCount} subtarefas concluídas`}
+                  >
+                    <ListChecks className={`w-3 h-3 ${mutedIconColor}`} />
+                    <span>{data.taskSubtaskCompletedCount ?? 0} de {data.taskSubtaskCount}</span>
+                  </span>
+                )}
+                {data.taskCommentCount != null && data.taskCommentCount > 0 && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 text-[10px] text-gray-400 flex-shrink-0 transition-colors duration-300 ${mutedTextColor}`}
+                    title={`${data.taskCommentCount} ${data.taskCommentCount === 1 ? "comentário" : "comentários"}`}
+                  >
+                    <MessageSquare className={`w-3 h-3 ${mutedIconColor}`} />
+                    <span>{data.taskCommentCount}</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -630,7 +656,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
         {/* Status badge */}
         <div className="mt-3 pt-3 border-t flex items-center gap-2 nodrag">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 min-w-0">
             <div
               className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
               title={hasTask ? 'Clique para alterar status' : undefined}
@@ -668,6 +694,29 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               </div>
             )}
           </div>
+          {((data.taskSubtaskCount != null && data.taskSubtaskCount > 0) ||
+            (data.taskCommentCount != null && data.taskCommentCount > 0)) && (
+            <div className="ml-auto inline-flex items-center gap-2 flex-shrink-0">
+              {data.taskSubtaskCount != null && data.taskSubtaskCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground flex-shrink-0"
+                  title={`${data.taskSubtaskCompletedCount ?? 0} de ${data.taskSubtaskCount} subtarefas concluídas`}
+                >
+                  <ListChecks className="w-3.5 h-3.5" />
+                  <span>{data.taskSubtaskCompletedCount ?? 0} de {data.taskSubtaskCount}</span>
+                </span>
+              )}
+              {data.taskCommentCount != null && data.taskCommentCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground flex-shrink-0"
+                  title={`${data.taskCommentCount} ${data.taskCommentCount === 1 ? "comentário" : "comentários"}`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>{data.taskCommentCount}</span>
+                </span>
+              )}
+            </div>
+          )}
           {editingStatus && createPortal(
             <>
               <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setEditingStatus(false); }} />

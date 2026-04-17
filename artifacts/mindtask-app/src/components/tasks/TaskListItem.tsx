@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip } from "lucide-react";
+import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -48,6 +48,9 @@ export interface TaskListItemData {
   isRecurring?: boolean | null;
   recurrenceConfig?: { type: string } | null;
   attachmentCount?: number | null;
+  subtaskCount?: number | null;
+  subtaskCompletedCount?: number | null;
+  commentCount?: number | null;
 }
 
 interface Props {
@@ -454,6 +457,16 @@ export function TaskListItem({
           />
         </label>
 
+        {/* Recurrence indicator */}
+        {localTask.isRecurring && localTask.recurrenceConfig && (
+          <span
+            className="inline-flex items-center shrink-0 text-muted-foreground"
+            title={`repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[localTask.recurrenceConfig.type] ?? "periodicamente"}`}
+          >
+            <Repeat className="w-3 h-3" />
+          </span>
+        )}
+
         {/* Priority badge — inline editable */}
         <div onClick={e => e.stopPropagation()} className="shrink-0">
           <PriorityBadge
@@ -468,21 +481,36 @@ export function TaskListItem({
           <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" aria-label="Possui anexos" />
         )}
 
-        {/* Recurrence indicator */}
-        {localTask.isRecurring && localTask.recurrenceConfig && (
-          <span
-            className="inline-flex items-center shrink-0 text-muted-foreground"
-            title={`repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[localTask.recurrenceConfig.type] ?? "periodicamente"}`}
-          >
-            <Repeat className="w-3 h-3" />
-          </span>
-        )}
-
         {/* Approval task badge */}
         {task.isApprovalTask && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-2 py-0.5 rounded-full tracking-wide lowercase shrink-0">
             aprovação
           </span>
+        )}
+
+        {/* Subtask + comment indicators pushed to the right edge */}
+        {((localTask.subtaskCount != null && localTask.subtaskCount > 0) ||
+          (localTask.commentCount != null && localTask.commentCount > 0)) && (
+          <div className="ml-auto inline-flex items-center gap-2 shrink-0">
+            {localTask.subtaskCount != null && localTask.subtaskCount > 0 && (
+              <span
+                className="inline-flex items-center gap-1 shrink-0 text-muted-foreground"
+                title={`${localTask.subtaskCompletedCount ?? 0} de ${localTask.subtaskCount} subtarefas concluídas`}
+              >
+                <ListChecks className="w-3 h-3" />
+                <span className="text-[11px] leading-none">{localTask.subtaskCompletedCount ?? 0} de {localTask.subtaskCount}</span>
+              </span>
+            )}
+            {localTask.commentCount != null && localTask.commentCount > 0 && (
+              <span
+                className="inline-flex items-center gap-1 shrink-0 text-muted-foreground"
+                title={`${localTask.commentCount} ${localTask.commentCount === 1 ? "comentário" : "comentários"}`}
+              >
+                <MessageSquare className="w-3 h-3" />
+                <span className="text-[11px] leading-none">{localTask.commentCount}</span>
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>
