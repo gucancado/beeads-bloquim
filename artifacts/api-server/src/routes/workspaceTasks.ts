@@ -51,6 +51,7 @@ import {
   deleteSubtask,
 } from "../services/taskSubtasksService";
 import { duplicateTask } from "../services/taskDuplicateService";
+import { patchTaskStatus } from "../services/taskStatusService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -403,121 +404,9 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
     res.status(400).json({ error: "Invalid status" });
     return;
   }
-  const { status, isRecurring: bodyIsRecurring, recurrenceConfig: bodyRecurrenceConfig } = parsed.data;
 
-  const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
-  if (!existing) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  const previousStatus = existing.status;
-
-  const updateData: Record<string, any> = {
-    status,
-    previousStatus,
-    updatedAt: new Date(),
-    completedAt: status === "completed" ? new Date() : null,
-  };
-
-  updateData.overdue = computeOverdue(existing.dueDate, status);
-  // If client sends recurrence state alongside status, apply it atomically (prevents race condition)
-  if (bodyIsRecurring !== undefined && !existing.mapId) updateData.isRecurring = bodyIsRecurring;
-  if (bodyRecurrenceConfig !== undefined && !existing.mapId) updateData.recurrenceConfig = bodyRecurrenceConfig ?? null;
-
-  // Reset parentApprovalStatus when task goes back to in_progress/draft/pending from approved
-  if (["in_progress", "draft", "pending"].includes(status) && existing.parentApprovalStatus === "approved") {
-    updateData.parentApprovalStatus = null;
-  }
-
-  const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
-
-  await syncCardVisual(taskId, updated.status, !!updated.overdue);
-
-  if (previousStatus !== status) {
-    const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1);
-    await db.insert(taskActivities).values({
-      taskId,
-      actorId,
-      type: "status_changed",
-      metadata: {
-        actorName: actorUser?.name ?? null,
-        oldStatus: previousStatus,
-        newStatus: status,
-      },
-    });
-  }
-
-  if (previousStatus !== status) {
-    const approvalChildTasks = await db
-      .select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status, approvalOrder: tasks.approvalOrder })
-      .from(tasks)
-      .where(and(eq(tasks.parentTaskId, taskId), eq(tasks.isApprovalTask, true)))
-      .orderBy(asc(tasks.approvalOrder));
-
-    const actorUserForCascade = (await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1))[0];
-
-    // When resetting parent to a non-completed state, clear approval decisions so children
-    // start fresh in the next cycle.
-    const clearApprovalDecisions = ["in_progress", "draft", "pending", "blocked"].includes(status);
-
-    // In sequential mode, when parent completes, only the first approval task activates;
-    // the rest stay pending until each predecessor approves.
-    const isSequential = (existing.approvalMode ?? "sequential") === "sequential";
-
-    for (let i = 0; i < approvalChildTasks.length; i++) {
-      const child = approvalChildTasks[i];
-      const approvalTaskNewStatus =
-        status === "completed" && isSequential && i > 0
-          ? "pending"
-          : getApprovalTaskStatus(status);
-      const childOverdue = computeOverdue(child.dueDate, approvalTaskNewStatus);
-      const childVisual = toVisualStatus(approvalTaskNewStatus, childOverdue);
-      const childUpdateSet: Record<string, any> = { status: approvalTaskNewStatus, overdue: childOverdue, updatedAt: new Date() };
-      if (clearApprovalDecisions) {
-        childUpdateSet.approvalStatus = null;
-        childUpdateSet.approvalComment = null;
-      }
-      await db.update(tasks)
-        .set(childUpdateSet)
-        .where(eq(tasks.id, child.id));
-      await db.update(cards)
-        .set({ statusVisual: childVisual, updatedAt: new Date() })
-        .where(eq(cards.taskId, child.id));
-      if (child.status !== approvalTaskNewStatus) {
-        await db.insert(taskActivities).values({
-          taskId: child.id,
-          actorId,
-          type: "status_changed",
-          metadata: {
-            actorName: actorUserForCascade?.name ?? null,
-            oldStatus: child.status,
-            newStatus: approvalTaskNewStatus,
-          },
-        });
-      }
-    }
-
-    // When completing with any approval children, set parentApprovalStatus to in_approval.
-    // Children are transitioned to in_progress regardless of their prior state,
-    // so any completion with approval children enters the approval cycle.
-    if (status === "completed" && approvalChildTasks.length > 0) {
-      await db.update(tasks)
-        .set({ parentApprovalStatus: "in_approval", updatedAt: new Date() })
-        .where(eq(tasks.id, taskId));
-      updated.parentApprovalStatus = "in_approval";
-    }
-  }
-
-  // Handle recurrence: when a recurring task without mapId transitions INTO completed, duplicate it with the next due date
-  // Use updated.isRecurring/recurrenceConfig so that recurrence state sent atomically with status is respected
-  if (status === "completed" && previousStatus !== "completed" && updated.isRecurring && updated.recurrenceConfig && !existing.mapId) {
-    const completedAt = updated.completedAt ?? new Date();
-    const nextDueDate = calculateNextDueDate(existing.dueDate, updated.recurrenceConfig as RecurrenceConfig, completedAt);
-    await duplicateRecurringTask(updated, nextDueDate, actorId, workspaceId);
-  }
-
-  res.json(updated);
+  const result = await patchTaskStatus(workspaceId, taskId, actorId, parsed.data);
+  res.status(result.status).json(result.body);
 });
 
 router.get("/:taskId/activities", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
