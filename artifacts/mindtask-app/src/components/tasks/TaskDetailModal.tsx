@@ -36,6 +36,7 @@ import { TaskAssociationSelector } from "@/components/tasks/association/TaskAsso
 import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";
 import { useTaskAssociation } from "@/components/tasks/association/useTaskAssociation";
 import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
+import { useAutoCreateTask } from "@/components/tasks/useAutoCreateTask";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
 
 interface TaskResponseExtended extends TaskResponse {
@@ -121,9 +122,6 @@ export function TaskDetailModal({
   const queryClient = useQueryClient();
 
   const isCardMode = !!(mapId && cardId);
-  const [autoCreatedTaskId, setAutoCreatedTaskId] = useState<string | null>(null);
-  const isEditing = isCardMode ? true : !!(taskId || autoCreatedTaskId);
-  const resolvedTaskId = taskId || autoCreatedTaskId;
 
   const { data: me } = useGetMe({ query: { enabled: open } });
   const currentUserId = me?.id ?? "";
@@ -137,7 +135,6 @@ export function TaskDetailModal({
   const [showDelete, setShowDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
-  const [autoCreateDirty, setAutoCreateDirty] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
   const [showRecurrencePanel, setShowRecurrencePanel] = useState(false);
@@ -145,13 +142,30 @@ export function TaskDetailModal({
   const [dialogContentEl, setDialogContentEl] = useState<HTMLDivElement | null>(null);
   const dialogContentCallbackRef = useCallback((el: HTMLDivElement | null) => setDialogContentEl(el), []);
 
+  // Forward refs to bridge auto-create <-> association <-> invalidateTask without TDZ.
+  const setTaskWorkspaceIdRef = useRef<(v: string | null) => void>(() => {});
+  const invalidateTaskRef = useRef<() => void>(() => {});
 
-  const markDirty = () => { if (autoCreatedTaskId) setAutoCreateDirty(true); };
+  const auto = useAutoCreateTask({
+    open,
+    isCardMode,
+    taskId,
+    propWorkspaceId,
+    currentUserId,
+    setTitle,
+    setAssignedTo,
+    setTaskWorkspaceId: (v) => setTaskWorkspaceIdRef.current(v),
+    invalidateTask: () => invalidateTaskRef.current(),
+    onAutoCreated,
+  });
+
+  const isEditing = isCardMode ? true : !!(taskId || auto.autoCreatedTaskId);
+  const resolvedTaskId = taskId || auto.autoCreatedTaskId;
+
+  const markDirty = () => { if (auto.autoCreatedTaskId) auto.setAutoCreateDirty(true); };
 
   useEffect(() => {
     if (!open) {
-      setAutoCreatedTaskId(null);
-      setAutoCreateDirty(false);
       setIsRecurring(false);
       setRecurrenceConfig(null);
       setShowRecurrencePanel(false);
@@ -181,6 +195,8 @@ export function TaskDetailModal({
     setRecurrenceConfig,
     setShowRecurrencePanel,
   });
+
+  setTaskWorkspaceIdRef.current = setTaskWorkspaceId;
 
   const { data: rawCard, isLoading: isCardLoading } = useGetCard(effectiveWorkspaceId, mapId ?? "", cardId ?? "", {
     query: { enabled: isCardMode && open && !!cardId }
@@ -441,63 +457,7 @@ export function TaskDetailModal({
     onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
   });
 
-  const autoCreateMutRef = useRef(false);
-  const [autoCreateError, setAutoCreateError] = useState(false);
-  const openRef = useRef(open);
-  openRef.current = open;
-
-  const autoCreateMutation = useMutation({
-    mutationFn: () => {
-      if (propWorkspaceId) {
-        return customFetch(`/api/workspaces/${propWorkspaceId}/tasks`, {
-          method: "POST",
-          body: JSON.stringify({ title: "nova tarefa", priority: "medium" }),
-        });
-      }
-      return customFetch("/api/my-tasks", {
-        method: "POST",
-        body: JSON.stringify({ title: "nova tarefa", priority: "medium" }),
-      });
-    },
-    onSuccess: (newTask: { id: string }) => {
-      const wasStandalone = !propWorkspaceId;
-      if (!openRef.current) {
-        const delPath = wasStandalone
-          ? `/api/my-tasks/${newTask.id}`
-          : `/api/workspaces/${propWorkspaceId}/tasks/${newTask.id}`;
-        customFetch(delPath, { method: "DELETE" }).catch(() => {});
-        invalidateTask();
-        return;
-      }
-      setAutoCreatedTaskId(newTask.id);
-      onAutoCreated?.(newTask.id);
-
-      setTitle("nova tarefa");
-      if (wasStandalone) {
-        setAssignedTo(currentUserId);
-      }
-      if (propWorkspaceId) {
-        setTaskWorkspaceId(propWorkspaceId);
-      }
-      invalidateTask();
-    },
-    onError: () => {
-      autoCreateMutRef.current = false;
-      setAutoCreateError(true);
-    },
-  });
-
-  useEffect(() => {
-    if (open && !isCardMode && !taskId && !autoCreatedTaskId && !autoCreateMutRef.current && !autoCreateError) {
-      autoCreateMutRef.current = true;
-      setAutoCreateError(false);
-      autoCreateMutation.mutate();
-    }
-    if (!open) {
-      autoCreateMutRef.current = false;
-      setAutoCreateError(false);
-    }
-  }, [open, isCardMode, taskId, autoCreatedTaskId, autoCreateError]);
+  invalidateTaskRef.current = invalidateTask;
 
   const handleSaveTask = () => {
     if (!resolvedTaskId) return;
@@ -600,11 +560,11 @@ export function TaskDetailModal({
     if (showDelete || isDeleting || deleteCardMut.isPending) return;
     if (isCardMode) { saveCard(); if (card?.task) saveCardTaskDetails(); }
     else if (isEditing && resolvedTaskId) {
-      if (autoCreatedTaskId && !autoCreateDirty) {
+      if (auto.autoCreatedTaskId && !auto.autoCreateDirty) {
         try {
           const delPath = isStandalone
-            ? `/api/my-tasks/${autoCreatedTaskId}`
-            : `/api/workspaces/${effectiveWorkspaceId}/tasks/${autoCreatedTaskId}`;
+            ? `/api/my-tasks/${auto.autoCreatedTaskId}`
+            : `/api/workspaces/${effectiveWorkspaceId}/tasks/${auto.autoCreatedTaskId}`;
           await customFetch(delPath, { method: "DELETE" });
           invalidateTask();
         } catch { /* ignore */ }
@@ -624,8 +584,7 @@ export function TaskDetailModal({
     : task?.parentApprovalStatus ?? null;
 
   const isTaskReady = isCardMode ? !!card?.task : true;
-  const isAutoCreating = !autoCreateError && (autoCreateMutation.isPending || (!isCardMode && !taskId && !autoCreatedTaskId));
-  const isLoading = isCardMode ? isCardLoading : (isAutoCreating || isTaskLoading);
+  const isLoading = isCardMode ? isCardLoading : (auto.isAutoCreating || isTaskLoading);
 
   const deleteLabel = isCardMode ? "Deletar card?" : "Excluir tarefa?";
   const deleteDescription = isCardMode
@@ -656,7 +615,7 @@ export function TaskDetailModal({
           <DialogDescription className="sr-only">
             {isCardMode ? "Detalhes do card selecionado" : "Formulário de tarefa"}
           </DialogDescription>
-          {autoCreateError ? (
+          {auto.autoCreateError ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3">
               <AlertTriangle className="w-8 h-8 text-destructive" />
               <p className="text-sm text-muted-foreground lowercase">Erro ao criar tarefa.</p>
@@ -664,10 +623,7 @@ export function TaskDetailModal({
                 variant="outline"
                 size="sm"
                 className="rounded-xl lowercase"
-                onClick={() => {
-                  setAutoCreateError(false);
-                  autoCreateMutRef.current = false;
-                }}
+                onClick={auto.retryAutoCreate}
               >
                 Tentar novamente
               </Button>
