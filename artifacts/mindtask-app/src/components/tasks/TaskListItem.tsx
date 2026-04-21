@@ -488,10 +488,10 @@ export function TaskListItem({
           </span>
         )}
 
-        {/* Subtask + comment indicators pushed to the right edge */}
+        {/* Subtask + comment indicators immediately right of the attachment icon */}
         {((localTask.subtaskCount != null && localTask.subtaskCount > 0) ||
           (localTask.commentCount != null && localTask.commentCount > 0)) && (
-          <div className="ml-auto inline-flex items-center gap-2 shrink-0">
+          <div className="inline-flex items-center gap-2 shrink-0">
             {localTask.subtaskCount != null && localTask.subtaskCount > 0 && (
               <span
                 className="inline-flex items-center gap-1 shrink-0 text-muted-foreground"

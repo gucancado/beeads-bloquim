@@ -175,6 +175,9 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
       attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
+      subtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
+      subtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
+      commentCount: sql<number>`((SELECT COUNT(*) FROM task_comments WHERE task_id = ${tasks.id}) + (SELECT COUNT(*) FROM task_comments tc JOIN tasks ct ON ct.id = tc.task_id WHERE ct.parent_task_id = ${tasks.id} AND ct.is_approval_task = true))`,
     })
     .from(tasks)
     .leftJoin(cards, eq(cards.taskId, tasks.id))
