@@ -95,9 +95,6 @@ export function useTaskDetailForm({
           setTaskMapId(task.mapId ?? null);
           setIsRecurring(task.isRecurring ?? false);
           setRecurrenceConfig(task.recurrenceConfig ?? null);
-          if (task.isRecurring && task.recurrenceConfig) {
-            setShowRecurrencePanel(true);
-          }
         }
       } else if (!isEditing) {
         initializedForTaskRef.current = null;
