@@ -204,12 +204,13 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
     return;
   }
 
-  const { title, description, assignedTo, dueDate, priority, isRecurring, recurrenceConfig } = parsed.data;
+  const { title, description, dueDate, priority, isRecurring, recurrenceConfig } = parsed.data;
 
   const dueDateValue = parseDateNoon(dueDate);
   const overdueValue = computeOverdue(dueDateValue, "draft");
 
   const actorId = req.user!.userId;
+  const assignedTo = parsed.data.assignedTo === undefined ? actorId : parsed.data.assignedTo;
 
   const [task] = await db
     .insert(tasks)
@@ -217,7 +218,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       workspaceId,
       title,
       description: description ?? null,
-      assignedTo: assignedTo ?? null,
+      assignedTo,
       dueDate: dueDateValue,
       priority: priority ?? "medium",
       status: "draft",

@@ -41,7 +41,7 @@ export function AssigneeAvatarPicker({
                 className="flex items-center justify-center w-10 h-10 rounded-xl bg-background hover:bg-muted/60 transition-colors focus:outline-none"
               >
                 {assigneeName ? (
-                  <Avatar className="w-9 h-9 shrink-0">
+                  <Avatar key={`${assignedTo}|${assigneeAvatarUrl ?? ""}`} className="w-9 h-9 shrink-0">
                     {assigneeAvatarUrl ? (
                       <AvatarImage src={assigneeAvatarUrl} alt={assigneeName} className="object-cover" />
                     ) : null}
@@ -60,7 +60,11 @@ export function AssigneeAvatarPicker({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <PopoverContent align="start" className="w-auto p-1 rounded-xl min-w-[180px]">
+      <PopoverContent
+        align="start"
+        className="w-auto p-1 rounded-xl min-w-[180px]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <button
           className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/60 text-left transition-colors rounded-lg"
           onClick={() => { onSelect("unassigned"); setOpen(false); }}

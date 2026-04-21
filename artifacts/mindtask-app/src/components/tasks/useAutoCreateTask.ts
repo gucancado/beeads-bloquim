@@ -61,9 +61,7 @@ export function useAutoCreateTask({
       onAutoCreated?.(newTask.id);
 
       setTitle("nova tarefa");
-      if (wasStandalone) {
-        setAssignedTo(currentUserId);
-      }
+      setAssignedTo(currentUserId);
       if (propWorkspaceId) {
         setTaskWorkspaceId(propWorkspaceId);
       }

@@ -393,7 +393,7 @@ export function TaskListItem({
                   title={members.length > 0 ? "Clique para alterar responsável" : undefined}
                 >
                   {localTask.assigneeName ? (
-                    <Avatar className="w-[26px] h-[26px] shrink-0">
+                    <Avatar key={`${localTask.assignedTo ?? "none"}|${localTask.assigneeAvatarUrl ?? ""}`} className="w-[26px] h-[26px] shrink-0">
                       {localTask.assigneeAvatarUrl ? (
                         <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
                       ) : null}

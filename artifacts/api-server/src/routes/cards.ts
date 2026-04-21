@@ -71,6 +71,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
   }
 
   const { workspaceId, mapId } = req.params;
+  const userId = (req as AuthRequest).user!.userId;
 
   const [card] = await db
     .insert(cards)
@@ -79,7 +80,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft" })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId })
     .returning();
 
   const [updated] = await db
@@ -88,7 +89,6 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
     .where(eq(cards.id, card.id))
     .returning();
 
-  const userId = (req as AuthRequest).user!.userId;
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
   await db.insert(taskActivities).values({
     taskId: task.id,
@@ -202,10 +202,11 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
   const visual = toVisualStatus("draft", overdue);
 
   const userId = req.user!.userId;
+  const assignedTo = parsed.data.assignedTo === undefined ? userId : parsed.data.assignedTo;
 
   const [task] = await db
     .insert(tasks)
-    .values({ ...parsed.data, mapId, workspaceId, dueDate, status: "draft", overdue })
+    .values({ ...parsed.data, assignedTo, mapId, workspaceId, dueDate, status: "draft", overdue })
     .returning();
 
   await db
