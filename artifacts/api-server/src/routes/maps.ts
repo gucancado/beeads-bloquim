@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachmentLinks, mapShapes } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
@@ -55,6 +56,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     return;
   }
 
+  const parentTasks = alias(tasks, "parent_tasks");
   const rawCards = await db
     .select({
       id: cards.id,
@@ -75,6 +77,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskCompletedAt: tasks.completedAt,
       taskIsApprovalTask: tasks.isApprovalTask,
       taskParentTaskId: tasks.parentTaskId,
+      parentTaskTitle: parentTasks.title,
       taskApprovalMode: tasks.approvalMode,
       taskApprovalDecision: tasks.approvalStatus,
       taskApprovalOrder: tasks.approvalOrder,
@@ -87,9 +90,10 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     .from(cards)
     .leftJoin(tasks, eq(tasks.id, cards.taskId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
+    .leftJoin(parentTasks, eq(parentTasks.id, tasks.parentTaskId))
     .where(eq(cards.mapId, mapId));
 
-  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, taskSubtaskCount, taskSubtaskCompletedCount, taskCommentCount, ...c }) => ({
+  const cardList = rawCards.map(({ taskDueDate, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, parentTaskTitle, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, taskSubtaskCount, taskSubtaskCompletedCount, taskCommentCount, ...c }) => ({
     ...c,
     taskDueDate: taskDueDate ?? null,
     taskAssigneeName: taskAssigneeName ?? null,
@@ -99,6 +103,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     taskCompletedAt: taskCompletedAt ? taskCompletedAt.toISOString() : null,
     taskIsApprovalTask: taskIsApprovalTask ?? false,
     taskParentTaskId: taskParentTaskId ?? null,
+    parentTaskTitle: parentTaskTitle ?? null,
     taskApprovalMode: taskApprovalMode ?? null,
     taskApprovalDecision: taskApprovalDecision ?? null,
     taskApprovalOrder: taskApprovalOrder ?? null,

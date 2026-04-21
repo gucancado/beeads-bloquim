@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
@@ -114,6 +115,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     return parts.length === 1 ? parts[0] : or(...parts);
   };
 
+  const parentTasks = alias(tasks, "parent_tasks");
   const taskList = await db
     .select({
       id: tasks.id,
@@ -133,6 +135,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       isRecurring: tasks.isRecurring,
       recurrenceConfig: tasks.recurrenceConfig,
       parentTaskId: tasks.parentTaskId,
+      parentTaskTitle: parentTasks.title,
       parentApprovalStatus: tasks.parentApprovalStatus,
       cardId: cards.id,
       cardTitle: cards.title,
@@ -150,6 +153,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     .leftJoin(maps, eq(maps.id, tasks.mapId))
     .leftJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
+    .leftJoin(parentTasks, eq(parentTasks.id, tasks.parentTaskId))
     .where(
       and(
         eq(tasks.workspaceId, workspaceId),
@@ -300,6 +304,11 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId))).limit(1);
   if (!existing) {
     res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (existing.isApprovalTask && parsed.data.title !== undefined) {
+    res.status(400).json({ error: "Approval task title is read-only", message: "não é permitido alterar o título de tarefas de aprovação" });
     return;
   }
 

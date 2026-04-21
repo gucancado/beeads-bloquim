@@ -1,0 +1,61 @@
+preciso de um relatório técnico completo sobre as alterações realizadas na task de título de tarefas de aprovação
+
+não quero uma síntese. quero um relatório detalhado, estruturado e auditável para validação antes de marcar como concluído
+
+organize a resposta nos seguintes blocos:
+
+1) resumo da implementação
+- o que foi alterado no backend
+- o que foi alterado no frontend
+- quais arquivos foram modificados
+
+2) modelagem e dados
+- como o título da tarefa de aprovação está sendo obtido
+- qual campo está sendo usado (ex: parentTaskTitle)
+- confirmar se existe padronização de nome entre todas as rotas
+- o que acontece se parentTaskId for null ou inválido
+
+3) endpoints afetados
+- listar todos endpoints alterados
+- mostrar exatamente o que cada endpoint retorna antes e depois (diff ou exemplo de payload)
+- confirmar se houve impacto em autenticação, headers ou middlewares
+
+4) frontend
+- onde o título da tarefa de aprovação está sendo renderizado (componentes)
+- como foi implementada a lógica de fallback (caso não haja título do pai)
+- como foi desabilitada a edição de título
+- confirmar que não há uso do campo title em tarefas de aprovação
+
+5) mapa (canvas)
+- listar todos os pontos onde foi alterada a construção dos nós
+- explicar por que existem múltiplos pontos
+- confirmar consistência entre eles
+
+6) riscos e edge cases
+- o que acontece se:
+  - a tarefa principal for deletada
+  - o parentTaskId estiver inválido
+  - houver dados antigos inconsistentes
+- impacto de performance do self-join
+
+7) testes
+- quais testes foram executados com sucesso
+- quais falharam e por quê
+- como reproduzir o erro de autenticação
+- sugerir solução para estabilizar os testes
+
+8) pendências
+- lista objetiva do que ainda falta fazer
+- separar entre:
+  - crítico (bloqueia produção)
+  - melhoria (pode ir depois)
+
+9) verificação final
+- checklist:
+  - [ ] lista de tarefas ok
+  - [ ] nó do mapa ok
+  - [ ] tela de edição ok
+  - [ ] edição de título bloqueada corretamente
+  - [ ] badge posicionado corretamente
+
+seja específico, técnico e direto. não omitir problemas.

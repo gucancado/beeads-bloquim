@@ -235,7 +235,13 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
           <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${colors.stripBg}`} />
         )}
 
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1 min-w-0">
+          <p className={`text-[11px] font-semibold truncate ${colors.textColor}`} title={data.taskTitle}>
+            {data.taskTitle}
+          </p>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
           <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center overflow-hidden ring-2 ${colors.bgLight} ${colors.ringLight}`}>
             {data.approverAvatarUrl ? (
               <img

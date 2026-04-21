@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TASK_STATUS_ORDER, getStatusActiveClass } from "@/lib/taskStatusConstants";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { getColorByIndex } from "@workspace/db/colorPalette";
+import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 
 function getInitials(name: string) {
   return name
@@ -45,6 +46,8 @@ export interface TaskListItemData {
   workspaceName?: string | null;
   workspaceColorIndex?: number | null;
   isApprovalTask?: boolean | null;
+  parentTaskId?: string | null;
+  parentTaskTitle?: string | null;
   isRecurring?: boolean | null;
   recurrenceConfig?: { type: string } | null;
   attachmentCount?: number | null;
@@ -85,6 +88,8 @@ export function TaskListItem({
 
   const [localTask, setLocalTask] = useState<TaskListItemData>(task);
   const [editingTitle, setEditingTitle] = useState(false);
+  const isApprovalTask = !!task.isApprovalTask;
+  const displayTitle = getApprovalDisplayTitle(localTask);
   const [titleValue, setTitleValue] = useState(task.cardTitle || task.title);
   const [statusOpen, setStatusOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
@@ -311,9 +316,19 @@ export function TaskListItem({
 
       {/* Line 1: title (left), status badge (right) */}
       <div className="flex items-center gap-2 min-w-0">
-        {/* Title — inline editable, takes remaining space */}
-        <div className="flex-1 min-w-0">
-          {editingTitle ? (
+        {/* Title — inline editable for regular tasks, read-only with badge for approval tasks */}
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          {isApprovalTask ? (
+            <>
+              <ApprovalBadge />
+              <h3
+                className="text-base font-semibold text-foreground truncate"
+                title={displayTitle}
+              >
+                {displayTitle}
+              </h3>
+            </>
+          ) : editingTitle ? (
             <input
               ref={titleInputRef}
               value={titleValue}
@@ -329,7 +344,7 @@ export function TaskListItem({
               onClick={handleTitleClick}
               title="Clique para editar o título"
             >
-              {localTask.cardTitle || localTask.title}
+              {displayTitle}
             </h3>
           )}
         </div>
@@ -479,13 +494,6 @@ export function TaskListItem({
         {/* Attachment icon */}
         {localTask.attachmentCount != null && localTask.attachmentCount > 0 && (
           <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" aria-label="Possui anexos" />
-        )}
-
-        {/* Approval task badge */}
-        {task.isApprovalTask && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-2 py-0.5 rounded-full tracking-wide lowercase shrink-0">
-            aprovação
-          </span>
         )}
 
         {/* Subtask + comment indicators immediately right of the attachment icon */}

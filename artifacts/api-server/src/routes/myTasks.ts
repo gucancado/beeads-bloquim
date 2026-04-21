@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
@@ -148,6 +149,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       )
     : and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId));
 
+  const parentTasks = alias(tasks, "parent_tasks");
   const taskList = await db
     .select({
       id: tasks.id,
@@ -167,6 +169,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       isRecurring: tasks.isRecurring,
       recurrenceConfig: tasks.recurrenceConfig,
       parentTaskId: tasks.parentTaskId,
+      parentTaskTitle: parentTasks.title,
       cardId: cards.id,
       cardTitle: cards.title,
       mapName: maps.name,
@@ -184,6 +187,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .leftJoin(maps, eq(maps.id, tasks.mapId))
     .leftJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
     .leftJoin(users, eq(users.id, tasks.assignedTo))
+    .leftJoin(parentTasks, eq(parentTasks.id, tasks.parentTaskId))
     .where(
       and(
         ownershipFilter,
@@ -288,6 +292,10 @@ router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   const parsed = updateStandaloneTaskSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+  }
+
+  if (existing.isApprovalTask && parsed.data.title !== undefined) {
+    return res.status(400).json({ message: "não é permitido alterar o título de tarefas de aprovação" });
   }
 
   const updateData: Record<string, any> = { ...parsed.data, updatedAt: new Date() };

@@ -435,6 +435,7 @@ export function TaskDetailModal({
 
   const handleSaveTask = () => {
     if (!resolvedTaskId) return;
+    if (!isCardMode && task?.isApprovalTask) return;
     const payload: UpdateTaskPayload = {
       title, description: description || null,
       priority, dueDate: dueDate || null,
@@ -532,6 +533,13 @@ export function TaskDetailModal({
 
   const handleCloseModal = async () => {
     if (showDelete || isDeleting || deleteCardMut.isPending) return;
+    const isApprovalTaskOpen = isCardMode
+      ? card?.task?.isApprovalTask === true
+      : task?.isApprovalTask === true;
+    if (isApprovalTaskOpen) {
+      onClose();
+      return;
+    }
     if (isCardMode) { saveCard(); if (card?.task) saveCardTaskDetails(); }
     else if (isEditing && resolvedTaskId) {
       if (auto.autoCreatedTaskId && !auto.autoCreateDirty) {

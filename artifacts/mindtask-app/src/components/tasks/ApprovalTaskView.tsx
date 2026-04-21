@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, X, ClipboardCheck, Loader2 } from "lucide-react";
+import { Check, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { customFetch } from "@workspace/api-client-react";
 import { getStatusLabel } from "@/lib/taskStatusConstants";
 import { ApprovalTaskActivityHistory } from "@/components/maps/CommentsSection";
+import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 
 interface ParentTask {
   id: string;
@@ -142,17 +143,19 @@ export function ApprovalTaskView({ taskId, workspaceId, onClose }: ApprovalTaskV
   return (
     <div className="p-6 space-y-6">
 
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
-          <ClipboardCheck className="w-4 h-4" />
-          <span className="text-xs font-semibold tracking-wider lowercase">tarefa de aprovação</span>
+      {/* Header row: aprovação badge + parent title */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <ApprovalBadge />
+          <h2 className="text-base font-semibold text-foreground truncate">
+            {getApprovalDisplayTitle({ isApprovalTask: true, parentTask: task.parentTask, title: task.title })}
+          </h2>
         </div>
         <Button
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg shrink-0"
         >
           <X className="w-4 h-4" />
         </Button>
@@ -179,25 +182,20 @@ export function ApprovalTaskView({ taskId, workspaceId, onClose }: ApprovalTaskV
         </div>
       </div>
 
-      {/* Linked common task */}
+      {/* Linked common task status */}
       {task.parentTask && (
         <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-muted-foreground tracking-wider lowercase">tarefa vinculada</p>
-          <div className="px-3 py-3 bg-muted/40 rounded-xl border border-border space-y-2">
-            <p className="text-sm font-semibold text-foreground leading-snug">
-              {task.parentTask.title}
-            </p>
-            <div>
-              {completedLabel ? (
-                <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full border lowercase ${statusBadgeClass("completed")}`}>
-                  {completedLabel}
-                </span>
-              ) : (
-                <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full border lowercase ${statusBadgeClass(parentStatus)}`}>
-                  {getStatusLabel(parentStatus)}
-                </span>
-              )}
-            </div>
+          <p className="text-xs font-semibold text-muted-foreground tracking-wider lowercase">status da tarefa</p>
+          <div>
+            {completedLabel ? (
+              <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full border lowercase ${statusBadgeClass("completed")}`}>
+                {completedLabel}
+              </span>
+            ) : (
+              <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full border lowercase ${statusBadgeClass(parentStatus)}`}>
+                {getStatusLabel(parentStatus)}
+              </span>
+            )}
           </div>
         </div>
       )}

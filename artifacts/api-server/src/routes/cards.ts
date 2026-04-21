@@ -125,6 +125,17 @@ router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), a
     return;
   }
 
+  if (parsed.data.title !== undefined) {
+    const [existingCard] = await db.select().from(cards).where(eq(cards.id, req.params.cardId)).limit(1);
+    if (existingCard?.taskId) {
+      const [linkedTask] = await db.select({ isApprovalTask: tasks.isApprovalTask }).from(tasks).where(eq(tasks.id, existingCard.taskId)).limit(1);
+      if (linkedTask?.isApprovalTask) {
+        res.status(400).json({ error: "Approval task title is read-only", message: "não é permitido alterar o título de tarefas de aprovação" });
+        return;
+      }
+    }
+  }
+
   const [updated] = await db
     .update(cards)
     .set({ ...parsed.data, updatedAt: new Date() })
@@ -474,6 +485,11 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
   }
 
   const [currentTask] = await db.select().from(tasks).where(eq(tasks.id, card.taskId)).limit(1);
+
+  if (currentTask?.isApprovalTask && parsed.data.title !== undefined) {
+    res.status(400).json({ error: "Approval task title is read-only", message: "não é permitido alterar o título de tarefas de aprovação" });
+    return;
+  }
 
   const updateData: any = { ...parsed.data, updatedAt: new Date() };
   let resolvedDueDate: Date | null = currentTask?.dueDate ?? null;
