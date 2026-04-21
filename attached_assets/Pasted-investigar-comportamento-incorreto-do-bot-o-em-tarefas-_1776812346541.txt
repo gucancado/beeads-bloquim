@@ -1,0 +1,93 @@
+investigar comportamento incorreto do botão "+" em tarefas de aprovação no mapa
+
+objetivo:
+garantir que o botão "+" em tarefas de aprovação tenha exatamente o mesmo comportamento do botão "+" em tarefas comuns, e identificar a causa dos desvios atuais
+
+1) comportamento esperado (padrão único para todos os botões "+")
+
+considere um botão + associado a uma tarefa A.
+
+1.1 clique simples no botão "+"
+- criar uma nova tarefa B
+- tarefa B deve ser vinculada à tarefa A
+- o nó da tarefa B deve ser criado à direita do botão +.
+
+1.2 clique + arrastar para área vazia
+- criar uma nova tarefa B
+- tarefa B deve ser vinculada à tarefa A
+- o nó da tarefa B deve ser criado na posição onde o mouse foi solto
+
+1.3 clique + arrastar para tarefa existente C
+- não criar nova tarefa
+- criar ligação entre tarefa A → tarefa C
+- a ligação deve entrar na lateral esquerda de C e deve se originar do ponto associado ao botão + dependendo de como o botão + estiver sendo exibido
+
+2) regras de exibição do botão "+"
+
+- tarefa comum sem aprovação:
+  botão "+" aparece à direita da tarefa
+
+- tarefa comum com 1 aprovação:
+  botão "+" aparece à direita da tarefa de aprovação
+
+- tarefa comum com múltiplas aprovações (sequencial):
+  botão "+" aparece à direita da última tarefa de aprovação da sequência
+
+- tarefa comum com múltiplas aprovações (paralelo):
+  botão "+" aparece como um nó intermediário, ligado à esquerda de todas as tarefas de aprovação
+
+3) problemas atuais (bugs observados)
+
+3.1 comportamento indevido de drag direto
+- ao passar o cursor na lateral de uma tarefa de aprovação:
+  - o cursor muda para modo de conexão
+  - é possível arrastar uma linha diretamente do nó
+
+isso está errado
+
+regra correta:
+- só deve ser possível iniciar conexões a partir do botão "+"
+- nós não devem permitir drag de conexão direto
+
+3.2 falha de conexão
+- ao tentar conectar uma tarefa de aprovação a uma tarefa comum:
+  - a ligação não é criada corretamente
+
+4) investigação necessária (não implementar ainda)
+
+identificar com precisão:
+
+- onde está sendo habilitado o comportamento de conexão direta nos nós
+  - verificar configuração de handles no React Flow (source/target handles)
+  - verificar se ApprovalNode está expondo handles indevidamente
+
+- diferenças entre:
+  - TaskNode (tarefa comum)
+  - ApprovalNode (tarefa de aprovação)
+
+- como o evento de criação de conexão via botão "+" está implementado
+  - handlers de mouse (onMouseDown, onDrag, onConnect, etc.)
+
+
+- por que a conexão A (approval) → C (task) não funciona
+  - verificar validações de edge (source/target types)
+  - verificar se há bloqueio por tipo de nó
+  - verificar se ids ou tipos estão inconsistentes
+
+5) resultado esperado da resposta
+
+- explicação clara da causa raiz dos dois problemas:
+  - conexão direta indevida
+  - falha ao conectar approval → task
+
+- apontar exatamente:
+  - arquivos envolvidos
+  - funções responsáveis
+  - diferenças de implementação entre nós
+
+- propor solução ideal:
+  - como remover conexão direta dos nós
+  - como padronizar comportamento via botão "+"
+  - como corrigir ligação entre tipos diferentes de tarefas
+
+não implementar nenhuma alteração ainda
