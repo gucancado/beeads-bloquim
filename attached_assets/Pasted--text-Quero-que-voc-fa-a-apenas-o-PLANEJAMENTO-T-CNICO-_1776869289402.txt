@@ -1,0 +1,62 @@
+```text
+Quero que você faça apenas o PLANEJAMENTO TÉCNICO da seguinte tarefa no Bloquim. Não implemente nada ainda.
+
+Tarefa:
+Adicionar presença visual em tempo real dentro de cada plano/mapa, mostrando para cada usuário online o cursor dos demais usuários.
+
+Requisitos funcionais:
+- A funcionalidade deve funcionar por plano/mapa aberto.
+- Se dois ou mais usuários estiverem com o mesmo plano aberto ao mesmo tempo, cada um deve ver em tempo real o cursor dos outros usuários online naquele plano.
+- O próprio usuário continua vendo apenas o cursor normal do sistema, sem qualquer modificação visual.
+- Para os outros usuários online, deve ser exibido:
+  - uma seta simples representando o cursor
+  - a foto do usuário
+  - o nome do usuário em tamanho reduzido
+- Cada usuário remoto deve ter uma cor aleatória associada ao seu cursor.
+- As cores possíveis são apenas:
+  - azul
+  - verde
+  - vermelho
+  - laranja
+  - roxo
+- Essa cor deve ser usada de forma consistente para identificar aquele usuário enquanto ele permanecer na sessão daquele plano.
+- Não precisa persistir essa cor no banco de dados.
+- Não deve haver salvamento no banco de dados do estado de presença ou da posição do cursor.
+- A funcionalidade é totalmente efêmera e deve existir apenas enquanto a sessão estiver ativa.
+- Ao sair do plano, recarregar a página, perder a conexão ou fechar a aba, a presença do usuário deve desaparecer para os demais.
+- Não vamos condicionar a funcionalidade ao número de usuários online. Basta entrar no plano para participar da presença em tempo real.
+- A solução deve ser otimizada para evitar tráfego desnecessário, mas sem usar a regra de ativar/desativar por quantidade de usuários.
+
+Requisitos técnicos esperados:
+- O cursor remoto deve aparecer na posição correta dentro do plano, considerando o sistema de coordenadas já usado no canvas/mapa.
+- A solução precisa conviver corretamente com pan e zoom do mapa.
+- O cursor remoto não deve interferir nas interações normais do usuário com o sistema.
+- O overlay dos cursores remotos deve ser apenas visual, sem bloquear clique, drag ou seleção.
+- Deve haver limpeza correta de presença quando um usuário desconectar ou ficar sem enviar atualizações.
+- O envio da posição do cursor deve usar alguma estratégia de otimização como throttle ou equivalente.
+- A solução deve ser desenhada para ser simples, robusta e fácil de evoluir depois para outras features colaborativas, como lousa em tempo real.
+
+O que eu quero que você entregue agora:
+1. Análise da complexidade da tarefa no contexto do código atual do Bloquim
+2. Mapeamento dos arquivos e componentes que provavelmente precisarão ser alterados
+3. Identificação dos pontos de risco e conflitos com o canvas atual
+4. Proposta de arquitetura da solução em alto nível
+5. Fluxo de eventos completo, do momento em que o usuário entra no plano até o momento em que sai
+6. Estratégia para coordenadas, pan e zoom
+7. Estratégia para presença efêmera e remoção de usuários desconectados
+8. Estratégia para atribuição aleatória e temporária das cores por sessão
+9. Estratégia de otimização de tráfego
+10. Plano de implementação em etapas pequenas e seguras
+11. Lista de testes necessários
+12. Critérios de aceite bem objetivos
+13. Sugestões de decisões de escopo para manter a primeira versão simples
+
+Importante:
+- Não implemente nada ainda.
+- Não gere código ainda.
+- Não faça mudanças no projeto ainda.
+- Primeiro quero um plano técnico completo, específico para a estrutura atual do Bloquim.
+- Antes de propor a solução, inspecione a arquitetura atual do canvas/mapa, o fluxo de presença em tempo real se já existir, e os pontos onde seria melhor acoplar essa funcionalidade.
+- Se identificar mais de uma abordagem viável, compare as opções e recomende a melhor para o contexto atual do projeto.
+- Seja concreto, técnico e específico. Evite resposta genérica.
+```
