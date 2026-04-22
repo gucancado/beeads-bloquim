@@ -625,6 +625,11 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               <input
                 type="date"
                 autoFocus
+                ref={(el) => {
+                  if (el) {
+                    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
+                  }
+                }}
                 className="nodrag text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer ml-auto"
                 value={dueDateValue}
                 onChange={e => setDueDateValue(e.target.value)}
@@ -634,7 +639,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               />
             ) : hasDueDate ? (
               <div
-                className={`flex items-center gap-1 text-[11px] font-medium ml-auto cursor-pointer rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} ${hasTask ? '' : 'cursor-default'} nodrag`}
+                className={`flex items-center gap-1 text-[11px] font-medium ml-auto rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} ${hasTask ? 'cursor-pointer' : 'cursor-default'} nodrag`}
                 title={hasTask ? 'Clique para editar prazo' : undefined}
                 onClick={(e) => { if (hasTask) { e.stopPropagation(); setEditingDueDate(true); } }}
                 onDoubleClick={(e) => e.stopPropagation()}
@@ -644,7 +649,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               </div>
             ) : hasTask ? (
               <button
-                className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all ml-auto"
+                className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all ml-auto cursor-pointer"
                 title="Adicionar prazo"
                 onClick={(e) => { e.stopPropagation(); setEditingDueDate(true); }}
               >

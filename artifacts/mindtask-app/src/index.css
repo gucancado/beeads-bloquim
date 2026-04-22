@@ -144,7 +144,7 @@
 }
 
 .react-flow__pane {
-  cursor: crosshair;
+  cursor: default;
 }
 
 .react-flow__node {

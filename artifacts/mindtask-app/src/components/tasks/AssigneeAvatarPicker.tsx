@@ -38,7 +38,7 @@ export function AssigneeAvatarPicker({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="flex items-center justify-center w-10 h-10 rounded-xl bg-background hover:bg-muted/60 transition-colors focus:outline-none"
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-background hover:bg-muted/60 transition-colors focus:outline-none cursor-pointer"
               >
                 {assigneeName ? (
                   <Avatar key={`${assignedTo}|${assigneeAvatarUrl ?? ""}`} className="w-9 h-9 shrink-0">
