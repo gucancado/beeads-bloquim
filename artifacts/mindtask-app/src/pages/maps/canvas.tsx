@@ -266,9 +266,9 @@ function buildJoinNodes(
       type: 'joinnode',
       position: { x: maxX + 260, y: avgCenterY - 18 },
       data: { parentCardId: parentCard.id, onAddChild },
-      draggable: false,
+      draggable: true,
       deletable: false,
-      selectable: false,
+      selectable: true,
     });
   }
   return joinNodes;
@@ -1179,8 +1179,23 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         return;
       }
 
-      // Approval nodes and join nodes are not draggable to meaningful positions
-      if (node.type === 'approvalnode' || node.type === 'joinnode') return;
+      // Approval nodes use auto-derived positions and are not user-movable.
+      if (node.type === 'approvalnode') return;
+
+      // Join nodes are user-draggable (individually and in group selections),
+      // but their position is derived from approval children and is not
+      // persisted. The drag lifecycle (snapshot/undo) above still applies.
+      if (node.type === 'joinnode') {
+        // Still clear any edge highlight that may have been left over.
+        if (highlightedEdgeIdRef.current) {
+          setHighlightedEdgeId(null);
+          setEdges(eds => eds.map(e => ({
+            ...e,
+            data: { ...e.data, highlighted: false },
+          })));
+        }
+        return;
+      }
 
       // Always save position
       updateCardMut.mutate({
@@ -1324,6 +1339,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             workspaceId, mapId, shapeId: node.id,
             data: { positionX: node.position.x, positionY: node.position.y },
           });
+        } else if (node.type === 'joinnode') {
+          // Position is derived from approval children; do not persist.
         } else {
           updateCardMut.mutate({
             workspaceId, mapId, cardId: node.id,
