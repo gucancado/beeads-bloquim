@@ -21,6 +21,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { usePresenceChannel } from "@/realtime/usePresenceChannel";
+import { PresenceCursorsOverlay } from "@/realtime/PresenceCursorsOverlay";
 
 interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   sourceHandle?: string;
@@ -1684,6 +1686,19 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const reactFlowRef = useRef<HTMLDivElement>(null);
 
+  const { peers: presencePeers, sendCursor: sendPresenceCursor } = usePresenceChannel(mapId);
+
+  useEffect(() => {
+    const el = reactFlowRef.current;
+    if (!el) return;
+    const handleMove = (e: MouseEvent) => {
+      const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      sendPresenceCursor(flow.x, flow.y);
+    };
+    el.addEventListener('mousemove', handleMove);
+    return () => el.removeEventListener('mousemove', handleMove);
+  }, [screenToFlowPosition, sendPresenceCursor]);
+
   useEffect(() => {
     const el = reactFlowRef.current;
     if (!el) return;
@@ -2098,6 +2113,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M5.333 16c0-5.891 4.776-10.667 10.667-10.667S26.667 10.109 26.667 16 21.891 26.667 16 26.667 5.333 21.891 5.333 16zM16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" /></svg>
               </ControlButton>
             </Controls>
+            <PresenceCursorsOverlay peers={presencePeers} />
           </ReactFlow>
         </div>
       </div>

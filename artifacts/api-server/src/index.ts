@@ -1,6 +1,8 @@
+import { createServer } from "node:http";
 import app from "./app";
 import { startScheduler } from "./scheduler";
 import { logger } from "./lib/logger";
+import { attachPresenceServer } from "./realtime/presenceServer";
 
 const rawPort = process.env["PORT"];
 
@@ -16,7 +18,10 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, () => {
+const httpServer = createServer(app);
+attachPresenceServer(httpServer);
+
+httpServer.listen(port, () => {
   logger.info({ port, env: process.env.NODE_ENV ?? "development" }, "server listening");
   startScheduler();
 });
