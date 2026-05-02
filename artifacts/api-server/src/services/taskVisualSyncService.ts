@@ -19,7 +19,8 @@ export type VisualStatus =
 export function parseDateNoon(value: string | null | undefined): Date | null {
   if (!value) return null;
   const dateOnly = value.slice(0, 10);
-  return new Date(dateOnly + "T12:00:00.000Z");
+  const d = new Date(dateOnly + "T12:00:00.000Z");
+  return isNaN(d.getTime()) ? null : d;
 }
 
 /**

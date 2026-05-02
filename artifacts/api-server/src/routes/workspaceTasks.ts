@@ -12,6 +12,8 @@ const log = logger.child({ module: "workspaceTasks" });
 import { requireWorkspaceRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
+import { resolveSchedule, type ScheduleMode } from "../lib/scheduleMode";
+import { tryActivateTask } from "../services/taskActivation";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -125,6 +127,8 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       description: tasks.description,
       assignedTo: tasks.assignedTo,
       dueDate: tasks.dueDate,
+      startAt: tasks.startAt,
+      scheduleMode: tasks.scheduleMode,
       priority: tasks.priority,
       status: tasks.status,
       overdue: tasks.overdue,
@@ -189,6 +193,8 @@ const createTaskSchema = z.object({
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  startAt: z.string().nullable().optional(),
+  scheduleMode: z.enum(["ate", "entre", "em"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -204,10 +210,14 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
     return;
   }
 
-  const { title, description, dueDate, priority, isRecurring, recurrenceConfig } = parsed.data;
+  const { title, description, priority, isRecurring, recurrenceConfig } = parsed.data;
 
-  const dueDateValue = parseDateNoon(dueDate);
-  const overdueValue = computeOverdue(dueDateValue, "draft");
+  const sched = resolveSchedule(parsed.data, { scheduleMode: "ate", startAt: null, dueDate: null });
+  if (!sched.ok) {
+    res.status(400).json({ error: "Validation error", message: sched.error });
+    return;
+  }
+  const overdueValue = computeOverdue(sched.value.dueDate, "draft");
 
   const actorId = req.user!.userId;
   const assignedTo = parsed.data.assignedTo === undefined ? actorId : parsed.data.assignedTo;
@@ -219,7 +229,9 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       title,
       description: description ?? null,
       assignedTo,
-      dueDate: dueDateValue,
+      dueDate: sched.value.dueDate,
+      startAt: sched.value.startAt,
+      scheduleMode: sched.value.scheduleMode,
       priority: priority ?? "medium",
       status: "draft",
       overdue: overdueValue,
@@ -316,13 +328,28 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   const assigneeChanging = "assignedTo" in parsed.data && parsed.data.assignedTo !== existing.assignedTo;
   const newAssigneeId = assigneeChanging ? (parsed.data.assignedTo ?? null) : null;
   const priorityChanging = parsed.data.priority !== undefined && parsed.data.priority !== existing.priority;
-  const dueDateChanging = "dueDate" in parsed.data && (parsed.data.dueDate ?? null) !== (existing.dueDate ? existing.dueDate.toISOString().slice(0, 10) : null);
+  const safeExistingDueDate = existing.dueDate && !isNaN(existing.dueDate.getTime()) ? existing.dueDate : null;
+  const dueDateChanging = "dueDate" in parsed.data && (parsed.data.dueDate ?? null) !== (safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null);
 
   const updateData: Record<string, any> = { updatedAt: new Date() };
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
   if ("assignedTo" in parsed.data) updateData.assignedTo = parsed.data.assignedTo ?? null;
-  if ("dueDate" in parsed.data) updateData.dueDate = parseDateNoon(parsed.data.dueDate as string);
+  const touchesSchedule = "dueDate" in parsed.data || "startAt" in parsed.data || "scheduleMode" in parsed.data;
+  if (touchesSchedule) {
+    const sched = resolveSchedule(parsed.data, {
+      scheduleMode: (existing.scheduleMode ?? "ate") as ScheduleMode,
+      startAt: existing.startAt,
+      dueDate: existing.dueDate,
+    });
+    if (!sched.ok) {
+      res.status(400).json({ error: "Validation error", message: sched.error });
+      return;
+    }
+    updateData.dueDate = sched.value.dueDate;
+    updateData.startAt = sched.value.startAt;
+    updateData.scheduleMode = sched.value.scheduleMode;
+  }
   if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
   // Invariant: tasks linked to a plan (mapId) cannot be recurring
   const effectiveMapId = existing.mapId;
@@ -341,6 +368,10 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
 
   await syncCardVisual(taskId, updated.status, !!updated.overdue);
+
+  if (touchesSchedule) {
+    await tryActivateTask(taskId);
+  }
 
   const [assignee, actorUser] = await Promise.all([
     updated.assignedTo
@@ -393,7 +424,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
       type: "due_date_changed",
       metadata: {
         actorName: actorUser[0]?.name ?? null,
-        oldDueDate: existing.dueDate ? existing.dueDate.toISOString().slice(0, 10) : null,
+        oldDueDate: safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null,
         newDueDate: parsed.data.dueDate ?? null,
       },
     });

@@ -5,6 +5,7 @@
  * MindTask API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ScheduleMode } from "./scheduleMode";
 import type { TaskPriority } from "./taskPriority";
 
 export interface UpdateTaskDetailsRequest {
@@ -12,5 +13,7 @@ export interface UpdateTaskDetailsRequest {
   description?: string;
   assignedTo?: string | null;
   dueDate?: Date | null;
+  startAt?: Date | null;
+  scheduleMode?: ScheduleMode;
   priority?: TaskPriority;
 }

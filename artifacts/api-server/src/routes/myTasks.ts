@@ -10,6 +10,8 @@ import { logger } from "../lib/logger";
 
 const log = logger.child({ module: "myTasks" });
 import { computeOverdue } from "../lib/overdue";
+import { resolveSchedule, type ScheduleMode } from "../lib/scheduleMode";
+import { tryActivateTask } from "../services/taskActivation";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
@@ -159,6 +161,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       description: tasks.description,
       assignedTo: tasks.assignedTo,
       dueDate: tasks.dueDate,
+      startAt: tasks.startAt,
+      scheduleMode: tasks.scheduleMode,
       priority: tasks.priority,
       status: tasks.status,
       completedAt: tasks.completedAt,
@@ -224,6 +228,8 @@ const createStandaloneTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  startAt: z.string().nullable().optional(),
+  scheduleMode: z.enum(["ate", "entre", "em"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -236,9 +242,12 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
   }
 
-  const { title, description, dueDate, priority, isRecurring, recurrenceConfig } = parsed.data;
-  const dueDateValue = parseDateNoon(dueDate);
-  const overdueValue = computeOverdue(dueDateValue, "draft");
+  const { title, description, priority, isRecurring, recurrenceConfig } = parsed.data;
+  const sched = resolveSchedule(parsed.data, { scheduleMode: "ate", startAt: null, dueDate: null });
+  if (!sched.ok) {
+    return res.status(400).json({ message: sched.error });
+  }
+  const overdueValue = computeOverdue(sched.value.dueDate, "draft");
 
   const [newTask] = await db.insert(tasks).values({
     workspaceId: null,
@@ -246,7 +255,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     title,
     description: description ?? null,
     assignedTo: userId,
-    dueDate: dueDateValue,
+    dueDate: sched.value.dueDate,
+    startAt: sched.value.startAt,
+    scheduleMode: sched.value.scheduleMode,
     priority,
     status: "draft",
     overdue: overdueValue,
@@ -270,6 +281,8 @@ const updateStandaloneTaskSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  startAt: z.string().nullable().optional(),
+  scheduleMode: z.enum(["ate", "entre", "em"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -298,13 +311,28 @@ router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
     return res.status(400).json({ message: "não é permitido alterar o título de tarefas de aprovação" });
   }
 
-  const updateData: Record<string, any> = { ...parsed.data, updatedAt: new Date() };
-  if (parsed.data.dueDate !== undefined) {
-    updateData.dueDate = parseDateNoon(parsed.data.dueDate);
-    updateData.overdue = computeOverdue(updateData.dueDate, existing.status ?? "pending");
+  const { dueDate: _dd, startAt: _sa, scheduleMode: _sm, ...rest } = parsed.data;
+  const updateData: Record<string, any> = { ...rest, updatedAt: new Date() };
+  const touchesSchedule = "dueDate" in parsed.data || "startAt" in parsed.data || "scheduleMode" in parsed.data;
+  if (touchesSchedule) {
+    const sched = resolveSchedule(parsed.data, {
+      scheduleMode: (existing.scheduleMode ?? "ate") as ScheduleMode,
+      startAt: existing.startAt,
+      dueDate: existing.dueDate,
+    });
+    if (!sched.ok) {
+      return res.status(400).json({ message: sched.error });
+    }
+    updateData.dueDate = sched.value.dueDate;
+    updateData.startAt = sched.value.startAt;
+    updateData.scheduleMode = sched.value.scheduleMode;
+    updateData.overdue = computeOverdue(sched.value.dueDate, existing.status ?? "pending");
   }
 
   const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+  if (touchesSchedule) {
+    await tryActivateTask(taskId);
+  }
   return res.json(updated);
 });
 

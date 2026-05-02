@@ -33,6 +33,7 @@ export * from "./loginRequest";
 export * from "./mapDetailResponse";
 export * from "./mapResponse";
 export * from "./registerRequest";
+export * from "./scheduleMode";
 export * from "./shapeResponse";
 export * from "./shapeResponseStrokeStyle";
 export * from "./shapeResponseType";

@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorkspaceMembers } from '@workspace/api-client-react';
 import { AssigneeAvatarPicker } from '@/components/tasks/AssigneeAvatarPicker';
 import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 function stripHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -99,6 +100,8 @@ interface MindMapNodeProps {
     statusVisual: string;
     taskId?: string | null;
     taskDueDate?: string | null;
+    taskStartAt?: string | null;
+    taskScheduleMode?: "ate" | "entre" | "em" | null;
     taskAssigneeName?: string | null;
     taskAssigneeId?: string | null;
     taskAssigneeAvatarUrl?: string | null;
@@ -120,6 +123,8 @@ interface MindMapNodeProps {
       taskAssigneeId: string | null;
       taskAssigneeAvatarUrl: string | null;
       taskDueDate: string | null;
+      taskStartAt: string | null;
+      taskScheduleMode: "ate" | "entre" | "em" | null;
     }>) => void;
     onEditingChange?: (cardId: string, isEditing: boolean) => void;
     onAutoFocusDone?: (cardId: string) => void;
@@ -139,6 +144,7 @@ function statusLabel(s: string) {
 
 
 function MindMapNode({ id, data, selected }: MindMapNodeProps) {
+  const { toast } = useToast();
   const color = getStatusColorHex(data.statusVisual);
   const nodeColors = getNodeColors(data.statusVisual);
   const isMuted = data.statusVisual === 'no_task';
@@ -171,6 +177,15 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   }
 
+  let startAtStr: string | null = null;
+  if (data.taskStartAt) {
+    try {
+      startAtStr = formatDueDate(data.taskStartAt);
+    } catch {
+      startAtStr = null;
+    }
+  }
+
   const isOverdue =
     data.taskDueDate &&
     new Date(data.taskDueDate.slice(0, 10) + 'T23:59:59') < new Date() &&
@@ -178,6 +193,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
 
   const hasAssignee = !!data.taskAssigneeName;
   const hasDueDate = !!dueDateStr;
+  const hasStartAt = !!startAtStr;
 
   const queryClient = useQueryClient();
   const mapQueryKey = [`/api/workspaces/${workspaceId}/maps/${mapId}`];
@@ -207,6 +223,10 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const [dueDateValue, setDueDateValue] = useState(
     data.taskDueDate ? data.taskDueDate.split('T')[0] : '',
   );
+  const [editingStartAt, setEditingStartAt] = useState(false);
+  const [startAtValue, setStartAtValue] = useState(
+    data.taskStartAt ? data.taskStartAt.split('T')[0] : '',
+  );
 
   useEffect(() => {
     if (!editingStatus) return;
@@ -226,6 +246,10 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   useEffect(() => {
     setDueDateValue(data.taskDueDate ? data.taskDueDate.split('T')[0] : '');
   }, [data.taskDueDate]);
+
+  useEffect(() => {
+    setStartAtValue(data.taskStartAt ? data.taskStartAt.split('T')[0] : '');
+  }, [data.taskStartAt]);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -310,14 +334,39 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   };
 
+  const serverScheduleMode = (data.taskScheduleMode ?? "ate") as "ate" | "entre" | "em";
+  // Local override: lets the user switch to "entre"/"em" before the dates
+  // are filled. Cleared once the server's mode catches up.
+  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | null>(null);
+  useEffect(() => {
+    if (pendingMode && serverScheduleMode === pendingMode) setPendingMode(null);
+  }, [serverScheduleMode, pendingMode]);
+  const currentScheduleMode: "ate" | "entre" | "em" = pendingMode ?? serverScheduleMode;
+
   const handleDueDateBlur = () => {
     setEditingDueDate(false);
+    if (currentScheduleMode === "entre" && dueDateValue && data.taskStartAt) {
+      const startStr = data.taskStartAt.slice(0, 10);
+      if (dueDateValue < startStr) {
+        toast({ title: "fim deve ser após o início", variant: "destructive" });
+        setDueDateValue(data.taskDueDate ? data.taskDueDate.slice(0, 10) : "");
+        return;
+      }
+    }
     if (!dueDateValue) {
       if (data.taskDueDate) {
-        data.onInlineUpdate?.(id, { taskDueDate: null });
+        const patch = currentScheduleMode === "em"
+          ? { taskDueDate: null, taskStartAt: null }
+          : { taskDueDate: null };
+        data.onInlineUpdate?.(id, patch);
         if (data.taskId) {
           updateTaskDetailsMut.mutate(
-            { workspaceId, mapId, cardId: id, data: { dueDate: null as any } },
+            {
+              workspaceId,
+              mapId,
+              cardId: id,
+              data: currentScheduleMode === "em" ? { dueDate: null, startAt: null } : { dueDate: null },
+            },
             { onSuccess: invalidateAll },
           );
         }
@@ -325,11 +374,101 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       return;
     }
     const isoDate = dueDateValue + "T12:00:00.000Z";
-    if (data.taskDueDate && data.taskDueDate.slice(0, 10) === dueDateValue) return;
-    data.onInlineUpdate?.(id, { taskDueDate: isoDate });
+    if (!pendingMode && data.taskDueDate && data.taskDueDate.slice(0, 10) === dueDateValue) return;
+    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" } = { taskDueDate: isoDate };
+    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" } = { dueDate: isoDate };
+    if (currentScheduleMode === "em") {
+      patch.taskStartAt = isoDate;
+      apiData.startAt = isoDate;
+    }
+    if (pendingMode) {
+      patch.taskScheduleMode = pendingMode;
+      apiData.scheduleMode = pendingMode;
+    }
+    data.onInlineUpdate?.(id, patch);
     if (data.taskId) {
       updateTaskDetailsMut.mutate(
-        { workspaceId, mapId, cardId: id, data: { dueDate: isoDate } },
+        { workspaceId, mapId, cardId: id, data: apiData },
+        { onSuccess: invalidateAll },
+      );
+    }
+  };
+
+  const handleScheduleModeChange = (next: "ate" | "entre" | "em") => {
+    if (next === currentScheduleMode) return;
+    // Persist immediately when the mode is fully specifiable from existing
+    // data; otherwise switch only the local UI mode and let the date input
+    // handler persist mode + dates atomically.
+    if (next === "ate") {
+      setPendingMode(null);
+      data.onInlineUpdate?.(id, { taskScheduleMode: "ate", taskStartAt: null });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: "ate", startAt: null } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
+    if (next === "em" && data.taskDueDate) {
+      setPendingMode(null);
+      data.onInlineUpdate?.(id, { taskScheduleMode: "em", taskStartAt: data.taskDueDate });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: "em", startAt: data.taskDueDate } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
+    if (next === "entre" && data.taskStartAt && data.taskDueDate) {
+      setPendingMode(null);
+      data.onInlineUpdate?.(id, { taskScheduleMode: "entre" });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: "entre" } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
+    setPendingMode(next);
+  };
+
+  const handleStartAtBlur = () => {
+    setEditingStartAt(false);
+    if (startAtValue && data.taskDueDate) {
+      const dueStr = data.taskDueDate.slice(0, 10);
+      if (startAtValue > dueStr) {
+        toast({ title: "início deve ser até o fim", variant: "destructive" });
+        setStartAtValue(data.taskStartAt ? data.taskStartAt.slice(0, 10) : "");
+        return;
+      }
+    }
+    if (!startAtValue) {
+      if (data.taskStartAt) {
+        data.onInlineUpdate?.(id, { taskStartAt: null });
+        if (data.taskId) {
+          updateTaskDetailsMut.mutate(
+            { workspaceId, mapId, cardId: id, data: { startAt: null } },
+            { onSuccess: invalidateAll },
+          );
+        }
+      }
+      return;
+    }
+    const iso = startAtValue + "T12:00:00.000Z";
+    if (!pendingMode && (data.taskStartAt ?? null) === iso) return;
+    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" } = { taskStartAt: iso };
+    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" } = { startAt: iso };
+    if (pendingMode) {
+      patch.taskScheduleMode = pendingMode;
+      apiData.scheduleMode = pendingMode;
+    }
+    data.onInlineUpdate?.(id, patch);
+    if (data.taskId) {
+      updateTaskDetailsMut.mutate(
+        { workspaceId, mapId, cardId: id, data: apiData },
         { onSuccess: invalidateAll },
       );
     }
@@ -621,41 +760,113 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               <Paperclip className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" aria-label="Possui anexos" />
             )}
 
-            {hasTask && editingDueDate ? (
-              <input
-                type="date"
-                autoFocus
-                ref={(el) => {
-                  if (el) {
-                    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
-                  }
-                }}
-                className="nodrag text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer ml-auto"
-                value={dueDateValue}
-                onChange={e => setDueDateValue(e.target.value)}
-                onBlur={handleDueDateBlur}
-                onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setDueDateValue(data.taskDueDate ? data.taskDueDate.split('T')[0] : ''); setEditingDueDate(false); } }}
-                onClick={e => e.stopPropagation()}
-              />
-            ) : hasDueDate ? (
+            {/* Non-task due-date display */}
+            {!hasTask && hasDueDate && (
               <div
-                className={`flex items-center gap-1 text-[11px] font-medium ml-auto rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} ${hasTask ? 'cursor-pointer' : 'cursor-default'} nodrag`}
-                title={hasTask ? 'Clique para editar prazo' : undefined}
-                onClick={(e) => { if (hasTask) { e.stopPropagation(); setEditingDueDate(true); } }}
-                onDoubleClick={(e) => e.stopPropagation()}
+                className={`flex items-center gap-1 text-[11px] font-medium ml-auto rounded px-1 transition-colors ${isOverdue ? 'text-red-500' : 'text-muted-foreground'} cursor-default nodrag`}
               >
                 <Calendar className="w-3 h-3 flex-shrink-0" />
                 <span>{dueDateStr}</span>
               </div>
-            ) : hasTask ? (
-              <button
-                className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all ml-auto cursor-pointer"
-                title="Adicionar prazo"
-                onClick={(e) => { e.stopPropagation(); setEditingDueDate(true); }}
-              >
-                <Calendar className="w-3 h-3" />
-              </button>
-            ) : null}
+            )}
+
+            {/* Task schedule fields — stacks vertically in "entre" mode */}
+            {hasTask && (
+              <div className={`ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : "flex items-center gap-1"}`}>
+                {/* Top row: mode select + startAt (only shown for "entre") */}
+                <div className="flex items-center gap-1">
+                  <select
+                    value={currentScheduleMode}
+                    onChange={(e) => { e.stopPropagation(); handleScheduleModeChange(e.target.value as "ate" | "entre" | "em"); }}
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    className="nodrag text-[10px] bg-card border border-border rounded-lg px-1.5 py-0.5 outline-none cursor-pointer"
+                    title="Modalidade do fazer"
+                  >
+                    <option value="ate">até</option>
+                    <option value="entre">entre</option>
+                    <option value="em">em</option>
+                  </select>
+                  {currentScheduleMode === "entre" && (
+                    editingStartAt ? (
+                      <input
+                        type="date"
+                        autoFocus
+                        max={data.taskDueDate ? data.taskDueDate.slice(0, 10) : undefined}
+                        ref={(el) => {
+                          if (el) {
+                            try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
+                          }
+                        }}
+                        className="nodrag text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer"
+                        value={startAtValue}
+                        onChange={e => setStartAtValue(e.target.value)}
+                        onBlur={handleStartAtBlur}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setStartAtValue(data.taskStartAt ? data.taskStartAt.split('T')[0] : ''); setEditingStartAt(false); } }}
+                        onClick={e => e.stopPropagation()}
+                        title="Início"
+                      />
+                    ) : hasStartAt ? (
+                      <div
+                        className="flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer nodrag"
+                        title="Clique para editar início"
+                        onClick={(e) => { e.stopPropagation(); setEditingStartAt(true); }}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <Calendar className="w-3 h-3 flex-shrink-0" />
+                        <span>{startAtStr}</span>
+                      </div>
+                    ) : (
+                      <button
+                        className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer"
+                        title="Adicionar início"
+                        onClick={(e) => { e.stopPropagation(); setEditingStartAt(true); }}
+                      >
+                        <Calendar className="w-3 h-3" />
+                      </button>
+                    )
+                  )}
+                </div>
+
+                {/* Due-date row — below startAt for "entre", inline otherwise */}
+                {editingDueDate ? (
+                  <input
+                    type="date"
+                    autoFocus
+                    min={currentScheduleMode === "entre" && data.taskStartAt ? data.taskStartAt.slice(0, 10) : undefined}
+                    ref={(el) => {
+                      if (el) {
+                        try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
+                      }
+                    }}
+                    className="nodrag text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer"
+                    value={dueDateValue}
+                    onChange={e => setDueDateValue(e.target.value)}
+                    onBlur={handleDueDateBlur}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setDueDateValue(data.taskDueDate ? data.taskDueDate.split('T')[0] : ''); setEditingDueDate(false); } }}
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : hasDueDate ? (
+                  <div
+                    className={`flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} cursor-pointer nodrag`}
+                    title="Clique para editar fazer"
+                    onClick={(e) => { e.stopPropagation(); setEditingDueDate(true); }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <Calendar className="w-3 h-3 flex-shrink-0" />
+                    <span>{dueDateStr}</span>
+                  </div>
+                ) : (
+                  <button
+                    className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer"
+                    title="Adicionar fazer"
+                    onClick={(e) => { e.stopPropagation(); setEditingDueDate(true); }}
+                  >
+                    <Calendar className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : null}
 

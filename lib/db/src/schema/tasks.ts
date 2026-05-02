@@ -65,6 +65,14 @@ export const parentApprovalStatusEnum = pgEnum("parent_approval_status", [
   "rejected",
 ]);
 
+export const scheduleModeEnum = pgEnum("schedule_mode", [
+  "ate",
+  "entre",
+  "em",
+]);
+
+export type ScheduleMode = "ate" | "entre" | "em";
+
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   mapId: uuid("map_id")
@@ -77,6 +85,8 @@ export const tasks = pgTable("tasks", {
     onDelete: "set null",
   }),
   dueDate: timestamp("due_date"),
+  startAt: timestamp("start_at"),
+  scheduleMode: scheduleModeEnum("schedule_mode").notNull().default("ate"),
   priority: taskPriorityEnum("priority").notNull().default("medium"),
   status: taskStatusEnum("status").notNull().default("pending"),
   previousStatus: taskStatusEnum("previous_status"),

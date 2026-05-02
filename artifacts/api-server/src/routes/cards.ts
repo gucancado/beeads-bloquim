@@ -7,6 +7,8 @@ import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions"
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 import { toVisualStatus } from "../services/taskVisualSyncService";
+import { resolveSchedule, isWithinScheduleWindow, type ScheduleMode } from "../lib/scheduleMode";
+import { tryActivateTask } from "../services/taskActivation";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -31,6 +33,8 @@ const createTaskSchema = z.object({
   description: z.string().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
+  startAt: z.string().datetime().nullable().optional(),
+  scheduleMode: z.enum(["ate", "entre", "em"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
 });
 
@@ -43,6 +47,8 @@ const updateTaskDetailsSchema = z.object({
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
+  startAt: z.string().datetime().nullable().optional(),
+  scheduleMode: z.enum(["ate", "entre", "em"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -197,16 +203,31 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     return;
   }
 
-  const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate.slice(0, 10) + "T12:00:00.000Z") : undefined;
-  const overdue = computeOverdue(dueDate ?? null, "draft");
+  const sched = resolveSchedule(parsed.data, { scheduleMode: "ate", startAt: null, dueDate: null });
+  if (!sched.ok) {
+    res.status(400).json({ error: "Validation error", message: sched.error });
+    return;
+  }
+  const overdue = computeOverdue(sched.value.dueDate, "draft");
   const visual = toVisualStatus("draft", overdue);
 
   const userId = req.user!.userId;
   const assignedTo = parsed.data.assignedTo === undefined ? userId : parsed.data.assignedTo;
 
+  const { dueDate: _dd, startAt: _sa, scheduleMode: _sm, ...rest } = parsed.data;
   const [task] = await db
     .insert(tasks)
-    .values({ ...parsed.data, assignedTo, mapId, workspaceId, dueDate, status: "draft", overdue })
+    .values({
+      ...rest,
+      assignedTo,
+      mapId,
+      workspaceId,
+      dueDate: sched.value.dueDate,
+      startAt: sched.value.startAt,
+      scheduleMode: sched.value.scheduleMode,
+      status: "draft",
+      overdue,
+    })
     .returning();
 
   await db
@@ -450,6 +471,11 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
 
       if (!allPrerequisitesDone) continue;
 
+      // Respect "fazer" schedule modes: "ate" tasks keep the legacy behavior
+      // (auto-advance regardless of due date — even if overdue), while
+      // "entre"/"em" tasks only advance when today is inside [startAt, dueDate].
+      if (!isWithinScheduleWindow(targetTask.scheduleMode, targetTask.startAt, targetTask.dueDate)) continue;
+
       // All prerequisites are done — advance the target task to "in_progress"
       const childOverdue = computeOverdue(targetTask.dueDate, "in_progress");
       const childVisual = toVisualStatus("in_progress", childOverdue);
@@ -492,12 +518,25 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     return;
   }
 
-  const updateData: any = { ...parsed.data, updatedAt: new Date() };
+  const { dueDate: _dd, startAt: _sa, scheduleMode: _sm, ...rest } = parsed.data;
+  const updateData: any = { ...rest, updatedAt: new Date() };
   let resolvedDueDate: Date | null = currentTask?.dueDate ?? null;
 
-  if (parsed.data.dueDate !== undefined) {
-    resolvedDueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate.slice(0, 10) + "T12:00:00.000Z") : null;
-    updateData.dueDate = resolvedDueDate;
+  const touchesSchedule = "dueDate" in parsed.data || "startAt" in parsed.data || "scheduleMode" in parsed.data;
+  if (touchesSchedule) {
+    const sched = resolveSchedule(parsed.data, {
+      scheduleMode: (currentTask?.scheduleMode ?? "ate") as ScheduleMode,
+      startAt: currentTask?.startAt ?? null,
+      dueDate: currentTask?.dueDate ?? null,
+    });
+    if (!sched.ok) {
+      res.status(400).json({ error: "Validation error", message: sched.error });
+      return;
+    }
+    resolvedDueDate = sched.value.dueDate;
+    updateData.dueDate = sched.value.dueDate;
+    updateData.startAt = sched.value.startAt;
+    updateData.scheduleMode = sched.value.scheduleMode;
   }
 
   const currentStatus = currentTask?.status ?? "in_progress";
@@ -515,6 +554,12 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     .update(cards)
     .set({ statusVisual: visual, updatedAt: new Date() })
     .where(eq(cards.id, cardId));
+
+  // If the schedule mode/dates were just touched, re-evaluate eligibility
+  // immediately so a pending task whose window opened jumps to in_progress.
+  if (touchesSchedule) {
+    await tryActivateTask(card.taskId!);
+  }
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
 

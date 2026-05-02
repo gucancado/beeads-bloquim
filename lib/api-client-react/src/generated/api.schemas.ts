@@ -39,6 +39,14 @@ export const TaskPriority = {
   critical: "critical",
 } as const;
 
+export type ScheduleMode = (typeof ScheduleMode)[keyof typeof ScheduleMode];
+
+export const ScheduleMode = {
+  ate: "ate",
+  entre: "entre",
+  em: "em",
+} as const;
+
 export type CardVisualStatus =
   (typeof CardVisualStatus)[keyof typeof CardVisualStatus];
 
@@ -159,6 +167,8 @@ export interface CardResponse {
   createdAt: string;
   updatedAt: string;
   taskDueDate?: string | null;
+  taskStartAt?: string | null;
+  taskScheduleMode?: ScheduleMode | null;
   taskAssigneeName?: string | null;
   taskAssigneeId?: string | null;
   taskOverdue?: boolean;
@@ -261,6 +271,8 @@ export interface TaskResponse {
   assignedTo?: string | null;
   assignedUser?: UserResponse | null;
   dueDate?: string | null;
+  startAt?: string | null;
+  scheduleMode?: ScheduleMode;
   priority: TaskPriority;
   status: TaskStatus;
   completedAt?: string | null;
@@ -292,6 +304,8 @@ export interface CreateTaskRequest {
   description?: string;
   assignedTo?: string | null;
   dueDate?: string | null;
+  startAt?: string | null;
+  scheduleMode?: ScheduleMode;
   priority?: TaskPriority;
 }
 
@@ -304,6 +318,8 @@ export interface UpdateTaskDetailsRequest {
   description?: string;
   assignedTo?: string | null;
   dueDate?: string | null;
+  startAt?: string | null;
+  scheduleMode?: ScheduleMode;
   priority?: TaskPriority;
 }
 
@@ -315,6 +331,8 @@ export interface TaskWithContextResponse {
   description?: string | null;
   assignedTo?: string | null;
   dueDate?: string | null;
+  startAt?: string | null;
+  scheduleMode?: ScheduleMode;
   priority: TaskPriority;
   status: TaskStatus;
   completedAt?: string | null;

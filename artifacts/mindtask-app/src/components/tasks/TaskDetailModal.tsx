@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
-import { Loader2, Flag, Calendar, User, AlertTriangle } from "lucide-react";
+import { Loader2, Flag, Calendar, User, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,7 @@ interface WorkspaceTask {
   id: string;
   workspaceId: string | null;
   mapId: string | null;
+  cardId?: string | null;
   title: string;
   description: string | null;
   assignedTo: string | null;
@@ -70,6 +71,8 @@ interface UpdateTaskPayload {
   assignedTo?: string | null;
   priority?: string;
   dueDate?: string | null;
+  startAt?: string | null;
+  scheduleMode?: "ate" | "entre" | "em";
   isRecurring?: boolean;
   recurrenceConfig?: RecurrenceConfig | null;
 }
@@ -93,6 +96,65 @@ interface TaskDetailModalProps {
   cardId?: string | null;
   onDeleteCard?: (cardId: string) => void;
   onDuplicated?: (newTaskId: string, newCardId: string | null) => void;
+}
+
+const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em"; label: string }[] = [
+  { value: "ate", label: "até" },
+  { value: "entre", label: "entre" },
+  { value: "em", label: "em" },
+];
+
+function ScheduleModeDropdown({
+  value,
+  onChange,
+}: {
+  value: "ate" | "entre" | "em";
+  onChange: (next: "ate" | "entre" | "em") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const current = SCHEDULE_MODE_OPTIONS.find(o => o.value === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1 text-xs font-medium text-foreground border border-border rounded-lg px-2.5 py-1 bg-background hover:border-primary/50 transition-colors"
+      >
+        <span className="lowercase">{current?.label ?? value}</span>
+        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[120px] overflow-hidden">
+          {SCHEDULE_MODE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs lowercase hover:bg-muted transition-colors text-left"
+            >
+              <span>{opt.label}</span>
+              {opt.value === value && <Check className="w-3 h-3 text-primary shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getInitials(name: string) {
@@ -230,6 +292,8 @@ export function TaskDetailModal({
     assignedTo, setAssignedTo,
     priority, setPriority,
     dueDate, setDueDate,
+    startAt, setStartAt,
+    scheduleMode, setScheduleMode,
     status, setStatus,
     isRecurring, setIsRecurring,
     recurrenceConfig, setRecurrenceConfig,
@@ -297,6 +361,16 @@ export function TaskDetailModal({
     if (effectiveWorkspaceId) {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${effectiveWorkspaceId}/tasks`] });
     }
+    // If the task is linked to a canvas node, also invalidate the map+card
+    // queries so that the node reflects the change immediately.
+    const linkedMapId = taskMapId ?? task?.mapId ?? null;
+    const linkedCardId = task?.cardId ?? null;
+    if (effectiveWorkspaceId && linkedMapId) {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${effectiveWorkspaceId}/maps/${linkedMapId}`] });
+      if (linkedCardId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${effectiveWorkspaceId}/maps/${linkedMapId}/cards/${linkedCardId}`] });
+      }
+    }
   };
 
   const updateCardMut = useUpdateCard();
@@ -327,11 +401,13 @@ export function TaskDetailModal({
     );
   };
 
-  const saveCardTaskDetails = (overrides: { priority?: string; assignedTo?: string; dueDate?: string } = {}) => {
+  const saveCardTaskDetails = (overrides: { priority?: string; assignedTo?: string; dueDate?: string; startAt?: string; scheduleMode?: "ate" | "entre" | "em" } = {}) => {
     if (!cardId || !mapId || !card?.task) return;
     const p = (overrides.priority ?? priority) as TaskPriority;
     const a = overrides.assignedTo ?? assignedTo;
     const d = overrides.dueDate ?? dueDate;
+    const s = overrides.startAt ?? startAt;
+    const m = overrides.scheduleMode ?? scheduleMode;
     updateTaskDetailsMut.mutate(
       {
         workspaceId: effectiveWorkspaceId, mapId, cardId, data: {
@@ -339,6 +415,8 @@ export function TaskDetailModal({
           priority: p,
           assignedTo: a === "unassigned" ? null : a,
           dueDate: d ? d + "T12:00:00.000Z" : null,
+          startAt: s ? s + "T12:00:00.000Z" : null,
+          scheduleMode: m,
         }
       },
       { onSuccess: () => invalidateCard() }
@@ -700,7 +778,7 @@ export function TaskDetailModal({
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-[0.7fr_1fr_1fr] gap-3">
                       {isStandalone ? (
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center gap-1 block lowercase">
@@ -729,62 +807,133 @@ export function TaskDetailModal({
                       )}
 
                       {/* Due Date + Recurrence */}
-                      <div>
-                        <label className={`text-xs font-semibold tracking-wider mb-1.5 flex items-center gap-1 block lowercase ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
-                          <Calendar className="w-3 h-3" /> Prazo
-                        </label>
-                        <div className="flex items-center gap-1.5">
+                      <div className={scheduleMode === "entre" ? "col-span-2" : ""}>
+                        <div className="mb-1.5 flex items-center justify-start gap-2 flex-wrap">
+                          <label className={`text-xs font-semibold tracking-wider flex items-center gap-1 lowercase ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
+                            <Calendar className="w-3 h-3" /> Fazer
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <ScheduleModeDropdown
+                              value={scheduleMode}
+                              onChange={(next) => {
+                                setScheduleMode(next);
+                                markDirty();
+                                const canPersist =
+                                  next === "ate" ||
+                                  (next === "em" && !!dueDate) ||
+                                  (next === "entre" && !!startAt && !!dueDate);
+                                if (!canPersist) return;
+                                const body: { scheduleMode: "ate" | "entre" | "em"; startAt?: string | null } = { scheduleMode: next };
+                                if (next === "ate") { setStartAt(""); body.startAt = null; }
+                                if (next === "em" && dueDate) { setStartAt(dueDate); body.startAt = dueDate + "T12:00:00.000Z"; }
+                                if (isCardMode) saveCardTaskDetails({ scheduleMode: next, startAt: next === "ate" ? "" : (next === "em" ? dueDate : startAt) });
+                                else if (isEditing && resolvedTaskId) saveMutation.mutate({ body, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                              }}
+                            />
+                            {!isCardMode && (
+                              <RecurrencePopover
+                                disabled={!!(mapId || taskMapId)}
+                                open={showRecurrencePanel}
+                                onOpenChange={(open) => {
+                                  if (mapId || taskMapId) return;
+                                  if (open && !showRecurrencePanel) {
+                                    setShowRecurrencePanel(true);
+                                    if (!recurrenceConfig) {
+                                      const defaultCfg: RecurrenceConfig = { type: "weekly", weekDays: [1] };
+                                      setRecurrenceConfig(defaultCfg);
+                                      setIsRecurring(true);
+                                      if (isEditing && resolvedTaskId) {
+                                        saveMutation.mutate({ body: { isRecurring: true, recurrenceConfig: defaultCfg }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                      }
+                                    }
+                                  } else if (!open) {
+                                    setShowRecurrencePanel(false);
+                                  }
+                                }}
+                                isRecurring={isRecurring}
+                                value={recurrenceConfig}
+                                onChange={(cfg) => {
+                                  setRecurrenceConfig(cfg);
+                                  setIsRecurring(!!cfg);
+                                  markDirty();
+                                  if (!cfg) {
+                                    setShowRecurrencePanel(false);
+                                  }
+                                  if (isEditing && resolvedTaskId) {
+                                    saveMutation.mutate({ body: { isRecurring: !!cfg, recurrenceConfig: cfg ?? null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                  }
+                                }}
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 w-[85%]">
+                          {scheduleMode === "entre" && (
+                            <>
+                              <Input
+                                type="date"
+                                value={startAt}
+                                max={dueDate || undefined}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  if (scheduleMode === "entre" && v && dueDate && v > dueDate) {
+                                    toast({ title: "início deve ser até o fim", variant: "destructive" });
+                                    return;
+                                  }
+                                  setStartAt(v);
+                                  markDirty();
+                                  const canPersist =
+                                    (scheduleMode as "ate" | "entre" | "em") === "ate" ||
+                                    ((scheduleMode as "ate" | "entre" | "em") === "em" && !!dueDate) ||
+                                    ((scheduleMode as "ate" | "entre" | "em") === "entre" && !!v && !!dueDate);
+                                  if (!canPersist) return;
+                                  if (isCardMode) saveCardTaskDetails({ startAt: v, scheduleMode });
+                                  else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, startAt: v ? v + "T12:00:00.000Z" : null, dueDate: dueDate || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                }}
+                                className="rounded-xl h-10 text-sm flex-1 min-w-0 pr-1 bg-background [&::-webkit-calendar-picker-indicator]:ml-0 [&::-webkit-calendar-picker-indicator]:pl-0 [&::-webkit-calendar-picker-indicator]:mr-0"
+                                title="início"
+                              />
+                              <span className="text-xs text-muted-foreground shrink-0 px-0.5 lowercase">e</span>
+                            </>
+                          )}
                           <Input
                             type="date"
                             value={dueDate}
+                            min={scheduleMode === "entre" ? (startAt || undefined) : undefined}
                             onChange={e => {
-                              setDueDate(e.target.value);
+                              const v = e.target.value;
+                              if (scheduleMode === "entre" && v && startAt && v < startAt) {
+                                toast({ title: "fim deve ser após o início", variant: "destructive" });
+                                return;
+                              }
+                              setDueDate(v);
                               markDirty();
-                              if (isCardMode) saveCardTaskDetails({ dueDate: e.target.value });
-                              else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { dueDate: e.target.value || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                              const canPersist =
+                                scheduleMode === "ate" ||
+                                (scheduleMode === "em" && !!v) ||
+                                (scheduleMode === "entre" && !!startAt && !!v);
+                              if (!canPersist) return;
+                              if (scheduleMode === "em") {
+                                setStartAt(v);
+                                if (isCardMode) saveCardTaskDetails({ dueDate: v, startAt: v, scheduleMode });
+                                else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, dueDate: v || null, startAt: v ? v + "T12:00:00.000Z" : null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                              } else if (scheduleMode === "entre") {
+                                if (isCardMode) saveCardTaskDetails({ dueDate: v, scheduleMode });
+                                else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, dueDate: v || null, startAt: startAt ? startAt + "T12:00:00.000Z" : null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                              } else {
+                                if (isCardMode) saveCardTaskDetails({ dueDate: v, scheduleMode });
+                                else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, dueDate: v || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                              }
                             }}
-                            className={`rounded-xl h-10 text-sm flex-1 min-w-0 ${isOverdue ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : "bg-background"}`}
+                            className={`rounded-xl h-10 text-sm flex-1 min-w-0 pr-1 [&::-webkit-calendar-picker-indicator]:ml-0 [&::-webkit-calendar-picker-indicator]:pl-0 [&::-webkit-calendar-picker-indicator]:mr-0 ${isOverdue ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : "bg-background"}`}
+                            title={scheduleMode === "entre" ? "fim" : undefined}
                           />
-                          {!isCardMode && (
-                            <RecurrencePopover
-                              disabled={!!(mapId || taskMapId)}
-                              open={showRecurrencePanel}
-                              onOpenChange={(open) => {
-                                if (mapId || taskMapId) return;
-                                if (open && !showRecurrencePanel) {
-                                  setShowRecurrencePanel(true);
-                                  if (!recurrenceConfig) {
-                                    const defaultCfg: RecurrenceConfig = { type: "weekly", weekDays: [1] };
-                                    setRecurrenceConfig(defaultCfg);
-                                    setIsRecurring(true);
-                                    if (isEditing && resolvedTaskId) {
-                                      saveMutation.mutate({ body: { isRecurring: true, recurrenceConfig: defaultCfg }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                                    }
-                                  }
-                                } else if (!open) {
-                                  setShowRecurrencePanel(false);
-                                }
-                              }}
-                              isRecurring={isRecurring}
-                              value={recurrenceConfig}
-                              onChange={(cfg) => {
-                                setRecurrenceConfig(cfg);
-                                setIsRecurring(!!cfg);
-                                markDirty();
-                                if (!cfg) {
-                                  setShowRecurrencePanel(false);
-                                }
-                                if (isEditing && resolvedTaskId) {
-                                  saveMutation.mutate({ body: { isRecurring: !!cfg, recurrenceConfig: cfg ?? null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
-                                }
-                              }}
-                            />
-                          )}
+                          
                         </div>
                       </div>
 
                       {/* Priority */}
-                      <div>
+                      <div className={scheduleMode === "entre" ? "col-start-3 row-start-2" : ""}>
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1.5 flex items-center justify-end gap-1 block lowercase">
                           <Flag className="w-3 h-3" /> Prioridade
                         </label>

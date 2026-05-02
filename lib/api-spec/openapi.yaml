@@ -1328,6 +1328,10 @@ components:
       type: string
       enum: [low, medium, high, critical]
 
+    ScheduleMode:
+      type: string
+      enum: [ate, entre, em]
+
     CardVisualStatus:
       type: string
       enum: [no_task, pending, in_progress, completed, overdue, blocked, draft]
@@ -1618,6 +1622,13 @@ components:
           type: string
           format: date-time
           nullable: true
+        taskStartAt:
+          type: string
+          format: date-time
+          nullable: true
+        taskScheduleMode:
+          $ref: '#/components/schemas/ScheduleMode'
+          nullable: true
         taskAssigneeName:
           type: string
           nullable: true
@@ -1717,6 +1728,12 @@ components:
           type: string
           format: date-time
           nullable: true
+        startAt:
+          type: string
+          format: date-time
+          nullable: true
+        scheduleMode:
+          $ref: "#/components/schemas/ScheduleMode"
         priority:
           $ref: "#/components/schemas/TaskPriority"
       required: [title]
@@ -1743,6 +1760,12 @@ components:
           type: string
           format: date-time
           nullable: true
+        startAt:
+          type: string
+          format: date-time
+          nullable: true
+        scheduleMode:
+          $ref: "#/components/schemas/ScheduleMode"
         priority:
           $ref: "#/components/schemas/TaskPriority"
 
@@ -1774,6 +1797,12 @@ components:
           type: string
           format: date-time
           nullable: true
+        startAt:
+          type: string
+          format: date-time
+          nullable: true
+        scheduleMode:
+          $ref: "#/components/schemas/ScheduleMode"
         priority:
           $ref: "#/components/schemas/TaskPriority"
         status:
@@ -1815,6 +1844,12 @@ components:
           type: string
           format: date-time
           nullable: true
+        startAt:
+          type: string
+          format: date-time
+          nullable: true
+        scheduleMode:
+          $ref: "#/components/schemas/ScheduleMode"
         priority:
           $ref: "#/components/schemas/TaskPriority"
         status:

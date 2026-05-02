@@ -12,6 +12,7 @@ import { TASK_STATUS_ORDER, getStatusActiveClass } from "@/lib/taskStatusConstan
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { getColorByIndex } from "@workspace/db/colorPalette";
 import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
+import { useToast } from "@/hooks/use-toast";
 
 function getInitials(name: string) {
   return name
@@ -36,6 +37,8 @@ export interface TaskListItemData {
   status: string;
   priority: string;
   dueDate?: string | null;
+  startAt?: string | null;
+  scheduleMode?: "ate" | "entre" | "em" | null;
   overdue?: boolean;
   assignedTo?: string | null;
   assigneeName?: string | null;
@@ -85,6 +88,7 @@ export function TaskListItem({
   showMapName = false,
 }: Props) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [localTask, setLocalTask] = useState<TaskListItemData>(task);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -94,6 +98,14 @@ export function TaskListItem({
   const [statusOpen, setStatusOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+  // Local override: lets the user switch to "entre"/"em" before persisting,
+  // so the start input can be revealed and filled. Cleared after a
+  // successful PATCH (or whenever the server's mode catches up).
+  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | null>(null);
+  const effectiveMode = pendingMode ?? (localTask.scheduleMode ?? "ate");
+  useEffect(() => {
+    if (pendingMode && localTask.scheduleMode === pendingMode) setPendingMode(null);
+  }, [localTask.scheduleMode, pendingMode]);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const titleInputRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
@@ -264,8 +276,63 @@ export function TaskListItem({
   const handleDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
     const val = e.target.value;
+    const startStr = localTask.startAt ? localTask.startAt.slice(0, 10) : "";
+    if (effectiveMode === "entre" && val && startStr && val < startStr) {
+      toast({ title: "fim deve ser após o início", variant: "destructive" });
+      return;
+    }
     setSavingField("dueDate");
-    patchTask({ dueDate: val || null }).finally(() => setSavingField(null));
+    const iso = val ? val + "T12:00:00.000Z" : null;
+    const body: { dueDate: string | null; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" } = { dueDate: iso };
+    if (effectiveMode === "em") body.startAt = iso;
+    if (pendingMode) body.scheduleMode = pendingMode;
+    patchTask(body).finally(() => setSavingField(null));
+  };
+
+  const handleStartAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    const val = e.target.value;
+    const dueStr = localTask.dueDate ? localTask.dueDate.slice(0, 10) : "";
+    if (val && dueStr && val > dueStr) {
+      toast({ title: "início deve ser até o fim", variant: "destructive" });
+      return;
+    }
+    setSavingField("startAt");
+    const body: { startAt: string | null; scheduleMode?: "ate" | "entre" | "em" } = {
+      startAt: val ? val + "T12:00:00.000Z" : null,
+    };
+    if (pendingMode) body.scheduleMode = pendingMode;
+    patchTask(body).finally(() => setSavingField(null));
+  };
+
+  const handleScheduleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    e.stopPropagation();
+    const next = e.target.value as "ate" | "entre" | "em";
+    // For "em" with a dueDate already set, we can persist immediately
+    // (mirroring startAt = dueDate). For "entre" requiring both bounds,
+    // or "em" without a date yet, switch only the local UI mode and let
+    // the user fill the missing field — the date handler will then
+    // persist mode+dates atomically.
+    if (next === "ate") {
+      setPendingMode(null);
+      setSavingField("scheduleMode");
+      patchTask({ scheduleMode: "ate", startAt: null }).finally(() => setSavingField(null));
+      return;
+    }
+    if (next === "em" && localTask.dueDate) {
+      setPendingMode(null);
+      setSavingField("scheduleMode");
+      patchTask({ scheduleMode: "em", startAt: localTask.dueDate }).finally(() => setSavingField(null));
+      return;
+    }
+    if (next === "entre" && localTask.startAt && localTask.dueDate) {
+      setPendingMode(null);
+      setSavingField("scheduleMode");
+      patchTask({ scheduleMode: "entre" }).finally(() => setSavingField(null));
+      return;
+    }
+    // Need more user input — keep mode pending in UI only.
+    setPendingMode(next);
   };
 
   const handleRowClick = () => {
@@ -442,6 +509,42 @@ export function TaskListItem({
           )}
         </div>
 
+        {/* Schedule modality */}
+        <select
+          value={effectiveMode as string}
+          onChange={handleScheduleModeChange}
+          onClick={e => e.stopPropagation()}
+          disabled={savingField === "scheduleMode"}
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+          title="Modalidade do fazer"
+        >
+          <option value="ate">até</option>
+          <option value="entre">entre</option>
+          <option value="em">em</option>
+        </select>
+
+        {/* Start date (visible only for "entre") */}
+        {effectiveMode === "entre" && (
+          <label
+            className="relative inline-flex items-center gap-1 cursor-pointer shrink-0"
+            onClick={e => e.stopPropagation()}
+          >
+            <CalendarIcon className="w-3 h-3 shrink-0 pointer-events-none text-muted-foreground" />
+            <span className={`pointer-events-none select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
+              {localTask.startAt ? formatDueDate(localTask.startAt) : "início"}
+            </span>
+            <input
+              type="date"
+              max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
+              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+              value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
+              onChange={handleStartAtChange}
+              onClick={e => e.stopPropagation()}
+              title="Data de início"
+            />
+          </label>
+        )}
+
         {/* Due date — inline editable */}
         <label
           className={`relative inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
@@ -458,17 +561,18 @@ export function TaskListItem({
             <span
               className={`pointer-events-none select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
             >
-              sem prazo
+              sem fazer
             </span>
           )}
           <input
             ref={dueDateInputRef}
             type="date"
+            min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
             className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
             value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
             onChange={handleDueDateChange}
             onClick={e => e.stopPropagation()}
-            title="Alterar prazo"
+            title="Alterar fazer"
           />
         </label>
 

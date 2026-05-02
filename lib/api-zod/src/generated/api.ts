@@ -337,6 +337,8 @@ export const GetMapResponse = zod.object({
       createdAt: zod.date(),
       updatedAt: zod.date(),
       taskDueDate: zod.date().nullish(),
+      taskStartAt: zod.date().nullish(),
+      taskScheduleMode: zod.enum(["ate", "entre", "em"]).nullish(),
       taskAssigneeName: zod.string().nullish(),
       taskAssigneeId: zod.string().uuid().nullish(),
       taskOverdue: zod.boolean().optional(),
@@ -484,6 +486,8 @@ export const GetCardResponse = zod.object({
         })
         .nullish(),
       dueDate: zod.date().nullish(),
+      startAt: zod.date().nullish(),
+      scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
       priority: zod.enum(["low", "medium", "high", "critical"]),
       status: zod.enum([
         "pending",
@@ -538,6 +542,8 @@ export const UpdateCardResponse = zod.object({
   createdAt: zod.date(),
   updatedAt: zod.date(),
   taskDueDate: zod.date().nullish(),
+  taskStartAt: zod.date().nullish(),
+  taskScheduleMode: zod.enum(["ate", "entre", "em"]).nullish(),
   taskAssigneeName: zod.string().nullish(),
   taskAssigneeId: zod.string().uuid().nullish(),
   taskOverdue: zod.boolean().optional(),
@@ -600,6 +606,8 @@ export const CreateTaskBody = zod.object({
   description: zod.string().optional(),
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
+  startAt: zod.date().nullish(),
+  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -654,6 +662,8 @@ export const UpdateTaskStatusResponse = zod.object({
     })
     .nullish(),
   dueDate: zod.date().nullish(),
+  startAt: zod.date().nullish(),
+  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",
@@ -682,6 +692,8 @@ export const UpdateTaskDetailsBody = zod.object({
   description: zod.string().optional(),
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
+  startAt: zod.date().nullish(),
+  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -702,6 +714,8 @@ export const UpdateTaskDetailsResponse = zod.object({
     })
     .nullish(),
   dueDate: zod.date().nullish(),
+  startAt: zod.date().nullish(),
+  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",
@@ -741,6 +755,8 @@ export const GetMyTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
+  startAt: zod.date().nullish(),
+  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",

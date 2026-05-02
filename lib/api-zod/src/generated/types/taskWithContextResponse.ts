@@ -5,6 +5,7 @@
  * MindTask API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ScheduleMode } from "./scheduleMode";
 import type { TaskPriority } from "./taskPriority";
 import type { TaskStatus } from "./taskStatus";
 
@@ -16,6 +17,8 @@ export interface TaskWithContextResponse {
   description?: string | null;
   assignedTo?: string | null;
   dueDate?: Date | null;
+  startAt?: Date | null;
+  scheduleMode?: ScheduleMode;
   priority: TaskPriority;
   status: TaskStatus;
   completedAt?: Date | null;

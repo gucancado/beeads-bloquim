@@ -1,8 +1,8 @@
 import { db } from "@workspace/db";
 import { tasks, cards } from "@workspace/db/schema";
-import { eq, and, lt, ne, isNotNull, notExists, inArray } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { eq, and, lt, lte, ne, isNotNull, notExists, inArray } from "drizzle-orm";
 import { getTodayLocal } from "./lib/overdue";
+import { tryActivateTask } from "./services/taskActivation";
 import { logger } from "./lib/logger";
 
 const schedulerLogger = logger.child({ module: "scheduler" });
@@ -75,6 +75,45 @@ export async function syncOverdueFlags() {
   }
 }
 
+/**
+ * Auto-activate `pending` tasks whose schedule window has been reached
+ * (today >= startAt AND today <= dueDate) and whose prerequisites are
+ * complete. Delegates the per-task decision to `tryActivateTask` so the
+ * cascade and PATCH paths share the same eligibility rules.
+ */
+export async function activateScheduledTasks() {
+  // `startAt` is persisted at 12:00 UTC by `parseDateNoon`, while
+  // `getTodayLocal()` returns midnight UTC of today (in São Paulo). To
+  // include any timestamp whose calendar date is "today or earlier" we
+  // compare against the start of the next day rather than `lte(today)`,
+  // which would otherwise miss start-day rows by ~12 hours.
+  const today = getTodayLocal();
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+  const candidates = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.status, "pending"),
+        isNotNull(tasks.startAt),
+        lt(tasks.startAt, tomorrow),
+      ),
+    );
+
+  if (candidates.length === 0) return;
+
+  let activated = 0;
+  for (const t of candidates) {
+    if (await tryActivateTask(t.id)) activated += 1;
+  }
+
+  if (activated > 0) {
+    schedulerLogger.info({ activated }, "schedule window sweep");
+  }
+}
+
 export async function cleanupOrphanTasks() {
   const orphans = await db
     .select({ id: tasks.id })
@@ -106,7 +145,9 @@ export function startScheduler() {
   cleanupOrphanTasks().catch(onErr);
   // Run immediately on startup
   syncOverdueFlags().catch(onErr);
+  activateScheduledTasks().catch(onErr);
   // Then every 5 minutes
   setInterval(() => syncOverdueFlags().catch(onErr), 5 * 60 * 1000);
+  setInterval(() => activateScheduledTasks().catch(onErr), 5 * 60 * 1000);
   schedulerLogger.info({ intervalMs: 5 * 60 * 1000 }, "overdue sync started");
 }

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CardVisualStatus } from "./cardVisualStatus";
+import type { ScheduleMode } from "./scheduleMode";
 
 export interface CardResponse {
   id: string;
@@ -19,6 +20,8 @@ export interface CardResponse {
   createdAt: Date;
   updatedAt: Date;
   taskDueDate?: Date | null;
+  taskStartAt?: Date | null;
+  taskScheduleMode?: ScheduleMode | null;
   taskAssigneeName?: string | null;
   taskAssigneeId?: string | null;
   taskOverdue?: boolean;

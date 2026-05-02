@@ -864,7 +864,7 @@ export default function WorkspaceDetailPage() {
                         {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
                         {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}
                         {upcomingTasks.length > 0 && renderSection("próximas", upcomingTasks)}
-                        {noDueDateTasks.length > 0 && renderSection("sem prazo", noDueDateTasks)}
+                        {noDueDateTasks.length > 0 && renderSection("sem fazer", noDueDateTasks)}
                       </div>
                     );
                   })()}
