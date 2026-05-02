@@ -1,0 +1,178 @@
+# Exibir anexos com preview (imagem, vídeo e PDF) e modal em carrossel
+
+## Objetivo
+Melhorar a visualização de anexos no modal de edição de tarefas, permitindo preview visual, navegação entre arquivos e exibição de metadados.
+
+---
+
+## 1) Tipos de arquivo suportados
+
+- Suportar preview para:
+  - imagens (image/*)
+  - vídeos (video/*)
+  - PDFs (application/pdf)
+
+- Arquivos fora desses tipos:
+  - não devem ser exibidos no modal de visualização
+  - mantêm comportamento padrão (download simples)
+
+---
+
+## 2) Exibição no modal de edição de tarefa
+
+- Anexos suportados devem ser exibidos como **miniaturas (thumbnails)**
+
+### Regras das miniaturas:
+
+- Imagens:
+  - preview da própria imagem
+
+- Vídeos:
+  - thumbnail do vídeo (frame inicial ou gerado)
+
+- PDFs:
+  - preview da primeira página
+
+- Todas as miniaturas devem:
+  - ter tamanho padronizado
+  - manter proporção
+  - não distorcer
+  - respeitar espaçamento e design system
+
+---
+
+## 3) Abertura do modal
+
+- Ao clicar em qualquer miniatura:
+  - abrir modal de visualização
+  - iniciar o modal focado no arquivo clicado
+
+---
+
+## 4) Modal de visualização (carrossel)
+
+### Comportamento geral
+
+- Modal deve funcionar como um **carrossel de anexos**
+- Exibir apenas arquivos suportados (imagem, vídeo, PDF)
+- Arquivos devem ser ordenados por:
+  - data e hora de criação (upload)
+
+---
+
+## 5) Navegação entre arquivos
+
+### Controles:
+
+- Seta esquerda (UI)
+- Seta direita (UI)
+- Teclas do teclado:
+  - ← (voltar)
+  - → (avançar)
+
+### Comportamento:
+
+- Ao navegar:
+  - trocar o arquivo exibido no modal
+  - manter ordem cronológica
+  - atualizar destaque nas miniaturas inferiores
+
+---
+
+## 6) Exibição do arquivo
+
+### Regras por tipo:
+
+- Imagem:
+  - não deve ultrapassar tamanho original
+  - se maior que viewport, ajustar para caber mantendo proporção
+
+- Vídeo:
+  - player embutido com controles básicos (play, pause, volume)
+
+- PDF:
+  - renderizar visualização (iframe ou viewer)
+  - exibir página inicial
+
+---
+
+## 7) Informações do arquivo
+
+Exibir no modal:
+
+- nome do arquivo
+- dimensões (para imagens e vídeos)
+- formato (MIME ou extensão)
+- data e hora do upload
+
+### Importante:
+
+- esses dados pertencem ao **anexo**, não à tarefa
+
+---
+
+## 8) Miniaturas no rodapé do modal
+
+- Exibir lista horizontal com miniaturas de todos os arquivos suportados
+- Ordenação:
+  - por data de upload
+
+### Comportamento:
+
+- miniatura do arquivo atual deve estar destacada
+- ao clicar em uma miniatura:
+  - trocar o arquivo exibido no modal
+
+---
+
+## 9) Download
+
+- Exibir botão de download no modal
+- Deve baixar o arquivo atualmente visualizado
+
+---
+
+## 10) Fechamento do modal
+
+- Permitir fechar via:
+  - tecla ESC
+  - botão de fechar (X)
+  - opcional: clique fora do conteúdo
+
+---
+
+## 11) Estrutura de dados
+
+Garantir que cada anexo tenha:
+
+- name (nome do arquivo)
+- mimeType
+- createdAt (data/hora de upload)
+- width / height (quando aplicável)
+- url ou caminho do arquivo
+
+---
+
+## 12) UX e consistência
+
+- manter padrão visual do sistema
+- garantir responsividade
+- evitar layout quebrado com arquivos grandes
+- navegação deve ser fluida
+
+---
+
+## 13) Fora de escopo
+
+- edição de arquivos
+- zoom avançado
+- comentários sobre anexos
+
+---
+
+## Resultado esperado
+
+- preview visual consistente para imagens, vídeos e PDFs
+- navegação fluida entre anexos
+- metadados claros por arquivo
+- experiência mais rica e intuitiva no uso de anexos
