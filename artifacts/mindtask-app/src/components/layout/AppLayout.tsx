@@ -77,13 +77,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className={`flex items-center gap-1 ${collapsed ? 'flex-col w-full' : ''}`}>
             <ThemeToggle />
             <button
-              title="sair"
-              onClick={() => logoutMutation.mutate()}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-            <button
               onClick={toggleCollapsed}
               title={collapsed ? "expandir menu" : "recolher menu"}
               className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
@@ -99,20 +92,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className={`space-y-1 ${collapsed ? 'mt-2' : ''}`}>
               <Link href="/my-tasks">
                 <span
-                  title="suas tarefas"
+                  title="tarefas"
                   className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/my-tasks') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
                 >
                   <CheckSquare className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span className="lowercase">Suas tarefas</span>}
+                  {!collapsed && <span className="lowercase">Tarefas</span>}
                 </span>
               </Link>
               <Link href="/my-templates">
                 <span
-                  title="seus modelos"
+                  title="modelos de tarefas"
                   className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/my-templates') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
                 >
                   <FileText className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span className="lowercase">Seus modelos</span>}
+                  {!collapsed && <span className="lowercase">Modelos de tarefas</span>}
                 </span>
               </Link>
               <Link href="/workspaces">
@@ -133,41 +126,59 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* Footer */}
         <div className={`border-t border-sidebar-border/50 ${collapsed ? 'p-2' : 'p-4'}`}>
           {!collapsed && (
-            <button
-              onClick={() => setProfileOpen(true)}
-              className="w-full flex items-center gap-3 px-2 py-3 mb-2 rounded-xl hover:bg-sidebar-accent/50 transition-colors text-left"
-              title="editar perfil"
-            >
-              <Avatar className="w-9 h-9 rounded-full shrink-0">
-                {(user as { avatarUrl?: string | null }).avatarUrl && (
-                  <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
-                )}
-                <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
-                  {user.name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
-                <p className="text-xs text-sidebar-foreground/50 truncate">{user.email}</p>
-              </div>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setProfileOpen(true)}
+                className="flex-1 min-w-0 flex items-center gap-3 px-2 py-3 rounded-xl hover:bg-sidebar-accent/50 transition-colors text-left"
+                title="editar perfil"
+              >
+                <Avatar className="w-9 h-9 rounded-full shrink-0">
+                  {(user as { avatarUrl?: string | null }).avatarUrl && (
+                    <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
+                  )}
+                  <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
+                    {user.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 overflow-hidden">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
+                  <p className="text-xs text-sidebar-foreground/50 truncate">{user.email}</p>
+                </div>
+              </button>
+              <button
+                title="sair"
+                onClick={() => logoutMutation.mutate()}
+                className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
 
           {collapsed && (
-            <button
-              title={`${user.name} · editar perfil`}
-              onClick={() => setProfileOpen(true)}
-              className="w-10 h-10 mx-auto rounded-full hover:ring-2 hover:ring-primary/40 transition-all shrink-0"
-            >
-              <Avatar className="w-10 h-10 rounded-full">
-                {(user as { avatarUrl?: string | null }).avatarUrl && (
-                  <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
-                )}
-                <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
-                  {user.name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                title={`${user.name} · editar perfil`}
+                onClick={() => setProfileOpen(true)}
+                className="w-10 h-10 rounded-full hover:ring-2 hover:ring-primary/40 transition-all shrink-0"
+              >
+                <Avatar className="w-10 h-10 rounded-full">
+                  {(user as { avatarUrl?: string | null }).avatarUrl && (
+                    <AvatarImage src={(user as { avatarUrl?: string | null }).avatarUrl!} alt={user.name} className="object-cover" />
+                  )}
+                  <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
+                    {user.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+              <button
+                title="sair"
+                onClick={() => logoutMutation.mutate()}
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>
