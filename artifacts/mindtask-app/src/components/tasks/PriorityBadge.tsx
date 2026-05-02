@@ -10,7 +10,7 @@ interface PriorityBadgeProps {
   portalContainer?: HTMLElement | null;
 }
 
-export function PriorityBadge({ value, onChange, disabled, portalContainer }: PriorityBadgeProps) {
+export function PriorityBadge({ value, onChange, disabled, portalContainer, allowEmpty }: PriorityBadgeProps & { allowEmpty?: boolean }) {
   const [open, setOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const [hoveredOpt, setHoveredOpt] = useState<string | null>(null);
@@ -75,11 +75,11 @@ export function PriorityBadge({ value, onChange, disabled, portalContainer }: Pr
       <Badge
         ref={badgeRef}
         variant="outline"
-        className={`px-1 py-0 text-sm border-0 bg-transparent shadow-none cursor-pointer select-none transition-opacity leading-none ${getPriorityColor(value)} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+        className={`px-1 py-0 text-sm border-0 bg-transparent shadow-none cursor-pointer select-none transition-opacity leading-none ${value ? getPriorityColor(value) : "text-muted-foreground/40"} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
         onClick={handleBadgeClick}
-        title={`prioridade ${translatePriority(value)}`}
+        title={value ? `prioridade ${translatePriority(value)}` : "prioridade vazia"}
       >
-        {"★".repeat(getPriorityStars(value))}
+        {value ? "★".repeat(getPriorityStars(value)) : "☆☆☆☆"}
       </Badge>
 
       {open && createPortal(
@@ -103,6 +103,21 @@ export function PriorityBadge({ value, onChange, disabled, portalContainer }: Pr
               {opt.label}
             </button>
           ))}
+          {allowEmpty && (
+            <button
+              key="__empty"
+              onMouseDown={(e) => { e.stopPropagation(); handleSelect(""); }}
+              onMouseEnter={() => setHoveredOpt("__empty")}
+              onMouseLeave={() => setHoveredOpt(null)}
+              className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-2 ${!value ? "opacity-60" : ""}`}
+              style={{ backgroundColor: hoveredOpt === "__empty" ? "hsl(var(--muted))" : undefined }}
+            >
+              <span className="inline-block w-[4em] shrink-0 text-right text-xs leading-none text-muted-foreground/40">
+                ☆☆☆☆
+              </span>
+              vazio
+            </button>
+          )}
         </div>,
         portalContainer ?? document.body
       )}

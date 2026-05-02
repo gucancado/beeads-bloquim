@@ -298,6 +298,7 @@ export function TaskDetailModal({
     isRecurring, setIsRecurring,
     recurrenceConfig, setRecurrenceConfig,
     showRecurrencePanel, setShowRecurrencePanel,
+    resetTitleDescriptionInit,
   } = useTaskDetailForm({
     open,
     isCardMode,
@@ -740,6 +741,24 @@ export function TaskDetailModal({
                   isDuplicating={isDuplicating}
                   onDuplicate={handleDuplicate}
                   onDelete={() => setShowDelete(true)}
+                  taskId={resolvedTaskId ?? null}
+                  taskStatus={status}
+                  templatePortalContainer={dialogContentEl}
+                  onTemplateApplied={() => {
+                    resetTitleDescriptionInit();
+                    invalidateTask();
+                    if (resolvedTaskId) {
+                      const subPath = isStandalone
+                        ? `/api/my-tasks/${resolvedTaskId}/subtasks`
+                        : `/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}/subtasks`;
+                      queryClient.invalidateQueries({ queryKey: [subPath] });
+                      queryClient.invalidateQueries({
+                        queryKey: isStandalone
+                          ? [`/api/my-tasks/${resolvedTaskId}`]
+                          : [`/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`],
+                      });
+                    }
+                  }}
                   leftSlot={
                     isEditing ? (
                       <TaskAssociationChips

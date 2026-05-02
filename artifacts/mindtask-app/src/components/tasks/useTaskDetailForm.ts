@@ -133,6 +133,10 @@ export function useTaskDetailForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task, isEditing, open, isCardMode, resolvedTaskId]);
 
+  const resetTitleDescriptionInit = () => {
+    initializedForTaskRef.current = null;
+  };
+
   return {
     title, setTitle,
     description, setDescription,
@@ -145,5 +149,6 @@ export function useTaskDetailForm({
     isRecurring, setIsRecurring,
     recurrenceConfig, setRecurrenceConfig,
     showRecurrencePanel, setShowRecurrencePanel,
+    resetTitleDescriptionInit,
   };
 }

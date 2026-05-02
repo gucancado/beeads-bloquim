@@ -13,6 +13,7 @@ import storageRouter from "./storage";
 import sidebarRouter from "./sidebar";
 import textElementsRouter from "./textElements";
 import shapesRouter from "./shapes";
+import taskTemplatesRouter from "./taskTemplates";
 
 const router: IRouter = Router();
 
@@ -28,6 +29,7 @@ router.use("/workspaces/:workspaceId/maps/:mapId/shapes", shapesRouter);
 router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskCommentsRouter);
 router.use("/my-tasks", myTasksRouter);
+router.use("/task-templates", taskTemplatesRouter);
 router.use("/maps/recent", recentMapsRouter);
 router.use("/sidebar", sidebarRouter);
 router.use(storageRouter);

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Loader2, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TaskApplyTemplateButton } from "@/components/tasks/TaskApplyTemplateButton";
 
 export function TaskHeaderActions({
   parentApprovalStatus,
@@ -12,6 +13,10 @@ export function TaskHeaderActions({
   onDuplicate,
   onDelete,
   leftSlot,
+  taskId,
+  taskStatus,
+  onTemplateApplied,
+  templatePortalContainer,
 }: {
   parentApprovalStatus: string | null;
   isEditing: boolean;
@@ -22,6 +27,10 @@ export function TaskHeaderActions({
   onDuplicate: () => void;
   onDelete: () => void;
   leftSlot?: ReactNode;
+  taskId?: string | null;
+  taskStatus?: string;
+  onTemplateApplied?: () => void;
+  templatePortalContainer?: HTMLElement | null;
 }) {
   return (
     <>
@@ -58,6 +67,14 @@ export function TaskHeaderActions({
           {leftSlot}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+        {isEditing && taskStatus !== undefined && (
+          <TaskApplyTemplateButton
+            taskId={taskId ?? null}
+            status={taskStatus}
+            onApplied={() => onTemplateApplied?.()}
+            portalContainer={templatePortalContainer}
+          />
+        )}
         {isEditing && !isStandalone && !!effectiveWorkspaceId && (
           <Button
             variant="ghost"

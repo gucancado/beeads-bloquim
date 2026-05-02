@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
-import { LogOut, CheckSquare, NotebookPen, Folders, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, CheckSquare, NotebookPen, Folders, FileText, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
@@ -104,6 +104,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 >
                   <CheckSquare className="w-5 h-5 shrink-0" />
                   {!collapsed && <span className="lowercase">Suas tarefas</span>}
+                </span>
+              </Link>
+              <Link href="/my-templates">
+                <span
+                  title="seus modelos"
+                  className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/my-templates') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
+                >
+                  <FileText className="w-5 h-5 shrink-0" />
+                  {!collapsed && <span className="lowercase">Seus modelos</span>}
                 </span>
               </Link>
               <Link href="/workspaces">

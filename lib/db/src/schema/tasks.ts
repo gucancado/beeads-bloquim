@@ -188,3 +188,35 @@ export const taskActivities = pgTable("task_activities", {
 ]);
 
 export type TaskActivity = typeof taskActivities.$inferSelect;
+
+export const taskTemplates = pgTable("task_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name"),
+  title: text("title"),
+  description: text("description"),
+  priority: taskPriorityEnum("priority"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_task_templates_user").on(table.userId),
+]);
+
+export type TaskTemplate = typeof taskTemplates.$inferSelect;
+
+export const taskTemplateSubtasks = pgTable("task_template_subtasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  templateId: uuid("template_id")
+    .notNull()
+    .references(() => taskTemplates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_task_template_subtasks_template_order").on(table.templateId, table.order),
+]);
+
+export type TaskTemplateSubtask = typeof taskTemplateSubtasks.$inferSelect;
