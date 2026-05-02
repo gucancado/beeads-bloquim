@@ -11,6 +11,7 @@ import DeletableEdge from "@/components/maps/DeletableEdge";
 import ApprovalNode from "@/components/maps/ApprovalNode";
 import ApprovalJoinNode from "@/components/maps/ApprovalJoinNode";
 import ApprovalEdge from "@/components/maps/ApprovalEdge";
+import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex } from "@/components/maps/layerOrder";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
@@ -36,6 +37,7 @@ const INACTIVE_STATUSES = new Set(['blocked', 'pending', 'draft']);
 
 const EDGE_BASE = {
   type: 'deletable' as const,
+  zIndex: LAYER_EDGE,
 };
 
 const EDGE_STYLE_ACTIVE = { strokeWidth: 2, stroke: '#374151' };
@@ -180,6 +182,7 @@ function buildApprovalEdges(
           style: edgeStyle(animated),
           deletable: false,
           selectable: false,
+          zIndex: LAYER_EDGE,
           data: { isApprovalEdge: true },
         });
       });
@@ -196,6 +199,7 @@ function buildApprovalEdges(
         style: edgeStyle(animated),
         deletable: false,
         selectable: false,
+        zIndex: LAYER_EDGE,
         data: { isApprovalEdge: true },
       });
     } else {
@@ -213,6 +217,7 @@ function buildApprovalEdges(
           style: edgeStyle(animatedParentToChild),
           deletable: false,
           selectable: false,
+          zIndex: LAYER_EDGE,
           data: { isApprovalEdge: true },
         });
         const animatedChildToJoin = isEdgeAnimated(child.id, joinNodeId, cardList);
@@ -227,6 +232,7 @@ function buildApprovalEdges(
           style: edgeStyle(animatedChildToJoin),
           deletable: false,
           selectable: false,
+          zIndex: LAYER_EDGE,
           data: { isApprovalEdge: true },
         });
       }
@@ -271,6 +277,7 @@ function buildJoinNodes(
       draggable: true,
       deletable: false,
       selectable: true,
+      zIndex: LAYER_TASK,
     });
   }
   return joinNodes;
@@ -604,6 +611,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     id: el.id,
     type: 'textnode',
     position: { x: el.positionX, y: el.positionY },
+    zIndex: LAYER_TEXT,
     data: {
       elementId: el.id,
       content: el.content,
@@ -619,7 +627,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     id: shape.id,
     type: 'shapenode',
     position: { x: shape.positionX, y: shape.positionY },
-    zIndex: -1,
+    zIndex: shapeNodeZIndex(shape.type),
     data: {
       type: shape.type,
       positionX: shape.positionX,
@@ -782,6 +790,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           id: c.id,
           type: isApproval ? 'approvalnode' : 'mindmap',
           position: { x: c.positionX, y: c.positionY },
+          zIndex: LAYER_TASK,
           data: isApproval
             ? mapApprovalCardToNodeData(c)
             : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskStartAt: c.taskStartAt ?? null, taskScheduleMode: c.taskScheduleMode ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeId: (c as ApprovalCardMeta).taskAssigneeId ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, taskAttachmentCount: (c as ApprovalCardMeta).taskAttachmentCount ?? 0, taskSubtaskCount: (c as ApprovalCardMeta).taskSubtaskCount ?? 0, taskSubtaskCompletedCount: (c as ApprovalCardMeta).taskSubtaskCompletedCount ?? 0, taskCommentCount: (c as ApprovalCardMeta).taskCommentCount ?? 0, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, isTerminalNode },
@@ -839,6 +848,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               id: c.id,
               type: isApproval ? 'approvalnode' : 'mindmap',
               position: { x: c.positionX, y: c.positionY },
+              zIndex: LAYER_TASK,
               data: isApproval
                 ? mapApprovalCardToNodeData(c)
                 : { title: c.title, statusVisual: c.statusVisual, taskId: c.taskId, taskDueDate: c.taskDueDate ?? null, taskStartAt: c.taskStartAt ?? null, taskScheduleMode: c.taskScheduleMode ?? null, taskAssigneeName: c.taskAssigneeName ?? null, taskAssigneeId: (c as ApprovalCardMeta).taskAssigneeId ?? null, taskAssigneeAvatarUrl: c.taskAssigneeAvatarUrl ?? null, taskDescription: c.description ?? null, taskCompletedAt: c.taskCompletedAt ?? null, taskParentApprovalStatus: (c as ApprovalCardMeta).taskParentApprovalStatus ?? null, taskAttachmentCount: (c as ApprovalCardMeta).taskAttachmentCount ?? 0, taskSubtaskCount: (c as ApprovalCardMeta).taskSubtaskCount ?? 0, taskSubtaskCompletedCount: (c as ApprovalCardMeta).taskSubtaskCompletedCount ?? 0, taskCommentCount: (c as ApprovalCardMeta).taskCommentCount ?? 0, workspaceId, mapId, onOpen: handleOpenPanel, onAddChild: handleAddChildCard, onInlineUpdate: handleInlineUpdate, onEditingChange: handleEditingChange, onAutoFocusDone: handleAutoFocusDone, isTerminalNode, autoFocusTitle: shouldAutoFocus },
@@ -1750,6 +1760,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             id: newEl.id,
             type: 'textnode',
             position: { x: newEl.positionX, y: newEl.positionY },
+            zIndex: LAYER_TEXT,
             data: {
               elementId: newEl.id,
               content: newEl.content,
@@ -2085,6 +2096,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
+            elevateNodesOnSelect={false}
+            elevateEdgesOnSelect={false}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             onNodesDelete={(deletedNodes) => {
