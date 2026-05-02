@@ -1,0 +1,135 @@
+
+# Criar funcionalidade de modelos de tarefas
+
+## Objetivo
+Permitir criar, gerenciar e reutilizar modelos de tarefas para acelerar a criação e padronizar processos
+
+---
+
+## 1) Campos suportados no modelo
+
+Cada modelo deve armazenar:
+
+- nome do modelo
+- título
+- descrição
+- prioridade
+- lista de subtarefas
+
+
+### Escopo inicial
+
+- inicialmente, os modelos serão atribuídos apenas ao usuário
+- cada usuário pode criar seus próprios modelos
+- futuramente, será possível:
+  - compartilhar modelos entre membros de um mesmo espaço de trabalho
+  - criar outros tipos de atribuição
+
+### Regras
+
+- todos os campos são opcionais no modelo
+
+- ao aplicar o modelo:
+  - apenas os campos preenchidos devem sobrescrever os valores da tarefa
+
+- comportamento da descrição:
+  - se a tarefa já possuir conteúdo na descrição:
+    - a descrição do modelo deve ser adicionada ao final
+    - não deve substituir o conteúdo existente
+
+---
+
+## 2) Aplicação de modelos
+
+- na tela de edição de tarefa:
+  - adicionar botão "aplicar modelo"
+  - posicionar ao lado do botão "duplicar tarefa"
+
+- ao clicar no botão:
+  - exibir dropdown com os modelos do usuário (mostrar títulos)
+
+- ao selecionar um modelo:
+  - abrir janela de confirmação com opções:
+    - aplicar
+    - cancelar
+
+### Regras de aplicação
+
+- ao confirmar:
+  - preencher automaticamente os campos da tarefa com os dados do modelo
+
+- o botão "aplicar modelo":
+  - só deve estar habilitado quando a tarefa estiver com status "rascunho"
+  - caso contrário:
+    - deve permanecer visível
+    - porém desabilitado
+
+---
+
+## 3) Edição de modelos
+
+- permitir editar modelos existentes
+
+- comportamento:
+  - alterações não afetam tarefas já criadas anteriormente
+  - tarefas que receberam um modelo:
+    - não possuem vínculo relacional com o modelo
+    - a aplicação do modelo é apenas uma edição normal da tarefa
+
+---
+
+## 4) Exclusão de modelos
+
+- permitir deletar modelos
+
+- comportamento:
+  - solicitar confirmação antes da exclusão
+  - ao excluir:
+    - não impactar tarefas já criadas a partir do modelo
+
+---
+
+## 5) Página de listagem de modelos
+
+- criar uma página "seus modelos"
+
+### Acesso
+
+- adicionar item "seus modelos" no menu lateral
+- posicionar abaixo de "suas tarefas"
+
+### Estrutura da página
+
+- botão "novo modelo"
+
+- lista de modelos:
+  - cada item deve exibir:
+    - nome/título do modelo
+
+  - interações:
+    - ao passar o mouse (hover):
+      - exibir ícone de edição (mesmo padrão da lista de tarefas)
+
+    - ao clicar no item:
+      - abrir modal de edição do modelo
+
+    - cada item deve ter botão de excluir
+
+### Edição no modal
+
+- comportamento de salvamento:
+  - salvamento automático
+  - mesmo padrão do modal de edição de tarefa
+
+---
+
+## 6) Regras adicionais
+
+- manter consistência visual com o sistema atual
+- garantir performance na listagem de modelos
+- evitar duplicação desnecessária de dados
+- permitir expansão futura:
+  - ex: anexos, novos campos, etc.
+
+
+
