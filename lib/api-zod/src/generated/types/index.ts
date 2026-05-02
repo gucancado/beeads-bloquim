@@ -7,12 +7,20 @@
  */
 
 export * from "./addMemberRequest";
+export * from "./attachmentKind";
 export * from "./attachmentResponse";
 export * from "./authResponse";
 export * from "./cardDetailResponse";
 export * from "./cardResponse";
 export * from "./cardVisualStatus";
 export * from "./connectionResponse";
+export * from "./consolidatedActivityActivityRow";
+export * from "./consolidatedActivityActivityRowKind";
+export * from "./consolidatedActivityActivityRowMetadata";
+export * from "./consolidatedActivityCommentRow";
+export * from "./consolidatedActivityCommentRowKind";
+export * from "./consolidatedActivityResponse";
+export * from "./consolidatedActivitySource";
 export * from "./createAttachmentRequest";
 export * from "./createCardRequest";
 export * from "./createConnectionRequest";
@@ -43,6 +51,7 @@ export * from "./taskResponse";
 export * from "./taskStatus";
 export * from "./taskWithContextResponse";
 export * from "./textElementResponse";
+export * from "./updateAttachmentKindRequest";
 export * from "./updateCardRequest";
 export * from "./updateMemberRoleRequest";
 export * from "./updateShapeRequest";

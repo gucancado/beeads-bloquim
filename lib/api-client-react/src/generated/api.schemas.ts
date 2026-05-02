@@ -367,6 +367,20 @@ export interface DashboardResponse {
   tasksByPriority: DashboardResponseTasksByPriority;
 }
 
+/**
+ * Categorizes attachments. `standard` is the default for general files;
+`deliverable` marks artifacts that approval tasks expose (read-only)
+as the deliverables of their parent task.
+
+ */
+export type AttachmentKind =
+  (typeof AttachmentKind)[keyof typeof AttachmentKind];
+
+export const AttachmentKind = {
+  standard: "standard",
+  deliverable: "deliverable",
+} as const;
+
 export interface AttachmentResponse {
   id: string;
   fileUploadId: string;
@@ -376,6 +390,7 @@ export interface AttachmentResponse {
   mimeType: string;
   uploadedBy?: string | null;
   createdAt: string;
+  kind: AttachmentKind;
 }
 
 export interface CreateAttachmentRequest {
@@ -383,7 +398,87 @@ export interface CreateAttachmentRequest {
   fileName: string;
   fileSize: number;
   mimeType: string;
+  kind?: AttachmentKind;
 }
+
+export interface UpdateAttachmentKindRequest {
+  kind: AttachmentKind;
+}
+
+export interface ConsolidatedActivitySource {
+  taskId: string;
+  taskTitle: string;
+  isApprovalTask: boolean;
+  approverName?: string | null;
+}
+
+export type ConsolidatedActivityActivityRowKind =
+  (typeof ConsolidatedActivityActivityRowKind)[keyof typeof ConsolidatedActivityActivityRowKind];
+
+export const ConsolidatedActivityActivityRowKind = {
+  activity: "activity",
+} as const;
+
+export type ConsolidatedActivityActivityRowMetadata = {
+  [key: string]: unknown;
+};
+
+/**
+ * Activity-style row in the consolidated approval timeline (status changes,
+assignments, etc). Discriminated by `kind: "activity"`.
+
+ */
+export interface ConsolidatedActivityActivityRow {
+  kind: ConsolidatedActivityActivityRowKind;
+  id: string;
+  taskId: string;
+  actorId?: string | null;
+  actorName?: string | null;
+  actorAvatarUrl?: string | null;
+  type: string;
+  metadata: ConsolidatedActivityActivityRowMetadata;
+  createdAt: string;
+  source?: ConsolidatedActivitySource | null;
+}
+
+export type ConsolidatedActivityCommentRowKind =
+  (typeof ConsolidatedActivityCommentRowKind)[keyof typeof ConsolidatedActivityCommentRowKind];
+
+export const ConsolidatedActivityCommentRowKind = {
+  comment: "comment",
+} as const;
+
+/**
+ * Comment-style row in the consolidated approval timeline (free-text
+notes posted by the executor or other approvers). Discriminated by
+`kind: "comment"`.
+
+ */
+export interface ConsolidatedActivityCommentRow {
+  kind: ConsolidatedActivityCommentRowKind;
+  id: string;
+  taskId: string;
+  authorId?: string | null;
+  authorName?: string | null;
+  authorAvatarUrl?: string | null;
+  content: string;
+  hidden: boolean;
+  createdAt: string;
+  updatedAt: string;
+  source?: ConsolidatedActivitySource | null;
+}
+
+/**
+ * A single row in the consolidated activity history of an approval
+task. Discriminated by the `kind` field — `"activity"` for system
+activities or `"comment"` for free-text comments. Both variants
+include an optional `source` describing whether the row originated
+on the parent task or a sibling approval task.
+
+ */
+export type ConsolidatedActivityResponse =
+  | ConsolidatedActivityActivityRow
+  | ConsolidatedActivityCommentRow;
 
 export interface UploadUrlRequest {
   /**

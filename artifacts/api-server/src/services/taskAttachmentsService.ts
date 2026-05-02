@@ -2,6 +2,8 @@ import { db } from "@workspace/db";
 import { tasks, fileUploads, attachmentLinks } from "@workspace/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 
+export type AttachmentKind = "standard" | "deliverable";
+
 export interface AttachmentRow {
   id: string;
   fileUploadId: string;
@@ -11,6 +13,7 @@ export interface AttachmentRow {
   mimeType: string;
   uploadedBy: string;
   createdAt: Date;
+  kind: AttachmentKind;
 }
 
 export interface AttachmentDownloadInfo {
@@ -24,6 +27,7 @@ export interface CreateAttachmentInput {
   fileName: string;
   fileSize: number;
   mimeType: string;
+  kind?: AttachmentKind;
 }
 
 /**
@@ -68,6 +72,25 @@ export async function getTaskOwnership(
   return row ?? null;
 }
 
+/**
+ * Returns `(isApprovalTask, parentTaskId)` for a task, or `null` when the
+ * task does not exist. Used by attachment routes to redirect approval-task
+ * attachment listings to the parent task's deliverables.
+ */
+export async function getApprovalTaskParent(
+  taskId: string,
+): Promise<{ isApprovalTask: boolean; parentTaskId: string | null } | null> {
+  const [row] = await db
+    .select({
+      isApprovalTask: tasks.isApprovalTask,
+      parentTaskId: tasks.parentTaskId,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  return row ?? null;
+}
+
 /** Lists attachments for a task in upload order (oldest first). */
 export async function listTaskAttachments(
   taskId: string,
@@ -82,6 +105,7 @@ export async function listTaskAttachments(
       mimeType: fileUploads.mimeType,
       uploadedBy: fileUploads.uploadedBy,
       createdAt: attachmentLinks.createdAt,
+      kind: attachmentLinks.kind,
     })
     .from(attachmentLinks)
     .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
@@ -89,6 +113,38 @@ export async function listTaskAttachments(
       and(
         eq(attachmentLinks.entityType, "task"),
         eq(attachmentLinks.entityId, taskId),
+      ),
+    )
+    .orderBy(asc(attachmentLinks.createdAt));
+}
+
+/**
+ * Lists only the `deliverable`-kind attachments of a task. Used to expose
+ * deliverables of the parent task on each approval task's attachment listing
+ * (read-only view inside the approval modal).
+ */
+export async function listTaskDeliverableAttachments(
+  taskId: string,
+): Promise<AttachmentRow[]> {
+  return db
+    .select({
+      id: attachmentLinks.id,
+      fileUploadId: fileUploads.id,
+      objectPath: fileUploads.objectPath,
+      fileName: fileUploads.fileName,
+      fileSize: fileUploads.fileSize,
+      mimeType: fileUploads.mimeType,
+      uploadedBy: fileUploads.uploadedBy,
+      createdAt: attachmentLinks.createdAt,
+      kind: attachmentLinks.kind,
+    })
+    .from(attachmentLinks)
+    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .where(
+      and(
+        eq(attachmentLinks.entityType, "task"),
+        eq(attachmentLinks.entityId, taskId),
+        eq(attachmentLinks.kind, "deliverable"),
       ),
     )
     .orderBy(asc(attachmentLinks.createdAt));
@@ -120,6 +176,7 @@ export async function createTaskAttachment(
       fileUploadId: fileUpload.id,
       entityType: "task",
       entityId: taskId,
+      kind: input.kind ?? "standard",
     })
     .returning();
 
@@ -132,7 +189,56 @@ export async function createTaskAttachment(
     mimeType: fileUpload.mimeType,
     uploadedBy: fileUpload.uploadedBy,
     createdAt: link.createdAt,
+    kind: link.kind,
   };
+}
+
+/**
+ * Updates the kind of an existing attachment (standard <-> deliverable).
+ * Returns the updated row, or `null` when no attachment with that id is
+ * linked to the given task.
+ */
+export async function updateTaskAttachmentKind(
+  taskId: string,
+  attachmentId: string,
+  kind: AttachmentKind,
+): Promise<AttachmentRow | null> {
+  const [link] = await db
+    .select({ id: attachmentLinks.id })
+    .from(attachmentLinks)
+    .where(
+      and(
+        eq(attachmentLinks.id, attachmentId),
+        eq(attachmentLinks.entityType, "task"),
+        eq(attachmentLinks.entityId, taskId),
+      ),
+    )
+    .limit(1);
+  if (!link) return null;
+
+  await db
+    .update(attachmentLinks)
+    .set({ kind })
+    .where(eq(attachmentLinks.id, attachmentId));
+
+  const [row] = await db
+    .select({
+      id: attachmentLinks.id,
+      fileUploadId: fileUploads.id,
+      objectPath: fileUploads.objectPath,
+      fileName: fileUploads.fileName,
+      fileSize: fileUploads.fileSize,
+      mimeType: fileUploads.mimeType,
+      uploadedBy: fileUploads.uploadedBy,
+      createdAt: attachmentLinks.createdAt,
+      kind: attachmentLinks.kind,
+    })
+    .from(attachmentLinks)
+    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .where(eq(attachmentLinks.id, attachmentId))
+    .limit(1);
+
+  return row ?? null;
 }
 
 /**
@@ -178,12 +284,26 @@ export async function deleteTaskAttachment(
 
 /**
  * Resolves the storage info needed to stream a task attachment download.
- * Returns `null` if the attachment does not belong to the given task.
+ * Returns `null` if the attachment does not belong to the given task, or
+ * (when `requireKind` is provided) when the attachment exists but its
+ * `kind` doesn't match. Used to scope approval-task downloads strictly to
+ * the parent task's `deliverable` attachments — otherwise an approver who
+ * guessed an attachment id could download arbitrary parent files.
  */
 export async function getTaskAttachmentForDownload(
   taskId: string,
   attachmentId: string,
+  requireKind?: AttachmentKind,
 ): Promise<AttachmentDownloadInfo | null> {
+  const conditions = [
+    eq(attachmentLinks.id, attachmentId),
+    eq(attachmentLinks.entityType, "task"),
+    eq(attachmentLinks.entityId, taskId),
+  ];
+  if (requireKind) {
+    conditions.push(eq(attachmentLinks.kind, requireKind));
+  }
+
   const [attachment] = await db
     .select({
       id: attachmentLinks.id,
@@ -193,13 +313,7 @@ export async function getTaskAttachmentForDownload(
     })
     .from(attachmentLinks)
     .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
-    .where(
-      and(
-        eq(attachmentLinks.id, attachmentId),
-        eq(attachmentLinks.entityType, "task"),
-        eq(attachmentLinks.entityId, taskId),
-      ),
-    )
+    .where(and(...conditions))
     .limit(1);
 
   if (!attachment) return null;

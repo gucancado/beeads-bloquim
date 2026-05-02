@@ -5,8 +5,16 @@ import {
   uuid,
   integer,
   index,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
+
+export const attachmentKindEnum = pgEnum("attachment_kind", [
+  "standard",
+  "deliverable",
+]);
+
+export type AttachmentKind = "standard" | "deliverable";
 
 export const fileUploads = pgTable("file_uploads", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -23,6 +31,7 @@ export const attachmentLinks = pgTable("attachment_links", {
   fileUploadId: uuid("file_upload_id").notNull().references(() => fileUploads.id, { onDelete: "cascade" }),
   entityType: text("entity_type").notNull(),
   entityId: uuid("entity_id").notNull(),
+  kind: attachmentKindEnum("kind").notNull().default("standard"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_attachment_links_entity").on(

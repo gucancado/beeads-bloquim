@@ -715,12 +715,16 @@ export function TaskDetailModal({
               taskId={card.task.id}
               workspaceId={effectiveWorkspaceId}
               onClose={onClose}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
             />
           ) : !isCardMode && task?.isApprovalTask && resolvedTaskId ? (
             <ApprovalTaskView
               taskId={resolvedTaskId}
               workspaceId={effectiveWorkspaceId}
               onClose={onClose}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
             />
           ) : (
             <div className="p-5 space-y-4 flex-1">
@@ -983,6 +987,7 @@ export function TaskDetailModal({
                         workspaceId={effectiveWorkspaceId}
                         taskId={taskIdResolved}
                         dropTargetEl={dialogContentEl}
+                        allowKindToggle={!!effectiveWorkspaceId}
                       />
                     )}
 

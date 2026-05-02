@@ -966,6 +966,54 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /workspaces/{workspaceId}/tasks/{taskId}/attachments/{attachmentId}:
+    patch:
+      operationId: updateTaskAttachmentKind
+      tags: [tasks]
+      summary: Update an attachment's kind (standard or deliverable)
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAttachmentKindRequest"
+      responses:
+        "200":
+          description: Updated attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Task or attachment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deleteTaskAttachment
       tags: [tasks]
@@ -998,6 +1046,46 @@ paths:
                 $ref: "#/components/schemas/SuccessResponse"
         "404":
           description: Task or attachment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/tasks/{approvalTaskId}/consolidated-activities:
+    get:
+      operationId: getConsolidatedActivities
+      tags: [tasks]
+      summary: Consolidated activity history for an approval task (parent + sibling approvers)
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: approvalTaskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Activities from parent task and all approval siblings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsolidatedActivityResponse"
+        "400":
+          description: Task is not an approval task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Task not found
           content:
             application/json:
               schema:
@@ -1913,6 +2001,14 @@ components:
           required: [low, medium, high, critical]
       required: [workspaceId, totalMaps, totalCards, totalTasks, tasksByStatus, tasksByPriority]
 
+    AttachmentKind:
+      type: string
+      enum: [standard, deliverable]
+      description: |
+        Categorizes attachments. `standard` is the default for general files;
+        `deliverable` marks artifacts that approval tasks expose (read-only)
+        as the deliverables of their parent task.
+
     AttachmentResponse:
       type: object
       properties:
@@ -1937,7 +2033,9 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt]
+        kind:
+          $ref: "#/components/schemas/AttachmentKind"
+      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt, kind]
 
     CreateAttachmentRequest:
       type: object
@@ -1950,7 +2048,126 @@ components:
           type: integer
         mimeType:
           type: string
+        kind:
+          $ref: "#/components/schemas/AttachmentKind"
       required: [objectPath, fileName, fileSize, mimeType]
+
+    UpdateAttachmentKindRequest:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/AttachmentKind"
+      required: [kind]
+
+    ConsolidatedActivitySource:
+      type: object
+      properties:
+        taskId:
+          type: string
+          format: uuid
+        taskTitle:
+          type: string
+        isApprovalTask:
+          type: boolean
+        approverName:
+          type: string
+          nullable: true
+      required: [taskId, taskTitle, isApprovalTask]
+
+    ConsolidatedActivityActivityRow:
+      type: object
+      description: |
+        Activity-style row in the consolidated approval timeline (status changes,
+        assignments, etc). Discriminated by `kind: "activity"`.
+      properties:
+        kind:
+          type: string
+          enum: [activity]
+        id:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+        actorName:
+          type: string
+          nullable: true
+        actorAvatarUrl:
+          type: string
+          nullable: true
+        type:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        source:
+          $ref: "#/components/schemas/ConsolidatedActivitySource"
+          nullable: true
+      required: [kind, id, taskId, type, metadata, createdAt]
+
+    ConsolidatedActivityCommentRow:
+      type: object
+      description: |
+        Comment-style row in the consolidated approval timeline (free-text
+        notes posted by the executor or other approvers). Discriminated by
+        `kind: "comment"`.
+      properties:
+        kind:
+          type: string
+          enum: [comment]
+        id:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+          nullable: true
+        authorName:
+          type: string
+          nullable: true
+        authorAvatarUrl:
+          type: string
+          nullable: true
+        content:
+          type: string
+        hidden:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        source:
+          $ref: "#/components/schemas/ConsolidatedActivitySource"
+          nullable: true
+      required: [kind, id, taskId, content, hidden, createdAt, updatedAt]
+
+    ConsolidatedActivityResponse:
+      description: |
+        A single row in the consolidated activity history of an approval
+        task. Discriminated by the `kind` field — `"activity"` for system
+        activities or `"comment"` for free-text comments. Both variants
+        include an optional `source` describing whether the row originated
+        on the parent task or a sibling approval task.
+      oneOf:
+        - $ref: "#/components/schemas/ConsolidatedActivityActivityRow"
+        - $ref: "#/components/schemas/ConsolidatedActivityCommentRow"
+      discriminator:
+        propertyName: kind
+        mapping:
+          activity: "#/components/schemas/ConsolidatedActivityActivityRow"
+          comment: "#/components/schemas/ConsolidatedActivityCommentRow"
 
     UploadUrlRequest:
       type: object

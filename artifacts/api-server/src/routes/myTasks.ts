@@ -706,6 +706,7 @@ const createAttachmentSchema = z.object({
   fileName: z.string().min(1),
   fileSize: z.number().int().positive(),
   mimeType: z.string().min(1),
+  kind: z.enum(["standard", "deliverable"]).optional(),
 });
 
 /**

@@ -1,10 +1,11 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2, Download } from "lucide-react";
+import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2, Download, Star } from "lucide-react";
 import {
   useListTaskAttachments,
   useCreateTaskAttachment,
   useDeleteTaskAttachment,
+  useUpdateTaskAttachmentKind,
   getListTaskAttachmentsQueryKey,
   customFetch,
 } from "@workspace/api-client-react";
@@ -58,10 +59,24 @@ async function uploadFileWithAuth(file: File): Promise<{ objectPath: string } | 
   return { objectPath };
 }
 
+type AttachmentMode = "full" | "deliverables-readonly";
+
 interface AttachmentsSectionProps {
   workspaceId?: string;
   taskId: string;
   dropTargetEl?: HTMLElement | null;
+  /**
+   * `full` (default) shows uploader, deletion and (optionally) the kind
+   * toggle. `deliverables-readonly` hides every editing affordance and is
+   * meant for the approval modal, where the listing already arrives
+   * filtered to the parent task's deliverables.
+   */
+  mode?: AttachmentMode;
+  /**
+   * When true, attachments display a "marcar como entregável" star button
+   * that toggles their `kind`. Only relevant in `full` mode.
+   */
+  allowKindToggle?: boolean;
 }
 
 function formatFileSize(bytes: number): string {
@@ -90,7 +105,13 @@ function getStandaloneAttachmentsQueryKey(taskId: string) {
   return ["myTasks", taskId, "attachments"] as const;
 }
 
-function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Required<Pick<AttachmentsSectionProps, "workspaceId">> & Omit<AttachmentsSectionProps, "workspaceId">) {
+function AttachmentsSectionWorkspace({
+  workspaceId,
+  taskId,
+  dropTargetEl,
+  mode,
+  allowKindToggle,
+}: Required<Pick<AttachmentsSectionProps, "workspaceId">> & Omit<AttachmentsSectionProps, "workspaceId">) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +126,7 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
 
   const createAttachmentMut = useCreateTaskAttachment();
   const deleteAttachmentMut = useDeleteTaskAttachment();
+  const updateKindMut = useUpdateTaskAttachmentKind();
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -150,6 +172,21 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
     }
   }, [deleteAttachmentMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
 
+  const handleToggleKind = useCallback(async (attachment: AttachmentResponse) => {
+    const nextKind = attachment.kind === "deliverable" ? "standard" : "deliverable";
+    try {
+      await updateKindMut.mutateAsync({
+        workspaceId,
+        taskId,
+        attachmentId: attachment.id,
+        data: { kind: nextKind },
+      });
+      queryClient.invalidateQueries({ queryKey: attachmentsKey });
+    } catch {
+      toast({ title: "Erro ao atualizar tipo do anexo", variant: "destructive" });
+    }
+  }, [updateKindMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
+
   const handleDownload = useCallback((attachment: AttachmentResponse) => {
     const url = `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachment.id}/download`;
     fetch(url, { credentials: "include" })
@@ -180,15 +217,18 @@ function AttachmentsSectionWorkspace({ workspaceId, taskId, dropTargetEl }: Requ
       isDragOver={isDragOver}
       fileInputRef={fileInputRef}
       dropTargetEl={dropTargetEl}
+      mode={mode ?? "full"}
+      allowKindToggle={!!allowKindToggle}
       onFiles={handleFiles}
       onRemove={handleRemove}
       onDownload={handleDownload}
+      onToggleKind={handleToggleKind}
       onDragOver={setIsDragOver}
     />
   );
 }
 
-function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<AttachmentsSectionProps, "workspaceId">) {
+function AttachmentsSectionStandalone({ taskId, dropTargetEl, mode, allowKindToggle }: Omit<AttachmentsSectionProps, "workspaceId">) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -288,9 +328,12 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl }: Omit<Attachments
       isDragOver={isDragOver}
       fileInputRef={fileInputRef}
       dropTargetEl={dropTargetEl}
+      mode={mode ?? "full"}
+      allowKindToggle={!!allowKindToggle}
       onFiles={handleFiles}
       onRemove={handleRemove}
       onDownload={handleDownload}
+      onToggleKind={undefined}
       onDragOver={setIsDragOver}
     />
   );
@@ -305,13 +348,33 @@ interface AttachmentsSectionUIProps {
   isDragOver: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   dropTargetEl?: HTMLElement | null;
+  mode: AttachmentMode;
+  allowKindToggle: boolean;
   onFiles: (files: FileList | File[]) => void;
   onRemove: (attachmentId: string) => void;
   onDownload: (attachment: AttachmentResponse) => void;
+  onToggleKind?: (attachment: AttachmentResponse) => void;
   onDragOver: (value: boolean) => void;
 }
 
-function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, uploading, isDragOver, fileInputRef, dropTargetEl, onFiles, onRemove, onDownload, onDragOver }: AttachmentsSectionUIProps) {
+function AttachmentsSectionUI({
+  workspaceId,
+  taskId,
+  attachments,
+  isLoading,
+  uploading,
+  isDragOver,
+  fileInputRef,
+  dropTargetEl,
+  mode,
+  allowKindToggle,
+  onFiles,
+  onRemove,
+  onDownload,
+  onToggleKind,
+  onDragOver,
+}: AttachmentsSectionUIProps) {
+  const isReadonly = mode === "deliverables-readonly";
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerAttachmentId, setViewerAttachmentId] = useState<string | null>(null);
 
@@ -347,6 +410,7 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
   }, [onFiles]);
 
   useEffect(() => {
+    if (isReadonly) return;
     const target = dropTargetEl;
     if (!target) return;
 
@@ -384,9 +448,10 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
       target.removeEventListener("dragover", handleDragOver);
       target.removeEventListener("drop", handleDrop);
     };
-  }, [dropTargetEl, onFiles, onDragOver]);
+  }, [dropTargetEl, onFiles, onDragOver, isReadonly]);
 
   useEffect(() => {
+    if (isReadonly) return;
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
@@ -404,11 +469,14 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [onFiles]);
+  }, [onFiles, isReadonly]);
+
+  const showKindStar = allowKindToggle && !isReadonly && !!onToggleKind;
+  const hasAnyAttachment = attachments.length > 0;
 
   return (
     <div className="space-y-2">
-      {isDragOver && (
+      {!isReadonly && isDragOver && (
         <div className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-2xl">
           <div className="text-center">
             <Paperclip className="w-8 h-8 text-primary mx-auto mb-2" />
@@ -417,27 +485,31 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted disabled:opacity-50"
-          title="Anexar arquivo"
-        >
-          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
-          <span className="lowercase">anexos +</span>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileInputChange}
-        />
-      </div>
+      {!isReadonly && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted disabled:opacity-50"
+            title="Anexar arquivo"
+          >
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+            <span className="lowercase">anexos +</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileInputChange}
+          />
+        </div>
+      )}
 
-      {isLoading ? null : (
+      {isLoading ? null : isReadonly && !hasAnyAttachment ? (
+        <p className="text-xs text-muted-foreground italic lowercase">Nenhum entregável anexado.</p>
+      ) : (
         <>
           {supportedAttachments.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -449,14 +521,32 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
                     downloadUrl={getDownloadUrl(attachment)}
                     onClick={() => handleOpenViewer(attachment.id)}
                   />
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive"
-                    title="Remover anexo"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  {attachment.kind === "deliverable" && (
+                    <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 ring-1 ring-amber-300 dark:ring-amber-800 shadow-sm">
+                      <Star className="w-2.5 h-2.5 fill-current" />
+                      <span className="lowercase">entregável</span>
+                    </span>
+                  )}
+                  {showKindStar && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onToggleKind!(attachment); }}
+                      className={`opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center ${attachment.kind === "deliverable" ? "text-amber-600 hover:text-amber-700" : "text-muted-foreground hover:text-amber-600"}`}
+                      title={attachment.kind === "deliverable" ? "Desmarcar como entregável" : "Marcar como entregável"}
+                    >
+                      <Star className={`w-3 h-3 ${attachment.kind === "deliverable" ? "fill-current" : ""}`} />
+                    </button>
+                  )}
+                  {!isReadonly && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive"
+                      title="Remover anexo"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -474,9 +564,27 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
                   >
                     <IconComponent className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{attachment.fileName}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm text-foreground truncate">{attachment.fileName}</p>
+                        {attachment.kind === "deliverable" && (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 ring-1 ring-amber-300 dark:ring-amber-800 shrink-0">
+                            <Star className="w-2.5 h-2.5 fill-current" />
+                            <span className="lowercase">entregável</span>
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-muted-foreground">{formatFileSize(attachment.fileSize)}</p>
                     </div>
+                    {showKindStar && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onToggleKind!(attachment); }}
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center hover:bg-amber-100 dark:hover:bg-amber-950/40 flex-shrink-0 ${attachment.kind === "deliverable" ? "text-amber-600" : "text-muted-foreground hover:text-amber-600"}`}
+                        title={attachment.kind === "deliverable" ? "Desmarcar como entregável" : "Marcar como entregável"}
+                      >
+                        <Star className={`w-3 h-3 ${attachment.kind === "deliverable" ? "fill-current" : ""}`} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onDownload(attachment); }}
@@ -485,14 +593,16 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
                     >
                       <Download className="w-3 h-3" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                      title="Remover anexo"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                    {!isReadonly && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                        title="Remover anexo"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -508,17 +618,17 @@ function AttachmentsSectionUI({ workspaceId, taskId, attachments, isLoading, upl
         initialAttachmentId={viewerAttachmentId}
         getDownloadUrl={getDownloadUrl}
         onDownload={onDownload}
-        onDelete={(att) => onRemove(att.id)}
-        onAddFiles={onFiles}
+        onDelete={isReadonly ? undefined : ((att) => onRemove(att.id))}
+        onAddFiles={isReadonly ? undefined : onFiles}
         uploading={uploading}
       />
     </div>
   );
 }
 
-export function AttachmentsSection({ workspaceId, taskId, dropTargetEl }: AttachmentsSectionProps) {
+export function AttachmentsSection({ workspaceId, taskId, dropTargetEl, mode, allowKindToggle }: AttachmentsSectionProps) {
   if (workspaceId) {
-    return <AttachmentsSectionWorkspace workspaceId={workspaceId} taskId={taskId} dropTargetEl={dropTargetEl} />;
+    return <AttachmentsSectionWorkspace workspaceId={workspaceId} taskId={taskId} dropTargetEl={dropTargetEl} mode={mode} allowKindToggle={allowKindToggle} />;
   }
-  return <AttachmentsSectionStandalone taskId={taskId} dropTargetEl={dropTargetEl} />;
+  return <AttachmentsSectionStandalone taskId={taskId} dropTargetEl={dropTargetEl} mode={mode} allowKindToggle={allowKindToggle} />;
 }

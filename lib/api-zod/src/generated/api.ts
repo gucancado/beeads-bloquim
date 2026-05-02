@@ -819,6 +819,11 @@ export const ListTaskAttachmentsResponseItem = zod.object({
   mimeType: zod.string(),
   uploadedBy: zod.string().uuid().nullish(),
   createdAt: zod.date(),
+  kind: zod
+    .enum(["standard", "deliverable"])
+    .describe(
+      "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
+    ),
 });
 export const ListTaskAttachmentsResponse = zod.array(
   ListTaskAttachmentsResponseItem,
@@ -837,6 +842,45 @@ export const CreateTaskAttachmentBody = zod.object({
   fileName: zod.string(),
   fileSize: zod.number(),
   mimeType: zod.string(),
+  kind: zod
+    .enum(["standard", "deliverable"])
+    .optional()
+    .describe(
+      "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
+    ),
+});
+
+/**
+ * @summary Update an attachment's kind (standard or deliverable)
+ */
+export const UpdateTaskAttachmentKindParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+  attachmentId: zod.coerce.string().uuid(),
+});
+
+export const UpdateTaskAttachmentKindBody = zod.object({
+  kind: zod
+    .enum(["standard", "deliverable"])
+    .describe(
+      "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
+    ),
+});
+
+export const UpdateTaskAttachmentKindResponse = zod.object({
+  id: zod.string().uuid(),
+  fileUploadId: zod.string().uuid(),
+  objectPath: zod.string(),
+  fileName: zod.string(),
+  fileSize: zod.number(),
+  mimeType: zod.string(),
+  uploadedBy: zod.string().uuid().nullish(),
+  createdAt: zod.date(),
+  kind: zod
+    .enum(["standard", "deliverable"])
+    .describe(
+      "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
+    ),
 });
 
 /**
@@ -852,6 +896,71 @@ export const DeleteTaskAttachmentResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
 });
+
+/**
+ * @summary Consolidated activity history for an approval task (parent + sibling approvers)
+ */
+export const GetConsolidatedActivitiesParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  approvalTaskId: zod.coerce.string().uuid(),
+});
+
+export const GetConsolidatedActivitiesResponseItem = zod
+  .union([
+    zod
+      .object({
+        kind: zod.enum(["activity"]),
+        id: zod.string().uuid(),
+        taskId: zod.string().uuid(),
+        actorId: zod.string().uuid().nullish(),
+        actorName: zod.string().nullish(),
+        actorAvatarUrl: zod.string().nullish(),
+        type: zod.string(),
+        metadata: zod.record(zod.string(), zod.unknown()),
+        createdAt: zod.date(),
+        source: zod
+          .object({
+            taskId: zod.string().uuid(),
+            taskTitle: zod.string(),
+            isApprovalTask: zod.boolean(),
+            approverName: zod.string().nullish(),
+          })
+          .nullish(),
+      })
+      .describe(
+        'Activity-style row in the consolidated approval timeline (status changes,\nassignments, etc). Discriminated by `kind: \"activity\"`.\n',
+      ),
+    zod
+      .object({
+        kind: zod.enum(["comment"]),
+        id: zod.string().uuid(),
+        taskId: zod.string().uuid(),
+        authorId: zod.string().uuid().nullish(),
+        authorName: zod.string().nullish(),
+        authorAvatarUrl: zod.string().nullish(),
+        content: zod.string(),
+        hidden: zod.boolean(),
+        createdAt: zod.date(),
+        updatedAt: zod.date(),
+        source: zod
+          .object({
+            taskId: zod.string().uuid(),
+            taskTitle: zod.string(),
+            isApprovalTask: zod.boolean(),
+            approverName: zod.string().nullish(),
+          })
+          .nullish(),
+      })
+      .describe(
+        'Comment-style row in the consolidated approval timeline (free-text\nnotes posted by the executor or other approvers). Discriminated by\n`kind: \"comment\"`.\n',
+      ),
+  ])
+  .describe(
+    'A single row in the consolidated activity history of an approval\ntask. Discriminated by the `kind` field — `\"activity\"` for system\nactivities or `\"comment\"` for free-text comments. Both variants\ninclude an optional `source` describing whether the row originated\non the parent task or a sibling approval task.\n',
+  );
+export const GetConsolidatedActivitiesResponse = zod.array(
+  GetConsolidatedActivitiesResponseItem,
+);
 
 /**
  * @summary List all shapes on a map

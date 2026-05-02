@@ -463,9 +463,13 @@ export default function WorkspaceDetailPage() {
 
   useEffect(() => {
     if (deepLinkTaskId) {
-      if (!taskSheetOpen && !openCard) {
+      // Always sync the open sheet to the URL — including when the user
+      // navigates between tasks while a modal is already open (e.g. from
+      // an approval task to its parent via "abrir tarefa principal").
+      if (deepLinkTaskId !== editingTaskId) {
         setEditingTaskId(deepLinkTaskId);
         setTaskSheetOpen(true);
+        setOpenCard(null);
       }
     } else {
       if (taskSheetOpen || openCard) {

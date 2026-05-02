@@ -1,7 +1,7 @@
 import { Router, IRouter } from "express";
 import { Readable } from "stream";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, fileUploads, attachmentLinks } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, fileUploads, attachmentLinks, taskComments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -30,9 +30,12 @@ import {
 import {
   taskBelongsToWorkspace,
   listTaskAttachments,
+  listTaskDeliverableAttachments,
   createTaskAttachment,
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
+  updateTaskAttachmentKind,
+  getApprovalTaskParent,
 } from "../services/taskAttachmentsService";
 import {
   approveApprovalTask,
@@ -285,14 +288,80 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt)),
   ]);
 
-  let parentTask: { id: string; title: string; status: string; completedAt: Date | null } | null = null;
+  let parentTask:
+    | {
+        id: string;
+        title: string;
+        status: string;
+        priority: string;
+        scheduleMode: string | null;
+        startAt: Date | null;
+        dueDate: Date | null;
+        completedAt: Date | null;
+        assignedTo: string | null;
+        assigneeName: string | null;
+        assigneeAvatarUrl: string | null;
+        completedById: string | null;
+        completedByName: string | null;
+        completedByAvatarUrl: string | null;
+      }
+    | null = null;
   if (task.isApprovalTask && task.parentTaskId) {
+    const assigneeAlias = alias(users, "parent_assignee");
     const [pt] = await db
-      .select({ id: tasks.id, title: tasks.title, status: tasks.status, completedAt: tasks.completedAt })
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        scheduleMode: tasks.scheduleMode,
+        startAt: tasks.startAt,
+        dueDate: tasks.dueDate,
+        completedAt: tasks.completedAt,
+        assignedTo: tasks.assignedTo,
+        assigneeName: assigneeAlias.name,
+        assigneeAvatarUrl: assigneeAlias.avatarUrl,
+      })
       .from(tasks)
+      .leftJoin(assigneeAlias, eq(assigneeAlias.id, tasks.assignedTo))
       .where(eq(tasks.id, task.parentTaskId))
       .limit(1);
-    parentTask = pt ?? null;
+    if (pt) {
+      // The "completed by" is captured on the most recent status_changed
+      // activity that landed in `completed`. We avoid adding a dedicated
+      // column by deriving it from the activity log.
+      const [completedByAct] = await db
+        .select({
+          actorId: taskActivities.actorId,
+          actorName: users.name,
+          actorAvatarUrl: users.avatarUrl,
+          metadata: taskActivities.metadata,
+          createdAt: taskActivities.createdAt,
+        })
+        .from(taskActivities)
+        .leftJoin(users, eq(users.id, taskActivities.actorId))
+        .where(
+          and(
+            eq(taskActivities.taskId, task.parentTaskId),
+            eq(taskActivities.type, "status_changed"),
+            sql`${taskActivities.metadata}->>'newStatus' = 'completed'`,
+          ),
+        )
+        .orderBy(desc(taskActivities.createdAt))
+        .limit(1);
+      parentTask = {
+        ...pt,
+        // Prefer the activity timestamp (canonical "when did the executor
+        // mark this complete?") and fall back to `tasks.completedAt` for
+        // legacy rows that may predate the activity log.
+        completedAt: completedByAct?.createdAt ?? pt.completedAt,
+        completedById: completedByAct?.actorId ?? null,
+        completedByName:
+          completedByAct?.actorName ??
+          (completedByAct?.metadata?.actorName ?? null),
+        completedByAvatarUrl: completedByAct?.actorAvatarUrl ?? null,
+      };
+    }
   }
 
   res.json({
@@ -479,6 +548,154 @@ router.get("/:taskId/activities", requireAuth, requireWorkspaceRole(["admin", "e
     .orderBy(asc(taskActivities.createdAt));
 
   res.json(activities);
+});
+
+/**
+ * Consolidated activity history for an approval task: returns the activities
+ * of the parent task plus those of every sibling approval task (other
+ * approvers in the same chain). Each item carries a `source` block with the
+ * originating task so the UI can render the "origem" chip.
+ */
+router.get("/:approvalTaskId/consolidated-activities", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, approvalTaskId } = req.params;
+  const viewerId = req.user!.userId;
+  const viewerRole = (req as { memberRole?: string }).memberRole;
+  const viewerIsAdmin = viewerRole === "admin";
+
+  const [approvalTask] = await db
+    .select({
+      id: tasks.id,
+      isApprovalTask: tasks.isApprovalTask,
+      parentTaskId: tasks.parentTaskId,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.id, approvalTaskId), eq(tasks.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!approvalTask) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (!approvalTask.isApprovalTask || !approvalTask.parentTaskId) {
+    res.status(400).json({ error: "Task is not an approval task" });
+    return;
+  }
+
+  const parentTaskId = approvalTask.parentTaskId;
+
+  // Fetch parent + every sibling approval task (including the one we're
+  // looking at) so the timeline shows the full picture, with each row
+  // tagged by its origin task.
+  const siblings = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      isApprovalTask: tasks.isApprovalTask,
+      assignedTo: tasks.assignedTo,
+      assigneeName: users.name,
+    })
+    .from(tasks)
+    .leftJoin(users, eq(users.id, tasks.assignedTo))
+    .where(
+      and(
+        eq(tasks.workspaceId, workspaceId),
+        or(
+          eq(tasks.id, parentTaskId),
+          eq(tasks.parentTaskId, parentTaskId),
+        ),
+      ),
+    );
+
+  const sourceMap = new Map(siblings.map(s => [s.id, s]));
+  const taskIds = siblings.map(s => s.id);
+
+  if (taskIds.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const activities = await db
+    .select({
+      id: taskActivities.id,
+      taskId: taskActivities.taskId,
+      actorId: taskActivities.actorId,
+      actorName: users.name,
+      actorAvatarUrl: users.avatarUrl,
+      type: taskActivities.type,
+      metadata: taskActivities.metadata,
+      createdAt: taskActivities.createdAt,
+    })
+    .from(taskActivities)
+    .leftJoin(users, eq(taskActivities.actorId, users.id))
+    .where(inArray(taskActivities.taskId, taskIds))
+    .orderBy(asc(taskActivities.createdAt));
+
+  // Comments live in a separate table — pull them too so the consolidated
+  // timeline is the single source of truth (otherwise approvers wouldn't
+  // see what the executor or other approvers wrote).
+  const commentRows = await db
+    .select({
+      id: taskComments.id,
+      taskId: taskComments.taskId,
+      authorId: taskComments.authorId,
+      authorName: sql<string>`coalesce(${users.name}, 'Usuário removido')`,
+      authorAvatarUrl: users.avatarUrl,
+      content: taskComments.content,
+      hidden: taskComments.hidden,
+      createdAt: taskComments.createdAt,
+      updatedAt: taskComments.updatedAt,
+    })
+    .from(taskComments)
+    .leftJoin(users, eq(taskComments.authorId, users.id))
+    .where(inArray(taskComments.taskId, taskIds))
+    .orderBy(asc(taskComments.createdAt));
+
+  const buildSource = (taskId: string) => {
+    const src = sourceMap.get(taskId);
+    return src
+      ? {
+          taskId: src.id,
+          taskTitle: src.title,
+          isApprovalTask: src.isApprovalTask,
+          approverName: src.isApprovalTask ? src.assigneeName : null,
+        }
+      : null;
+  };
+
+  type TimelineRow =
+    | { kind: "activity"; createdAt: Date; payload: Record<string, unknown> }
+    | { kind: "comment"; createdAt: Date; payload: Record<string, unknown> };
+
+  const enrichedActivities: TimelineRow[] = activities.map((a) => ({
+    kind: "activity" as const,
+    createdAt: a.createdAt,
+    payload: { ...a, source: buildSource(a.taskId) },
+  }));
+
+  // Hidden comments still ship in the timeline so the UI can render the
+  // "Comentário oculto." placeholder, but we scrub the body server-side
+  // for viewers who are neither the author nor a workspace admin —
+  // otherwise approvers could read moderated content via DevTools even
+  // though the UI masks it.
+  const enrichedComments: TimelineRow[] = commentRows.map((c) => {
+    const canSeeContent = !c.hidden || c.authorId === viewerId || viewerIsAdmin;
+    return {
+      kind: "comment" as const,
+      createdAt: c.createdAt,
+      payload: {
+        ...c,
+        content: canSeeContent ? c.content : "",
+        source: buildSource(c.taskId),
+      },
+    };
+  });
+
+  const merged = [...enrichedActivities, ...enrichedComments]
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((row) => ({ kind: row.kind, ...row.payload }));
+
+  res.json(merged);
 });
 
 router.delete("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
@@ -705,11 +922,18 @@ router.post("/:taskId/duplicate", requireAuth, requireWorkspaceRole(["admin", "e
   res.status(result.status).json(result.body);
 });
 
+const attachmentKindSchema = z.enum(["standard", "deliverable"]);
+
 const createAttachmentSchema = z.object({
   objectPath: z.string().min(1),
   fileName: z.string().min(1),
   fileSize: z.number().int().positive(),
   mimeType: z.string().min(1),
+  kind: attachmentKindSchema.optional(),
+});
+
+const updateAttachmentKindSchema = z.object({
+  kind: attachmentKindSchema,
 });
 
 router.get("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -717,6 +941,14 @@ router.get("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "
 
   if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
     res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  // Approval tasks proxy the *deliverable* attachments of their parent task
+  // so approvers see (read-only) the artifacts they need to evaluate.
+  const meta = await getApprovalTaskParent(taskId);
+  if (meta?.isApprovalTask && meta.parentTaskId) {
+    res.json(await listTaskDeliverableAttachments(meta.parentTaskId));
     return;
   }
 
@@ -740,6 +972,29 @@ router.post("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", 
 
   const created = await createTaskAttachment(taskId, actorId, parsed.data);
   res.status(201).json(created);
+});
+
+router.patch("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId, taskId, attachmentId } = req.params;
+
+  const parsed = updateAttachmentKindSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+
+  if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const updated = await updateTaskAttachmentKind(taskId, attachmentId, parsed.data.kind);
+  if (!updated) {
+    res.status(404).json({ error: "Attachment not found" });
+    return;
+  }
+
+  res.json(updated);
 });
 
 router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
@@ -769,7 +1024,22 @@ router.get("/:taskId/attachments/:attachmentId/download", requireAuth, requireWo
     return;
   }
 
-  const attachment = await getTaskAttachmentForDownload(taskId, attachmentId);
+  // Approval tasks proxy the parent task's deliverables in their listing
+  // (see GET /:taskId/attachments). The attachment_links rows themselves
+  // belong to the *parent* task, so we must look them up against the parent
+  // id; otherwise the approver always 404s when previewing or downloading.
+  // We additionally constrain the lookup to `kind=deliverable` so an
+  // approver can't use the approval task ID to download non-deliverable
+  // attachments of the parent (info disclosure).
+  const meta = await getApprovalTaskParent(taskId);
+  const isApproval = !!(meta?.isApprovalTask && meta.parentTaskId);
+  const lookupTaskId = isApproval ? meta!.parentTaskId! : taskId;
+
+  const attachment = await getTaskAttachmentForDownload(
+    lookupTaskId,
+    attachmentId,
+    isApproval ? "deliverable" : undefined,
+  );
   if (!attachment) {
     res.status(404).json({ error: "Attachment not found" });
     return;

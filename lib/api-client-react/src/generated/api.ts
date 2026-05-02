@@ -23,6 +23,7 @@ import type {
   CardDetailResponse,
   CardResponse,
   ConnectionResponse,
+  ConsolidatedActivityResponse,
   CreateAttachmentRequest,
   CreateCardRequest,
   CreateConnectionRequest,
@@ -44,6 +45,7 @@ import type {
   TaskResponse,
   TaskWithContextResponse,
   TextElementResponse,
+  UpdateAttachmentKindRequest,
   UpdateCardRequest,
   UpdateMemberRoleRequest,
   UpdateShapeRequest,
@@ -3283,6 +3285,134 @@ export const useCreateTaskAttachment = <
 };
 
 /**
+ * @summary Update an attachment's kind (standard or deliverable)
+ */
+export const getUpdateTaskAttachmentKindUrl = (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachmentId}`;
+};
+
+export const updateTaskAttachmentKind = async (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+  updateAttachmentKindRequest: UpdateAttachmentKindRequest,
+  options?: RequestInit,
+): Promise<AttachmentResponse> => {
+  return customFetch<AttachmentResponse>(
+    getUpdateTaskAttachmentKindUrl(workspaceId, taskId, attachmentId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateAttachmentKindRequest),
+    },
+  );
+};
+
+export const getUpdateTaskAttachmentKindMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTaskAttachmentKind>>,
+    TError,
+    {
+      workspaceId: string;
+      taskId: string;
+      attachmentId: string;
+      data: BodyType<UpdateAttachmentKindRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTaskAttachmentKind>>,
+  TError,
+  {
+    workspaceId: string;
+    taskId: string;
+    attachmentId: string;
+    data: BodyType<UpdateAttachmentKindRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateTaskAttachmentKind"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTaskAttachmentKind>>,
+    {
+      workspaceId: string;
+      taskId: string;
+      attachmentId: string;
+      data: BodyType<UpdateAttachmentKindRequest>;
+    }
+  > = (props) => {
+    const { workspaceId, taskId, attachmentId, data } = props ?? {};
+
+    return updateTaskAttachmentKind(
+      workspaceId,
+      taskId,
+      attachmentId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTaskAttachmentKindMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTaskAttachmentKind>>
+>;
+export type UpdateTaskAttachmentKindMutationBody =
+  BodyType<UpdateAttachmentKindRequest>;
+export type UpdateTaskAttachmentKindMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update an attachment's kind (standard or deliverable)
+ */
+export const useUpdateTaskAttachmentKind = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTaskAttachmentKind>>,
+    TError,
+    {
+      workspaceId: string;
+      taskId: string;
+      attachmentId: string;
+      data: BodyType<UpdateAttachmentKindRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTaskAttachmentKind>>,
+  TError,
+  {
+    workspaceId: string;
+    taskId: string;
+    attachmentId: string;
+    data: BodyType<UpdateAttachmentKindRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateTaskAttachmentKindMutationOptions(options));
+};
+
+/**
  * @summary Delete an attachment from a task
  */
 export const getDeleteTaskAttachmentUrl = (
@@ -3379,6 +3509,117 @@ export const useDeleteTaskAttachment = <
 > => {
   return useMutation(getDeleteTaskAttachmentMutationOptions(options));
 };
+
+/**
+ * @summary Consolidated activity history for an approval task (parent + sibling approvers)
+ */
+export const getGetConsolidatedActivitiesUrl = (
+  workspaceId: string,
+  approvalTaskId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/tasks/${approvalTaskId}/consolidated-activities`;
+};
+
+export const getConsolidatedActivities = async (
+  workspaceId: string,
+  approvalTaskId: string,
+  options?: RequestInit,
+): Promise<ConsolidatedActivityResponse[]> => {
+  return customFetch<ConsolidatedActivityResponse[]>(
+    getGetConsolidatedActivitiesUrl(workspaceId, approvalTaskId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetConsolidatedActivitiesQueryKey = (
+  workspaceId: string,
+  approvalTaskId: string,
+) => {
+  return [
+    `/api/workspaces/${workspaceId}/tasks/${approvalTaskId}/consolidated-activities`,
+  ] as const;
+};
+
+export const getGetConsolidatedActivitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getConsolidatedActivities>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  workspaceId: string,
+  approvalTaskId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getConsolidatedActivities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetConsolidatedActivitiesQueryKey(workspaceId, approvalTaskId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getConsolidatedActivities>>
+  > = ({ signal }) =>
+    getConsolidatedActivities(workspaceId, approvalTaskId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(workspaceId && approvalTaskId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getConsolidatedActivities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetConsolidatedActivitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getConsolidatedActivities>>
+>;
+export type GetConsolidatedActivitiesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Consolidated activity history for an approval task (parent + sibling approvers)
+ */
+
+export function useGetConsolidatedActivities<
+  TData = Awaited<ReturnType<typeof getConsolidatedActivities>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  workspaceId: string,
+  approvalTaskId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getConsolidatedActivities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetConsolidatedActivitiesQueryOptions(
+    workspaceId,
+    approvalTaskId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all shapes on a map

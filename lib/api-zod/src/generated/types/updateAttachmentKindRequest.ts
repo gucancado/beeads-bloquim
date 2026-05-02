@@ -7,10 +7,6 @@
  */
 import type { AttachmentKind } from "./attachmentKind";
 
-export interface CreateAttachmentRequest {
-  objectPath: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
-  kind?: AttachmentKind;
+export interface UpdateAttachmentKindRequest {
+  kind: AttachmentKind;
 }

@@ -5,6 +5,7 @@
  * MindTask API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AttachmentKind } from "./attachmentKind";
 
 export interface AttachmentResponse {
   id: string;
@@ -15,4 +16,5 @@ export interface AttachmentResponse {
   mimeType: string;
   uploadedBy?: string | null;
   createdAt: Date;
+  kind: AttachmentKind;
 }
