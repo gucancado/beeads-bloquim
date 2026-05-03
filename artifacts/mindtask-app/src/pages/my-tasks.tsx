@@ -57,11 +57,6 @@ export default function MyTasksPage() {
     );
   };
 
-  const clearAllFilters = () => {
-    setSelectedStatuses([]);
-    setSelectedAssignees(["me"]);
-  };
-
   const { data: members } = useQuery<{ userId: string; name: string; workspaceId: string; avatarUrl?: string | null }[]>({
     queryKey: ["/api/my-tasks/members"],
     queryFn: () => customFetch("/api/my-tasks/members"),
@@ -165,8 +160,6 @@ export default function MyTasksPage() {
     }
   };
 
-  const hasActiveFilters = selectedStatuses.length > 0 || !( selectedAssignees.length === 1 && selectedAssignees[0] === "me");
-
   const membersByWorkspace = (members ?? []).reduce<Record<string, TaskListItemMember[]>>((acc, m) => {
     if (!acc[m.workspaceId]) acc[m.workspaceId] = [];
     if (!acc[m.workspaceId].some(x => x.userId === m.userId)) {
@@ -192,7 +185,17 @@ export default function MyTasksPage() {
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <AssigneeFilterPills
+                members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }])).values())}
+                selected={selectedAssignees}
+                onToggle={toggleAssignee}
+                showMe
+                meLabel="Eu"
+                meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
               {STATUS_OPTIONS.map(opt => {
                 const isActive = selectedStatuses.includes(opt.value);
                 const cnt = statusCounts?.[opt.value] ?? 0;
@@ -210,25 +213,6 @@ export default function MyTasksPage() {
                   </button>
                 );
               })}
-
-              {hasActiveFilters && (
-                <button
-                  onClick={clearAllFilters}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
-                >
-                  <span className="lowercase">Limpar filtros</span>
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <AssigneeFilterPills
-                members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }])).values())}
-                selected={selectedAssignees}
-                onToggle={toggleAssignee}
-                showMe
-                meLabel="Eu"
-                meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
-              />
             </div>
           </div>
 
@@ -252,7 +236,7 @@ export default function MyTasksPage() {
             type TaskItem = NonNullable<typeof tasks>[number];
             const renderSection = (label: string, sectionTasks: TaskItem[]) => (
               <div>
-                <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">{label}</p>
+                <p className="text-xs font-light text-muted-foreground mb-2 text-center lowercase">{label}</p>
                 <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                   <div className="divide-y divide-border/50">
                     {sectionTasks.map(task => (
@@ -278,10 +262,10 @@ export default function MyTasksPage() {
             return (
               <div className="flex flex-col gap-6">
                 {showNadaAteSexta && (
-                  <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada até sexta</p>
+                  <p className="text-xs font-light text-muted-foreground text-center lowercase">nada até sexta</p>
                 )}
                 {showNadaHoje && (
-                  <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada pra hoje</p>
+                  <p className="text-xs font-light text-muted-foreground text-center lowercase">nada pra hoje</p>
                 )}
                 {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
                 {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}

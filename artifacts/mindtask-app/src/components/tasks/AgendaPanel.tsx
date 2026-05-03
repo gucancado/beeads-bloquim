@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export function AgendaPanel() {
   const [expanded, setExpanded] = useState(false);
-  const { data: status, isLoading: statusLoading } = useGoogleCalendarStatus();
+  const { data: status, isLoading: statusLoading, isFetched: statusFetched } = useGoogleCalendarStatus();
   const isConnected = !!status?.connected;
   const { data, isLoading: eventsLoading, error, refetch, isFetching } = useTodayEvents(expanded && isConnected);
   const qc = useQueryClient();
@@ -17,6 +17,10 @@ export function AgendaPanel() {
   const events = data?.events ?? [];
   const allDay = events.filter(e => e.allDay);
   const timed = events.filter(e => !e.allDay);
+
+  if (statusLoading || !statusFetched || !isConnected) {
+    return null;
+  }
 
   return (
     <div>
@@ -28,7 +32,7 @@ export function AgendaPanel() {
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           <span>agenda</span>
         </button>
-        {expanded && isConnected && (
+        {expanded && (
           <button
             onClick={() => {
               qc.invalidateQueries({ queryKey: ["/api/integrations/google-calendar/today-events"] });
@@ -45,20 +49,7 @@ export function AgendaPanel() {
 
       {expanded && (
         <div className="px-1">
-          {statusLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : !isConnected ? (
-            <div className="flex flex-col items-start gap-3 py-2">
-              <p className="text-sm text-muted-foreground lowercase">
-                <Link href="/settings/integrations">
-                  <span className="underline underline-offset-2 hover:text-foreground transition-colors cursor-pointer">conecte sua conta google</span>
-                </Link>
-                {" "}para ver os eventos do dia.
-              </p>
-            </div>
-          ) : reauthRequired ? (
+          {reauthRequired ? (
             <div className="flex items-start gap-2 p-4 rounded-xl bg-destructive/10 text-destructive text-sm">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="flex-1">

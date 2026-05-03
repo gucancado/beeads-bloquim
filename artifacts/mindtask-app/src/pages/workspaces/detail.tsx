@@ -350,15 +350,6 @@ export default function WorkspaceDetailPage() {
     );
   };
 
-  const clearAllFilters = () => {
-    setSelectedStatuses([]);
-    setSelectedAssignees(["me"]);
-  };
-
-  const hasActiveFilters =
-    selectedStatuses.length > 0 ||
-    !(selectedAssignees.length === 1 && selectedAssignees[0] === "me");
-
   const handleCreateMap = (e: React.FormEvent) => {
     e.preventDefault();
     if (!mapName.trim()) return;
@@ -548,9 +539,64 @@ export default function WorkspaceDetailPage() {
                   { label: workspace.name.toLowerCase() },
                 ];
                 const tabTriggerClass = "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=active]:font-normal rounded-none px-0 py-0 h-auto text-base font-light text-muted-foreground/80 hover:text-foreground lowercase transition-colors";
+                const colorHex = getColorByIndex(workspace.colorIndex);
                 return (
-                  <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-                    <PageBreadcrumb items={breadcrumbItems} />
+                  <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <PageBreadcrumb items={breadcrumbItems} />
+                      {isAdmin ? (
+                        <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <button
+                              title="escolher cor"
+                              className="shrink-0 w-3 h-3 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                              style={
+                                colorHex
+                                  ? { backgroundColor: colorHex }
+                                  : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
+                              }
+                            />
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-3" align="start">
+                            <div className="grid grid-cols-8 gap-1.5">
+                              {COLOR_PALETTE.map((entry) => {
+                                const isSelected = workspace.colorIndex === entry.index;
+                                return (
+                                  <button
+                                    key={entry.index}
+                                    onClick={() => {
+                                      colorMutation.mutate(entry.index);
+                                      setColorPopoverOpen(false);
+                                    }}
+                                    className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
+                                  >
+                                    <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {workspace.colorIndex && (
+                              <button
+                                onClick={() => {
+                                  colorMutation.mutate(null);
+                                  setColorPopoverOpen(false);
+                                }}
+                                className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
+                              >
+                                remover cor
+                              </button>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        colorHex && (
+                          <span
+                            className="shrink-0 w-3 h-3 rounded-full"
+                            style={{ backgroundColor: colorHex }}
+                          />
+                        )
+                      )}
+                    </div>
                     <TabsList className="bg-transparent border-b-0 h-auto p-0 flex gap-5">
                       <TabsTrigger value="tasks" className={tabTriggerClass}>tarefas</TabsTrigger>
                       <TabsTrigger value="maps" className={tabTriggerClass}>planos</TabsTrigger>
@@ -561,143 +607,32 @@ export default function WorkspaceDetailPage() {
                 );
               })()}
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6">
-              <div className="flex items-center gap-3 min-w-0">
-                {isAdmin ? (
-                  <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        title="escolher cor"
-                        className="shrink-0 w-4 h-4 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                        style={
-                          getColorByIndex(workspace.colorIndex)
-                            ? { backgroundColor: getColorByIndex(workspace.colorIndex)! }
-                            : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
-                        }
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3" align="start">
-                      <div className="grid grid-cols-8 gap-1.5">
-                        {COLOR_PALETTE.map((entry) => {
-                          const isSelected = workspace.colorIndex === entry.index;
-                          return (
-                            <button
-                              key={entry.index}
-                              onClick={() => {
-                                colorMutation.mutate(entry.index);
-                                setColorPopoverOpen(false);
-                              }}
-                              className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
-                            >
-                              <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {workspace.colorIndex && (
-                        <button
-                          onClick={() => {
-                            colorMutation.mutate(null);
-                            setColorPopoverOpen(false);
-                          }}
-                          className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
-                        >
-                          remover cor
-                        </button>
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                ) : (
-                  getColorByIndex(workspace.colorIndex) && (
-                    <span
-                      className="shrink-0 w-4 h-4 rounded-sm"
-                      style={{ backgroundColor: getColorByIndex(workspace.colorIndex)! }}
+            <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>
+              <DialogContent className="sm:max-w-md rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-display lowercase">Criar Plano</DialogTitle>
+                  <DialogDescription className="lowercase">Dê um nome para o seu novo plano de planejamento visual.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateMap} className="space-y-6 mt-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium lowercase">Nome do Plano</label>
+                    <Input
+                      placeholder="ex: Roadmap Q3, Sprint Planejamento"
+                      value={mapName}
+                      onChange={(e) => setMapName(e.target.value)}
+                      className="h-12 rounded-xl"
+                      autoFocus
                     />
-                  )
-                )}
-                {isEditingTitle ? (
-                  <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={editTitleValue}
-                    onChange={(e) => setEditTitleValue(e.target.value)}
-                    onBlur={saveTitle}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === "Tab") {
-                        e.preventDefault();
-                        saveTitle();
-                      }
-                      if (e.key === "Escape") {
-                        setIsEditingTitle(false);
-                      }
-                    }}
-                    className="text-base font-medium text-foreground bg-transparent border-b border-primary outline-none lowercase min-w-0"
-                  />
-                ) : isAdmin ? (
-                  <button
-                    onClick={startEditingTitle}
-                    title="renomear espaço"
-                    className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors lowercase"
-                  >
-                    renomear
-                  </button>
-                ) : null}
-                {workspace.members && workspace.members.length > 0 && (
-                  <TooltipProvider delayDuration={200}>
-                    <div className="flex items-center ml-2">
-                      <div className="flex -space-x-2">
-                        {workspace.members.map((member: any) => (
-                          <Tooltip key={member.userId ?? member.user?.id}>
-                            <TooltipTrigger asChild>
-                              <Avatar className="w-7 h-7 border-2 border-card ring-0 cursor-default">
-                                {(member.user?.avatarUrl ?? member.avatarUrl) ? (
-                                  <AvatarImage src={member.user?.avatarUrl ?? member.avatarUrl} alt={member.user?.name ?? member.name} />
-                                ) : null}
-                                <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
-                                  {getInitials(member.user?.name ?? member.name ?? "")}
-                                </AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                              <p className="font-medium">{member.user?.name ?? member.name}</p>
-                              <p className="text-primary-foreground/70 text-[11px]">{translateRoleLabel(member.role)}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </div>
-                    </div>
-                  </TooltipProvider>
-                )}
-              </div>
-              <div className="flex gap-3">
-                <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>
-                  <DialogContent className="sm:max-w-md rounded-2xl">
-                    <DialogHeader>
-                      <DialogTitle className="text-2xl font-display lowercase">Criar Plano</DialogTitle>
-                      <DialogDescription className="lowercase">Dê um nome para o seu novo plano de planejamento visual.</DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleCreateMap} className="space-y-6 mt-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium lowercase">Nome do Plano</label>
-                        <Input
-                          placeholder="ex: Roadmap Q3, Sprint Planejamento"
-                          value={mapName}
-                          onChange={(e) => setMapName(e.target.value)}
-                          className="h-12 rounded-xl"
-                          autoFocus
-                        />
-                      </div>
-                      <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsMapDialogOpen(false)} className="rounded-xl lowercase">Cancelar</Button>
-                        <Button type="submit" disabled={createMapMutation.isPending || !mapName.trim()} className="rounded-xl lowercase">
-                          {createMapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Plano"}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsMapDialogOpen(false)} className="rounded-xl lowercase">Cancelar</Button>
+                    <Button type="submit" disabled={createMapMutation.isPending || !mapName.trim()} className="rounded-xl lowercase">
+                      {createMapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Plano"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
 
               <div className="pt-2 pb-16 max-w-6xl mx-auto">
                 <TabsContent value="maps" className="mt-0 outline-none">
@@ -768,8 +703,31 @@ export default function WorkspaceDetailPage() {
 
                 <TabsContent value="tasks" className="mt-0 outline-none">
                   {/* Header row: filters + nova tarefa button */}
-                  <div className="flex flex-col gap-3 mb-6">
-                    <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col gap-6 mb-12">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer shrink-0 lowercase"
+                        onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
+                      >
+                        <Plus className="w-4 h-4 mr-1.5" /> criar
+                      </Button>
+                    </div>
+                    {(workspaceMembers && workspaceMembers.length > 0) && (
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <AssigneeFilterPills
+                          members={(workspaceMembers ?? [])
+                            .filter(m => m.userId !== currentUserId)
+                            .map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
+                          selected={selectedAssignees}
+                          onToggle={toggleAssignee}
+                          showMe
+                          meLabel="Eu"
+                          meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-center gap-2">
                       {STATUS_OPTIONS.map(opt => {
                         const isActive = selectedStatuses.includes(opt.value);
                         const cnt = statusCounts?.[opt.value] ?? 0;
@@ -787,36 +745,7 @@ export default function WorkspaceDetailPage() {
                           </button>
                         );
                       })}
-                      {hasActiveFilters && (
-                        <button
-                          onClick={clearAllFilters}
-                          className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
-                        >
-                          <span className="lowercase">Limpar filtros</span>
-                        </button>
-                      )}
-                      <Button
-                        variant="outline"
-                        className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer shrink-0 lowercase ml-auto"
-                        onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
-                      >
-                        <Plus className="w-4 h-4 mr-1.5" /> criar
-                      </Button>
                     </div>
-                    {(workspaceMembers && workspaceMembers.length > 0) && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <AssigneeFilterPills
-                          members={(workspaceMembers ?? [])
-                            .filter(m => m.userId !== currentUserId)
-                            .map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
-                          selected={selectedAssignees}
-                          onToggle={toggleAssignee}
-                          showMe
-                          meLabel="Eu"
-                          meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
-                        />
-                      </div>
-                    )}
                   </div>
 
                   {isTasksLoading ? (
@@ -843,7 +772,7 @@ export default function WorkspaceDetailPage() {
                     type WorkspaceTaskItem = NonNullable<typeof workspaceTasks>[number];
                     const renderSection = (label: string, sectionTasks: WorkspaceTaskItem[]) => (
                       <div>
-                        <p className="text-xs font-light text-muted-foreground mb-2 px-1 lowercase">{label}</p>
+                        <p className="text-xs font-light text-muted-foreground mb-2 text-center lowercase">{label}</p>
                         <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                           <div className="divide-y divide-border/50">
                             {sectionTasks.map(task => (
@@ -868,10 +797,10 @@ export default function WorkspaceDetailPage() {
                     return (
                       <div className="flex flex-col gap-6">
                         {showNadaAteSexta && (
-                          <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada até sexta</p>
+                          <p className="text-xs font-light text-muted-foreground text-center lowercase">nada até sexta</p>
                         )}
                         {showNadaHoje && (
-                          <p className="text-xs font-light text-muted-foreground px-1 lowercase">nada pra hoje</p>
+                          <p className="text-xs font-light text-muted-foreground text-center lowercase">nada pra hoje</p>
                         )}
                         {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
                         {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}
