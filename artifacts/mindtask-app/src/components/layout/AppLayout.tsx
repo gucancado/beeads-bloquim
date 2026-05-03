@@ -7,6 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SidebarWorkspaceList } from "@/components/layout/SidebarWorkspaceList";
+import { GlobalTaskSearch } from "@/components/layout/GlobalTaskSearch";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -200,6 +201,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative min-w-0">
         {children}
+        <GlobalTaskSearch />
       </main>
 
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
