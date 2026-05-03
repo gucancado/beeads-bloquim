@@ -2210,7 +2210,7 @@ components:
           format: uuid
         type:
           type: string
-          enum: [line, rect, ellipse]
+          enum: [line, rect, ellipse, image]
         positionX:
           type: number
         positionY:
@@ -2239,6 +2239,19 @@ components:
           nullable: true
         y2:
           type: number
+          nullable: true
+        fileUploadId:
+          type: string
+          format: uuid
+          nullable: true
+        fileName:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        fileSize:
+          type: integer
           nullable: true
         createdAt:
           type: string
@@ -2268,7 +2281,7 @@ components:
       properties:
         type:
           type: string
-          enum: [line, rect, ellipse]
+          enum: [line, rect, ellipse, image]
         positionX:
           type: number
         positionY:
@@ -2297,6 +2310,10 @@ components:
           nullable: true
         y2:
           type: number
+          nullable: true
+        fileUploadId:
+          type: string
+          format: uuid
           nullable: true
 
     UpdateShapeRequest:

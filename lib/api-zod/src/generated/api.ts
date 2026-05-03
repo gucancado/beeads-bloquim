@@ -374,7 +374,7 @@ export const GetMapResponse = zod.object({
     zod.object({
       id: zod.string().uuid(),
       mapId: zod.string().uuid(),
-      type: zod.enum(["line", "rect", "ellipse"]),
+      type: zod.enum(["line", "rect", "ellipse", "image"]),
       positionX: zod.number(),
       positionY: zod.number(),
       width: zod.number(),
@@ -387,6 +387,10 @@ export const GetMapResponse = zod.object({
       y1: zod.number().nullish(),
       x2: zod.number().nullish(),
       y2: zod.number().nullish(),
+      fileUploadId: zod.string().uuid().nullish(),
+      fileName: zod.string().nullish(),
+      mimeType: zod.string().nullish(),
+      fileSize: zod.number().nullish(),
       createdAt: zod.date(),
       updatedAt: zod.date(),
     }),
@@ -973,7 +977,7 @@ export const ListShapesParams = zod.object({
 export const ListShapesResponseItem = zod.object({
   id: zod.string().uuid(),
   mapId: zod.string().uuid(),
-  type: zod.enum(["line", "rect", "ellipse"]),
+  type: zod.enum(["line", "rect", "ellipse", "image"]),
   positionX: zod.number(),
   positionY: zod.number(),
   width: zod.number(),
@@ -986,6 +990,10 @@ export const ListShapesResponseItem = zod.object({
   y1: zod.number().nullish(),
   x2: zod.number().nullish(),
   y2: zod.number().nullish(),
+  fileUploadId: zod.string().uuid().nullish(),
+  fileName: zod.string().nullish(),
+  mimeType: zod.string().nullish(),
+  fileSize: zod.number().nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -1000,7 +1008,7 @@ export const CreateShapeParams = zod.object({
 });
 
 export const CreateShapeBody = zod.object({
-  type: zod.enum(["line", "rect", "ellipse"]).optional(),
+  type: zod.enum(["line", "rect", "ellipse", "image"]).optional(),
   positionX: zod.number().optional(),
   positionY: zod.number().optional(),
   width: zod.number().optional(),
@@ -1013,6 +1021,7 @@ export const CreateShapeBody = zod.object({
   y1: zod.number().nullish(),
   x2: zod.number().nullish(),
   y2: zod.number().nullish(),
+  fileUploadId: zod.string().uuid().nullish(),
 });
 
 /**
@@ -1042,7 +1051,7 @@ export const UpdateShapeBody = zod.object({
 export const UpdateShapeResponse = zod.object({
   id: zod.string().uuid(),
   mapId: zod.string().uuid(),
-  type: zod.enum(["line", "rect", "ellipse"]),
+  type: zod.enum(["line", "rect", "ellipse", "image"]),
   positionX: zod.number(),
   positionY: zod.number(),
   width: zod.number(),
@@ -1055,6 +1064,10 @@ export const UpdateShapeResponse = zod.object({
   y1: zod.number().nullish(),
   x2: zod.number().nullish(),
   y2: zod.number().nullish(),
+  fileUploadId: zod.string().uuid().nullish(),
+  fileName: zod.string().nullish(),
+  mimeType: zod.string().nullish(),
+  fileSize: zod.number().nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });

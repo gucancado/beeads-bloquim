@@ -1,7 +1,9 @@
 import { memo, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useReactFlow, useStore } from 'reactflow';
+import { useReactFlow, useStore, NodeToolbar, Position } from 'reactflow';
+import { Download, Loader2 } from 'lucide-react';
 import { useUpdateShape } from '@workspace/api-client-react';
+import { useAttachmentBlobUrl } from '@/components/tasks/attachments/useAttachmentBlobUrl';
 
 const SHAPE_COLORS = [
   { label: 'Índigo', value: '#6366f1' },
@@ -12,8 +14,10 @@ const SHAPE_COLORS = [
   { label: 'Cinza', value: '#6b7280' },
 ];
 
+export type ShapeNodeKind = 'line' | 'rect' | 'ellipse' | 'image';
+
 interface ShapeNodeData {
-  type: 'line' | 'rect' | 'ellipse';
+  type: ShapeNodeKind;
   positionX: number;
   positionY: number;
   width: number;
@@ -27,6 +31,10 @@ interface ShapeNodeData {
   y1?: number | null;
   x2?: number | null;
   y2?: number | null;
+  fileUploadId?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+  downloadUrl?: string | null;
   onBeforeMutate?: () => void;
 }
 
@@ -43,6 +51,7 @@ const HANDLE_SIZE = 8;
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
+  const isImage = data.type === 'image';
   const [width, setWidth] = useState(data.width);
   const [height, setHeight] = useState(data.height);
   const [color, setColor] = useState(data.color);
@@ -77,6 +86,10 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     top: yPos * transform[2] + transform[1] - 52,
     left: xPos * transform[2] + transform[0],
   } : { top: 0, left: 0 };
+
+  const { url: imageUrl, loading: imageLoading, error: imageError } = useAttachmentBlobUrl(
+    isImage ? (data.downloadUrl ?? null) : null,
+  );
 
   useEffect(() => {
     setWidth(data.width);
@@ -126,6 +139,25 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     setStrokeStyle(next);
     saveStyle({ strokeStyle: next });
   }, [strokeStyle, saveStyle]);
+
+  const handleDownload = useCallback(async () => {
+    if (!data.downloadUrl) return;
+    try {
+      const res = await fetch(data.downloadUrl, { credentials: 'include' });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.fileName ?? 'image';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      // swallow
+    }
+  }, [data.downloadUrl, data.fileName]);
 
   const startResizeLine = useCallback((e: React.MouseEvent, endpoint: 'start' | 'end') => {
     e.stopPropagation();
@@ -227,6 +259,7 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     const startNode = getNode(id);
     const startPosX = startNode?.position.x ?? data.positionX;
     const startPosY = startNode?.position.y ?? data.positionY;
+    const aspect = isImage && startH > 0 ? startW / startH : 0;
 
     const compute = (ev: MouseEvent) => {
       const zoom = getZoom();
@@ -237,16 +270,47 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
       let newPosX = startPosX;
       let newPosY = startPosY;
 
-      if (handle.includes('e')) newW = Math.max(40, startW + dx);
+      const minW = isImage ? 20 : 40;
+      const minH = isImage ? 20 : 20;
+
+      if (handle.includes('e')) newW = Math.max(minW, startW + dx);
       if (handle.includes('w')) {
-        newW = Math.max(40, startW - dx);
+        newW = Math.max(minW, startW - dx);
         newPosX = startPosX + (startW - newW);
       }
-      if (handle.includes('s')) newH = Math.max(20, startH + dy);
+      if (handle.includes('s')) newH = Math.max(minH, startH + dy);
       if (handle.includes('n')) {
-        newH = Math.max(20, startH - dy);
+        newH = Math.max(minH, startH - dy);
         newPosY = startPosY + (startH - newH);
       }
+
+      // For images, lock aspect ratio. Drive sizing from the dominant axis,
+      // and re-anchor positions when resizing from a north/west handle.
+      if (isImage && aspect > 0) {
+        const horizOnly = handle === 'e' || handle === 'w';
+        const vertOnly = handle === 'n' || handle === 's';
+        let lockedW: number;
+        let lockedH: number;
+        if (horizOnly) {
+          lockedW = newW;
+          lockedH = Math.max(minH, lockedW / aspect);
+        } else if (vertOnly) {
+          lockedH = newH;
+          lockedW = Math.max(minW, lockedH * aspect);
+        } else {
+          // corner handle: pick larger ratio change
+          const wChange = newW / startW;
+          const hChange = newH / startH;
+          const scale = Math.max(wChange, hChange);
+          lockedW = Math.max(minW, startW * scale);
+          lockedH = Math.max(minH, startH * scale);
+        }
+        if (handle.includes('w')) newPosX = startPosX + (startW - lockedW);
+        if (handle.includes('n')) newPosY = startPosY + (startH - lockedH);
+        newW = lockedW;
+        newH = lockedH;
+      }
+
       return { newW, newH, newPosX, newPosY };
     };
 
@@ -276,7 +340,7 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, [width, height, data.positionX, data.positionY, data.workspaceId, data.mapId, id, updateMut, setNodes, getZoom, getNode]);
+  }, [width, height, isImage, data, id, updateMut, setNodes, getZoom, getNode]);
 
   const strokeDash = strokeStyle === 'dashed' ? '8 5' : undefined;
   const fillColor = filled ? color + '33' : 'none';
@@ -310,7 +374,7 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     sw: 'sw-resize', w: 'w-resize',
   };
 
-  const styleToolbar = selected ? createPortal(
+  const styleToolbar = selected && !isImage ? createPortal(
     <div
       className="fixed z-[9999] flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl px-3 py-2"
       style={{ top: menuPos.top, left: menuPos.left, minWidth: 220 }}
@@ -360,6 +424,81 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
     </div>,
     document.body,
   ) : null;
+
+  const imageToolbar = isImage ? (
+    <NodeToolbar
+      isVisible={selected}
+      position={Position.Right}
+      align="start"
+      offset={6}
+    >
+      <button
+        title="Baixar imagem"
+        onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleDownload(); }}
+        className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 shadow-md hover:bg-gray-100 dark:hover:bg-gray-800"
+      >
+        <Download className="w-3.5 h-3.5" />
+      </button>
+    </NodeToolbar>
+  ) : null;
+
+  if (isImage) {
+    return (
+      <>
+        {imageToolbar}
+        <div
+          style={{ position: 'relative', width: svgW, height: svgH, userSelect: 'none', cursor: 'grab' }}
+        >
+          {imageLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/40 rounded-md">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {imageError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/40 rounded-md text-xs text-muted-foreground">
+              erro ao carregar
+            </div>
+          )}
+          {!imageLoading && !imageError && imageUrl && (
+            <img
+              src={imageUrl}
+              alt={data.fileName ?? 'imagem'}
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none' }}
+            />
+          )}
+          {selected && (
+            <svg
+              width={svgW}
+              height={svgH}
+              style={{ overflow: 'visible', pointerEvents: 'none', position: 'absolute', inset: 0 }}
+            >
+              <rect x={0.5} y={0.5} width={svgW - 1} height={svgH - 1} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 3" />
+              {rectHandlePositions
+                .filter(({ handle }) => handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw')
+                .map(({ handle, cx, cy }) => (
+                <rect
+                  key={handle}
+                  x={cx - HANDLE_SIZE / 2}
+                  y={cy - HANDLE_SIZE / 2}
+                  width={HANDLE_SIZE}
+                  height={HANDLE_SIZE}
+                  rx={1}
+                  fill="white"
+                  stroke="#6366f1"
+                  strokeWidth={1.5}
+                  className="nodrag"
+                  style={{ cursor: cursorMap[handle] }}
+                  pointerEvents="all"
+                  onMouseDown={e => startResize(e, handle)}
+                />
+                ))}
+            </svg>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

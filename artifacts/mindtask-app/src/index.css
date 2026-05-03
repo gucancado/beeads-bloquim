@@ -150,6 +150,12 @@
 .react-flow__node {
   border-radius: var(--radius-xl);
 }
+.react-flow__node.shape-image-node.selected,
+.react-flow__node.shape-image-node:focus,
+.react-flow__node.shape-image-node:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
 .react-flow__handle {
   width: 10px;
   height: 10px;

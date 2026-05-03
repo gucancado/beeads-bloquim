@@ -11,7 +11,7 @@ import DeletableEdge from "@/components/maps/DeletableEdge";
 import ApprovalNode from "@/components/maps/ApprovalNode";
 import ApprovalJoinNode from "@/components/maps/ApprovalJoinNode";
 import ApprovalEdge from "@/components/maps/ApprovalEdge";
-import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex } from "@/components/maps/layerOrder";
+import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex, type ShapeKind } from "@/components/maps/layerOrder";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
@@ -368,6 +368,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const shapeDrawRef = useRef<{ startX: number; startY: number; flowX: number; flowY: number } | null>(null);
   const [shapeGhost, setShapeGhost] = useState<{ x: number; y: number; w: number; h: number; rawAbsW?: number; rawAbsH?: number; dxSign?: number; dySign?: number } | null>(null);
   const shapeToolRef = useRef<'line' | 'rect' | 'ellipse' | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const lastMouseFlowPosRef = useRef<{ x: number; y: number } | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
     query: { refetchInterval: 3000, throwOnError: false, retry: false },
   });
@@ -629,7 +632,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     id: shape.id,
     type: 'shapenode',
     position: { x: shape.positionX, y: shape.positionY },
-    zIndex: shapeNodeZIndex(shape.type),
+    zIndex: shapeNodeZIndex(shape.type as ShapeKind),
+    className: shape.type === 'image' ? 'shape-image-node' : undefined,
     data: {
       type: shape.type,
       positionX: shape.positionX,
@@ -644,6 +648,12 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       y1: shape.y1 ?? null,
       x2: shape.x2 ?? null,
       y2: shape.y2 ?? null,
+      fileUploadId: shape.fileUploadId ?? null,
+      fileName: shape.fileName ?? null,
+      mimeType: shape.mimeType ?? null,
+      downloadUrl: shape.fileUploadId
+        ? `/api/workspaces/${workspaceId}/maps/${mapId}/shapes/${shape.id}/download`
+        : null,
       workspaceId,
       mapId,
       onBeforeMutate: () => pendingUpdatesRef.current.set(shape.id, Date.now()),
@@ -1947,6 +1957,207 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     setShapeMenuOpen(false);
   }, []);
 
+  const insertImageFromFile = useCallback(async (file: File, dropFlowPos?: { x: number; y: number }) => {
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Tipo de arquivo inválido', description: 'Selecione uma imagem.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'Arquivo muito grande', description: 'O limite é de 10 MB.', variant: 'destructive' });
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const urlRes = await fetch('/api/storage/uploads/request-url', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!urlRes.ok) {
+        let msg = 'Não foi possível preparar o upload.';
+        try {
+          const body = await urlRes.json();
+          if (body?.error) msg = body.error;
+        } catch { /* ignore */ }
+        toast({ title: 'Falha no upload', description: msg, variant: 'destructive' });
+        return;
+      }
+      const { uploadURL, objectPath } = await urlRes.json();
+
+      let putRes: Response;
+      try {
+        putRes = await fetch(uploadURL, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type },
+        });
+      } catch {
+        toast({ title: 'Falha no upload', description: 'Erro de rede ao enviar a imagem.', variant: 'destructive' });
+        return;
+      }
+      if (!putRes.ok) {
+        toast({ title: 'Falha no upload', description: 'O servidor de armazenamento recusou o arquivo.', variant: 'destructive' });
+        return;
+      }
+
+      let fileUploadId: string;
+      try {
+        const fuRes = await customFetch<{ fileUploadId: string }>(
+          `/api/workspaces/${workspaceId}/maps/${mapId}/shapes/uploads`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ objectPath, fileName: file.name, fileSize: file.size, mimeType: file.type }),
+          },
+        );
+        fileUploadId = fuRes.fileUploadId;
+      } catch {
+        toast({ title: 'Falha ao registrar imagem', description: 'Tente novamente em alguns instantes.', variant: 'destructive' });
+        return;
+      }
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('read fail'));
+        reader.readAsDataURL(file);
+      });
+      const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+        const img = new window.Image();
+        img.onload = () => resolve({ w: img.naturalWidth || 320, h: img.naturalHeight || 240 });
+        img.onerror = () => resolve({ w: 320, h: 240 });
+        img.src = dataUrl;
+      });
+      const maxDim = 400;
+      let w = dims.w;
+      let h = dims.h;
+      if (w > maxDim || h > maxDim) {
+        const scale = Math.min(maxDim / w, maxDim / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+
+      let posX: number;
+      let posY: number;
+      if (dropFlowPos) {
+        posX = dropFlowPos.x - w / 2;
+        posY = dropFlowPos.y - h / 2;
+      } else {
+        const vp = getViewport();
+        const reactFlowEl = reactFlowRef.current;
+        const rect = reactFlowEl?.getBoundingClientRect();
+        const centerScreenX = (rect?.left ?? 0) + (rect?.width ?? window.innerWidth) / 2;
+        const centerScreenY = (rect?.top ?? 0) + (rect?.height ?? window.innerHeight) / 2;
+        const center = screenToFlowPosition({ x: centerScreenX, y: centerScreenY });
+        posX = center.x - w / 2;
+        posY = center.y - h / 2;
+        void vp;
+      }
+
+      createShapeMut.mutate(
+        { workspaceId, mapId, data: { type: 'image', positionX: posX, positionY: posY, width: w, height: h, fileUploadId } },
+        {
+          onSuccess: (shape) => {
+            const newNode = buildShapeNode(shape);
+            setNodes(prev => [newNode, ...prev]);
+            queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          },
+          onError: () => {
+            toast({ title: 'Falha ao inserir imagem', description: 'Não foi possível adicionar a imagem ao mapa.', variant: 'destructive' });
+          },
+        },
+      );
+    } finally {
+      setImageUploading(false);
+    }
+  }, [workspaceId, mapId, createShapeMut, buildShapeNode, setNodes, queryClient, screenToFlowPosition, getViewport]);
+
+  const handleImageButtonClick = useCallback(() => {
+    imageFileInputRef.current?.click();
+  }, []);
+
+  const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void insertImageFromFile(file);
+  }, [insertImageFromFile]);
+
+  // Track last mouse position over the canvas so paste lands at the cursor.
+  useEffect(() => {
+    const el = reactFlowRef.current;
+    if (!el) return;
+    const onMove = (ev: MouseEvent) => {
+      try {
+        lastMouseFlowPosRef.current = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+      } catch {
+        // ignore until ReactFlow is ready
+      }
+    };
+    const onLeave = () => {
+      lastMouseFlowPosRef.current = null;
+    };
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseleave', onLeave);
+    return () => {
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('mouseleave', onLeave);
+    };
+  }, [screenToFlowPosition]);
+
+  // Ctrl+V paste image (lands at cursor when available, otherwise center)
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      const target = ev.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      const items = ev.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            ev.preventDefault();
+            const cursorPos = lastMouseFlowPosRef.current ?? undefined;
+            void insertImageFromFile(file, cursorPos);
+            return;
+          }
+        }
+      }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [insertImageFromFile]);
+
+  // Ctrl+C copy selected image to clipboard
+  useEffect(() => {
+    const onCopy = async (ev: ClipboardEvent) => {
+      const target = ev.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      const selectedImage = nodesRef.current.find(n => n.selected && n.type === 'shapenode' && n.data?.type === 'image');
+      if (!selectedImage) return;
+      const downloadUrl = (selectedImage.data as { downloadUrl?: string | null }).downloadUrl;
+      if (!downloadUrl) return;
+      ev.preventDefault();
+      try {
+        const res = await fetch(downloadUrl, { credentials: 'include' });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const mime = blob.type || 'image/png';
+        if (typeof window.ClipboardItem === 'undefined' || !navigator.clipboard?.write) return;
+        await navigator.clipboard.write([
+          new window.ClipboardItem({ [mime]: blob }),
+        ]);
+      } catch {
+        // ignored
+      }
+    };
+    document.addEventListener('copy', onCopy);
+    return () => document.removeEventListener('copy', onCopy);
+  }, []);
+
   const deleteCardMut = useDeleteCard();
   const handleDeleteCard = useCallback((cardId: string) => {
     const toRemove = new Set<string>([cardId, `join-${cardId}`]);
@@ -2075,13 +2286,23 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             <Users className="w-4 h-4 mr-2" />
             <span className="lowercase">Reunião</span>
           </Button>
+          <input
+            ref={imageFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageFileChange}
+          />
           <Button
-            disabled
+            onClick={handleImageButtonClick}
+            disabled={imageUploading || createShapeMut.isPending}
             variant="outline"
-            title="funcionalidade vindoura"
-            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
+            title="Inserir imagem (clique ou cole com Ctrl+V)"
+            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer"
           >
-            <Image className="w-4 h-4 mr-2" />
+            {imageUploading
+              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              : <Image className="w-4 h-4 mr-2" />}
             <span className="lowercase">Imagem</span>
           </Button>
           <div className="relative">

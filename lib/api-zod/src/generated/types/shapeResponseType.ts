@@ -13,4 +13,5 @@ export const ShapeResponseType = {
   line: "line",
   rect: "rect",
   ellipse: "ellipse",
+  image: "image",
 } as const;

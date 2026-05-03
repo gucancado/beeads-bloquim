@@ -13,4 +13,5 @@ export const CreateShapeRequestType = {
   line: "line",
   rect: "rect",
   ellipse: "ellipse",
+  image: "image",
 } as const;

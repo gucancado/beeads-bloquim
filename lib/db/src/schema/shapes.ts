@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 import { maps } from "./maps";
+import { fileUploads } from "./attachments";
 
 export const mapShapes = pgTable("map_shapes", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -27,25 +28,34 @@ export const mapShapes = pgTable("map_shapes", {
   y1: doublePrecision("y1"),
   x2: doublePrecision("x2"),
   y2: doublePrecision("y2"),
+  fileUploadId: uuid("file_upload_id").references(() => fileUploads.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertMapShapeSchema = z.object({
-  type: z.enum(["line", "rect", "ellipse"]).optional().default("rect"),
-  positionX: z.number().optional().default(0),
-  positionY: z.number().optional().default(0),
-  width: z.number().optional().default(200),
-  height: z.number().optional().default(120),
-  rotation: z.number().optional().default(0),
-  color: z.string().optional().default("#6366f1"),
-  filled: z.boolean().optional().default(false),
-  strokeStyle: z.enum(["solid", "dashed"]).optional().default("solid"),
-  x1: z.number().nullable().optional(),
-  y1: z.number().nullable().optional(),
-  x2: z.number().nullable().optional(),
-  y2: z.number().nullable().optional(),
-});
+export const insertMapShapeSchema = z
+  .object({
+    type: z.enum(["line", "rect", "ellipse", "image"]).optional().default("rect"),
+    positionX: z.number().optional().default(0),
+    positionY: z.number().optional().default(0),
+    width: z.number().optional().default(200),
+    height: z.number().optional().default(120),
+    rotation: z.number().optional().default(0),
+    color: z.string().optional().default("#6366f1"),
+    filled: z.boolean().optional().default(false),
+    strokeStyle: z.enum(["solid", "dashed"]).optional().default("solid"),
+    x1: z.number().nullable().optional(),
+    y1: z.number().nullable().optional(),
+    x2: z.number().nullable().optional(),
+    y2: z.number().nullable().optional(),
+    fileUploadId: z.string().uuid().nullable().optional(),
+  })
+  .refine((d) => d.type !== "image" || !!d.fileUploadId, {
+    message: "fileUploadId is required when type is image",
+    path: ["fileUploadId"],
+  });
 
 export const updateMapShapeSchema = z.object({
   positionX: z.number().optional(),

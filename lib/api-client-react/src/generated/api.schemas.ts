@@ -205,6 +205,7 @@ export const ShapeResponseType = {
   line: "line",
   rect: "rect",
   ellipse: "ellipse",
+  image: "image",
 } as const;
 
 export type ShapeResponseStrokeStyle =
@@ -231,6 +232,10 @@ export interface ShapeResponse {
   y1?: number | null;
   x2?: number | null;
   y2?: number | null;
+  fileUploadId?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -513,6 +518,7 @@ export const CreateShapeRequestType = {
   line: "line",
   rect: "rect",
   ellipse: "ellipse",
+  image: "image",
 } as const;
 
 export type CreateShapeRequestStrokeStyle =
@@ -537,6 +543,7 @@ export interface CreateShapeRequest {
   y1?: number | null;
   x2?: number | null;
   y2?: number | null;
+  fileUploadId?: string | null;
 }
 
 export type UpdateShapeRequestStrokeStyle =

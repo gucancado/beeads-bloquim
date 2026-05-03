@@ -22,4 +22,5 @@ export interface CreateShapeRequest {
   y1?: number | null;
   x2?: number | null;
   y2?: number | null;
+  fileUploadId?: string | null;
 }

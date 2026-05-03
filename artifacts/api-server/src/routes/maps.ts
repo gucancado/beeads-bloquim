@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachmentLinks, mapShapes } from "@workspace/db/schema";
+import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachmentLinks, mapShapes, fileUploads } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -120,7 +120,33 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
 
   const connectionList = await db.select().from(cardConnections).where(eq(cardConnections.mapId, mapId));
   const textElementList = await db.select().from(mapTextElements).where(eq(mapTextElements.mapId, mapId));
-  const shapeList = await db.select().from(mapShapes).where(eq(mapShapes.mapId, mapId));
+  const shapeList = await db
+    .select({
+      id: mapShapes.id,
+      mapId: mapShapes.mapId,
+      type: mapShapes.type,
+      positionX: mapShapes.positionX,
+      positionY: mapShapes.positionY,
+      width: mapShapes.width,
+      height: mapShapes.height,
+      rotation: mapShapes.rotation,
+      color: mapShapes.color,
+      filled: mapShapes.filled,
+      strokeStyle: mapShapes.strokeStyle,
+      x1: mapShapes.x1,
+      y1: mapShapes.y1,
+      x2: mapShapes.x2,
+      y2: mapShapes.y2,
+      fileUploadId: mapShapes.fileUploadId,
+      fileName: fileUploads.fileName,
+      mimeType: fileUploads.mimeType,
+      fileSize: fileUploads.fileSize,
+      createdAt: mapShapes.createdAt,
+      updatedAt: mapShapes.updatedAt,
+    })
+    .from(mapShapes)
+    .leftJoin(fileUploads, eq(fileUploads.id, mapShapes.fileUploadId))
+    .where(eq(mapShapes.mapId, mapId));
 
   res.json({ ...map, cards: cardList, connections: connectionList, textElements: textElementList, shapes: shapeList });
 });

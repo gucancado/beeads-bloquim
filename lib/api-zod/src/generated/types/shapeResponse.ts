@@ -24,6 +24,10 @@ export interface ShapeResponse {
   y1?: number | null;
   x2?: number | null;
   y2?: number | null;
+  fileUploadId?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
