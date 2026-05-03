@@ -36,22 +36,25 @@ router.get("/search", requireAuth, async (req: AuthRequest, res) => {
     : null;
 
   const memberships = await db
-    .select({ workspaceId: workspaceMembers.workspaceId })
+    .select({ workspaceId: workspaceMembers.workspaceId, hidden: workspaces.hidden })
     .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(eq(workspaceMembers.userId, userId));
-  const memberWorkspaceIds = memberships.map((m) => m.workspaceId);
+  const visibleMemberWorkspaceIds = memberships
+    .filter((m) => !m.hidden)
+    .map((m) => m.workspaceId);
 
   let ownershipFilter;
   if (workspaceIdFilter) {
-    if (!memberWorkspaceIds.includes(workspaceIdFilter)) {
+    if (!visibleMemberWorkspaceIds.includes(workspaceIdFilter)) {
       return res.json([]);
     }
     ownershipFilter = eq(tasks.workspaceId, workspaceIdFilter);
   } else {
     ownershipFilter =
-      memberWorkspaceIds.length > 0
+      visibleMemberWorkspaceIds.length > 0
         ? or(
-            inArray(tasks.workspaceId, memberWorkspaceIds),
+            inArray(tasks.workspaceId, visibleMemberWorkspaceIds),
             and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId)),
           )
         : and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId));

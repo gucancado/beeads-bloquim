@@ -73,7 +73,8 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
   const memberships = await db
     .select({ workspaceId: workspaceMembers.workspaceId })
     .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, userId));
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(and(eq(workspaceMembers.userId, userId), eq(workspaces.hidden, false)));
 
   const memberWorkspaceIds = memberships.map(m => m.workspaceId);
 
@@ -140,7 +141,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const memberships = await db
     .select({ workspaceId: workspaceMembers.workspaceId })
     .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, userId));
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(and(eq(workspaceMembers.userId, userId), eq(workspaces.hidden, false)));
 
   const memberWorkspaceIds = memberships.map(m => m.workspaceId);
 
