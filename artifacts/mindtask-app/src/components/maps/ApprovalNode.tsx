@@ -152,17 +152,13 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
   if (data.allSiblingsApproved) {
     return (
       <div
-        className={`group/node relative rounded-full transition-all duration-200 bg-neutral-100 dark:bg-neutral-800 overflow-hidden ${
-          selected
-            ? 'border-[3px] border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35),0_8px_32px_-4px_rgba(16,185,129,0.55)]'
-            : 'border-2 border-emerald-400 dark:border-emerald-600 shadow-md'
-        }`}
+        className="group/node relative"
         style={{ width: 48, height: 48 }}
         onDoubleClick={handleDoubleClick}
       >
         {isTerminal && (
           <div
-            className="nodrag nopan absolute opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110"
+            className="nodrag nopan absolute opacity-0 group-hover/node:opacity-100 transition-all duration-150 hover:scale-110 z-10"
             style={{ right: '-2.75rem', top: 'calc(50% - 1rem)', width: '2rem', height: '2rem' }}
           >
             <button
@@ -186,18 +182,26 @@ function ApprovalNode({ id: _id, data, selected }: ApprovalNodeProps) {
         <Handle type="target" position={Position.Left} id="target-left" className={ANCHOR_HANDLE_CLS} isConnectable={false} />
         <Handle type="source" position={Position.Right} id="source-right" className={ANCHOR_HANDLE_CLS} isConnectable={false} />
 
-        <div className="w-full h-full flex items-center justify-center" style={{ filter: 'grayscale(100%)' }}>
-          {data.approverAvatarUrl ? (
-            <img
-              src={data.approverAvatarUrl}
-              alt={data.approverName ?? ''}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <span className={`text-xs font-bold ${colors.avatarInitialColor}`}>
-              {data.approverName ? data.approverName.charAt(0).toUpperCase() : '?'}
-            </span>
-          )}
+        <div
+          className={`w-full h-full rounded-full overflow-hidden bg-neutral-100 dark:bg-neutral-800 transition-all duration-200 ${
+            selected
+              ? 'border-[3px] border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35),0_8px_32px_-4px_rgba(16,185,129,0.55)]'
+              : 'border-2 border-emerald-400 dark:border-emerald-600 shadow-md'
+          }`}
+        >
+          <div className="w-full h-full flex items-center justify-center" style={{ filter: 'grayscale(100%)' }}>
+            {data.approverAvatarUrl ? (
+              <img
+                src={data.approverAvatarUrl}
+                alt={data.approverName ?? ''}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className={`text-xs font-bold ${colors.avatarInitialColor}`}>
+                {data.approverName ? data.approverName.charAt(0).toUpperCase() : '?'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     );

@@ -374,6 +374,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const editingCardIdRef = useRef<string | null>(null);
   const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
   const connectingJoinNodeRef = useRef<string | null>(null);
+  const dropTargetElRef = useRef<Element | null>(null);
+  const connectPointerMoveRef = useRef<((ev: PointerEvent) => void) | null>(null);
   const { pushSnapshot, undo, redo } = usePositionHistory();
   const dragStartSnapshotRef = useRef<NodePositionSnapshot | null>(null);
 
@@ -1537,20 +1539,69 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     [setEdges, createConnMut, workspaceId, mapId, queryClient, mapData, edges],
   );
 
+  const clearDropTarget = useCallback(() => {
+    if (dropTargetElRef.current) {
+      dropTargetElRef.current.classList.remove('mindmap-drop-target');
+      dropTargetElRef.current = null;
+    }
+  }, []);
+
+  const stopConnectPointerTracking = useCallback(() => {
+    if (connectPointerMoveRef.current) {
+      window.removeEventListener('pointermove', connectPointerMoveRef.current);
+      connectPointerMoveRef.current = null;
+    }
+    clearDropTarget();
+  }, [clearDropTarget]);
+
   const onConnectStart = useCallback(
     (_event: React.MouseEvent | React.TouchEvent, params: { nodeId?: string | null; handleId?: string | null }) => {
       const nodeId = params.nodeId ?? '';
       const handleId = params.handleId ?? '';
       const isPlusSource = nodeId.startsWith('join-') || handleId === 'plus-right';
       connectingJoinNodeRef.current = isPlusSource ? nodeId : null;
+      stopConnectPointerTracking();
+      if (!isPlusSource) return;
+      const fromNodeId = nodeId;
+      const dbSourceId = fromNodeId.startsWith('join-') ? fromNodeId.slice('join-'.length) : fromNodeId;
+      const handler = (ev: PointerEvent) => {
+        const target = ev.target as Element | null;
+        if (target?.closest('.react-flow__handle')) {
+          clearDropTarget();
+          return;
+        }
+        const nodeEl = target?.closest('[data-id]') as HTMLElement | null;
+        const candidateId = nodeEl?.getAttribute('data-id') ?? null;
+        if (!nodeEl || !candidateId || candidateId === fromNodeId || candidateId === dbSourceId) {
+          clearDropTarget();
+          return;
+        }
+        const candidate = nodesRef.current.find(n => n.id === candidateId);
+        if (!candidate || candidate.type === 'approvalnode' || candidate.type === 'joinnode' || candidate.type === 'textnode' || candidate.type === 'shapenode') {
+          clearDropTarget();
+          return;
+        }
+        const alreadyConnected = edgesRef.current.some(e => e.source === dbSourceId && e.target === candidateId);
+        if (alreadyConnected) {
+          clearDropTarget();
+          return;
+        }
+        if (dropTargetElRef.current === nodeEl) return;
+        clearDropTarget();
+        nodeEl.classList.add('mindmap-drop-target');
+        dropTargetElRef.current = nodeEl;
+      };
+      connectPointerMoveRef.current = handler;
+      window.addEventListener('pointermove', handler);
     },
-    [],
+    [stopConnectPointerTracking, clearDropTarget],
   );
 
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
       const fromNodeId = connectingJoinNodeRef.current;
       connectingJoinNodeRef.current = null;
+      stopConnectPointerTracking();
       if (!fromNodeId) return;
 
       const eventTarget = event.target as Element | null;

@@ -175,6 +175,15 @@
   background-color: hsl(var(--accent)) !important;
 }
 
+/* Drop target highlight when dragging from + handle to connect tasks */
+.react-flow__node.mindmap-drop-target {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 0 0 6px hsl(var(--primary) / 0.2);
+  transition: outline-color 0.1s ease, box-shadow 0.1s ease;
+}
+
 /* TipTap Editor */
 .comment-editor-area {
   min-height: 80px;
