@@ -134,6 +134,13 @@
       "when": 1776390854939,
       "tag": "0018_add_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1777776800000,
+      "tag": "0024_add_google_calendar_integration",
+      "breakpoints": true
     }
   ]
 }

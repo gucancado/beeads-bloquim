@@ -38,3 +38,5 @@ defaultBucketID = "replit-objstore-28d3becc-6924-4227-96b6-52d26d2c4ee0"
 
 [userenv.production]
 ALLOWED_ORIGINS = "https://visual-task-flow.replit.app"
+
+[userenv.shared]

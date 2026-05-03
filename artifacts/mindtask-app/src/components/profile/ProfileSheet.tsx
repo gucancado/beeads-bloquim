@@ -3,7 +3,8 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Save, Building2, Pencil, EyeOff, Camera } from "lucide-react";
+import { Loader2, Save, Building2, Pencil, EyeOff, Camera, Plug } from "lucide-react";
+import { Link } from "wouter";
 import { useMyWorkspaces, useUpdateMe } from "@/hooks/useProfile";
 import { useGetMe } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -226,6 +227,27 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               E-mail
             </label>
             <p className="text-base text-muted-foreground">{user?.email}</p>
+          </div>
+
+          {/* Integrations */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-2 block lowercase">
+              Integrações
+            </label>
+            <Link href="/settings/integrations">
+              <button
+                onClick={onClose}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border bg-background hover:bg-accent/30 transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Plug className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium lowercase">Google Agenda e outros</p>
+                  <p className="text-xs text-muted-foreground lowercase">Conecte serviços externos</p>
+                </div>
+              </button>
+            </Link>
           </div>
 
           {/* Workspaces */}

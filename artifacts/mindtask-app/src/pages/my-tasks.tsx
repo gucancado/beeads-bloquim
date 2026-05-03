@@ -8,6 +8,7 @@ import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListIte
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { groupTasksByDeadline } from "@/lib/groupTasksByDeadline";
+import { AgendaPanel } from "@/components/tasks/AgendaPanel";
 import { useRoute, useLocation } from "wouter";
 
 interface OpenCard {
@@ -229,6 +230,10 @@ export default function MyTasksPage() {
                 meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
               />
             </div>
+          </div>
+
+          <div className="mb-6">
+            <AgendaPanel />
           </div>
 
           {isLoading ? (
