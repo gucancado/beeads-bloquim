@@ -50,7 +50,7 @@ export function AssigneeFilterPills({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center justify-center gap-1.5 flex-wrap">
         {items.map(item => {
           const isActive = selected.includes(item.id);
           return (
