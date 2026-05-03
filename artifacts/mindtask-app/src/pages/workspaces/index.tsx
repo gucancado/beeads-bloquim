@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useTheme } from "next-themes";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { useCreateWorkspace, useGetMe } from "@workspace/api-client-react";
 import { FolderGit2, Plus, Loader2, EyeOff, Eye, Trash2 } from "lucide-react";
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
@@ -412,10 +413,9 @@ export default function WorkspacesPage() {
     <AppLayout>
       <div className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto p-8 lg:p-12">
+          <PageBreadcrumb items={[{ label: "espaços de trabalho" }]} className="mb-4" />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-4xl font-display font-bold text-foreground lowercase">Espaços de Trabalho</h1>
-            </div>
+            <div />
 
             <div className="flex items-center gap-3">
               {isAdmin && (

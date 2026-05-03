@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Calendar, ExternalLink, Unplug, AlertCircle, Plug } from "lucide-react";
@@ -66,9 +67,9 @@ export default function SettingsIntegrationsPage() {
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
         <div className="max-w-3xl mx-auto p-8 lg:p-12">
-          <div className="mb-10">
-            <h1 className="text-4xl font-display font-bold text-foreground lowercase">Integrações</h1>
-            <p className="text-muted-foreground mt-2 lowercase">Conecte serviços externos ao Bloquim.</p>
+          <PageBreadcrumb items={[{ label: "integrações" }]} className="mb-4" />
+          <div className="mb-8">
+            <p className="text-muted-foreground lowercase">Conecte serviços externos ao Bloquim.</p>
           </div>
 
           <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">

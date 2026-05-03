@@ -1,13 +1,41 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
-import { LogOut, CheckSquare, NotebookPen, Folders, FileText, Loader2, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { LogOut, CheckSquare, NotebookPen, Folders, Loader2, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { User as UserIcon, FileText as FileTextIcon, Plug as PlugIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SidebarWorkspaceList } from "@/components/layout/SidebarWorkspaceList";
 import { GlobalTaskSearch } from "@/components/layout/GlobalTaskSearch";
+
+function SettingsDropdown({ onProfile, onNavigate }: { onProfile: () => void; onNavigate: (path: string) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          title="configurações"
+          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all focus:outline-none"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-56">
+        <DropdownMenuItem onSelect={() => onProfile()} className="lowercase cursor-pointer">
+          <UserIcon className="w-4 h-4 mr-2" /> perfil
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onNavigate("/my-templates")} className="lowercase cursor-pointer">
+          <FileTextIcon className="w-4 h-4 mr-2" /> modelos de tarefas
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onNavigate("/settings/integrations")} className="lowercase cursor-pointer">
+          <PlugIcon className="w-4 h-4 mr-2" /> integrações
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -100,15 +128,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   {!collapsed && <span className="lowercase">Tarefas</span>}
                 </span>
               </Link>
-              <Link href="/my-templates">
-                <span
-                  title="modelos de tarefas"
-                  className={`flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${isActive('/my-templates') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-                >
-                  <FileText className="w-5 h-5 shrink-0" />
-                  {!collapsed && <span className="lowercase">Modelos de tarefas</span>}
-                </span>
-              </Link>
               <Link href="/workspaces">
                 <span
                   title="espaços de trabalho"
@@ -146,13 +165,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   <p className="text-xs text-sidebar-foreground/50 truncate">{user.email}</p>
                 </div>
               </button>
-              <button
-                title="configurações"
-                onClick={() => setLocation("/settings/integrations")}
-                className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
+              <SettingsDropdown
+                onProfile={() => setProfileOpen(true)}
+                onNavigate={(path) => setLocation(path)}
+              />
               <button
                 title="sair"
                 onClick={() => logoutMutation.mutate()}
@@ -179,13 +195,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   </AvatarFallback>
                 </Avatar>
               </button>
-              <button
-                title="configurações"
-                onClick={() => setLocation("/settings/integrations")}
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
+              <SettingsDropdown
+                onProfile={() => setProfileOpen(true)}
+                onNavigate={(path) => setLocation(path)}
+              />
               <button
                 title="sair"
                 onClick={() => logoutMutation.mutate()}

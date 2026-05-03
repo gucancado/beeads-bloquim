@@ -127,14 +127,6 @@ function SortableWorkspaceItem({
             )}
           </button>
         )}
-        <Link href={`/workspaces/${workspace.id}?tab=tasks`}>
-          <span
-            title={`tarefas de ${workspace.name}`}
-            className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-sidebar-foreground/30 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all opacity-0 group-hover/ws:opacity-100"
-          >
-            <ListTodo className="w-3.5 h-3.5" />
-          </span>
-        </Link>
       </div>
 
       {hasMaps && workspace.expanded && (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -137,6 +138,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
         <SheetTitle className="sr-only">Perfil do usuário</SheetTitle>
         {/* Header */}
         <div className="p-6 border-b bg-slate-50 dark:bg-slate-900">
+          <PageBreadcrumb items={[{ label: "perfil" }]} className="mb-4" />
           <div className="flex items-center gap-4">
             <div className="relative shrink-0 group">
               <Avatar className="w-14 h-14 rounded-2xl shadow-sm">
@@ -164,7 +166,6 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-muted-foreground tracking-wider mb-0.5 lowercase">Perfil do usuário</p>
               <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
           </div>

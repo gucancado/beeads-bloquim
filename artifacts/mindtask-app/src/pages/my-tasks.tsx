@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
 import { Loader2, Plus } from "lucide-react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -178,11 +179,10 @@ export default function MyTasksPage() {
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
         <div className="max-w-6xl mx-auto p-8 lg:p-12">
-          <div className="flex flex-col gap-6 mb-12">
+          <PageBreadcrumb items={[{ label: "tarefas" }]} className="mb-4" />
+          <div className="flex flex-col gap-6 mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h1 className="text-4xl font-display font-bold text-foreground lowercase">Suas tarefas</h1>
-              </div>
+              <div />
               <Button
                 title="nova tarefa"
                 className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"

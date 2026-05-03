@@ -14,7 +14,8 @@ import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex, type ShapeKind } from "@/components/maps/layerOrder";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
-import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
+import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import type { ShapeResponse } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -374,6 +375,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
     query: { refetchInterval: 3000, throwOnError: false, retry: false },
   });
+  const { data: canvasWorkspace } = useGetWorkspace(workspaceId);
   const editingCardIdRef = useRef<string | null>(null);
   const pendingUpdatesRef = useRef<Map<string, number>>(new Map());
   const connectingJoinNodeRef = useRef<string | null>(null);
@@ -2287,8 +2289,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div className="bg-background px-5 py-2.5 rounded-xl border border-border/60 shadow-md">
-            <h2 className="font-display font-bold text-foreground text-lg leading-none">{mapData.name}</h2>
+          <div className="bg-background px-4 py-2 rounded-xl border border-border/60 shadow-md">
+            <PageBreadcrumb
+              items={[
+                { label: (canvasWorkspace?.name ?? "espaço").toLowerCase(), href: `/workspaces/${workspaceId}` },
+                { label: mapData.name.toLowerCase() },
+              ]}
+            />
           </div>
         </div>
 

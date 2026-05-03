@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute, Link, useSearch, useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageBreadcrumb, PageBreadcrumbItem } from "@/components/layout/PageBreadcrumb";
 import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden, useDeleteMap } from "@/hooks/useHidden";
 import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare } from "lucide-react";
@@ -166,7 +167,7 @@ export default function WorkspaceDetailPage() {
   const deepLinkTaskId = deepLinkParams?.taskId ?? null;
   const search = useSearch();
   const tabParam = new URLSearchParams(search).get("tab");
-  const tabFromUrl: TabValue = isValidTab(tabParam) ? tabParam : "maps";
+  const tabFromUrl: TabValue = isValidTab(tabParam) ? tabParam : "tasks";
   const [activeTab, setActiveTab] = useState<TabValue>(deepLinkTaskId ? "tasks" : tabFromUrl);
   const [, navigate] = useLocation();
 
@@ -540,14 +541,80 @@ export default function WorkspaceDetailPage() {
       <div className="flex-1 overflow-auto">
         <div className="pt-12 px-8 lg:px-12 pb-0">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center gap-3 text-muted-foreground mb-4 text-sm">
-              <Link href="/workspaces"><span className="hover:text-foreground cursor-pointer transition-colors lowercase">Espaços de Trabalho</span></Link>
-              <span>/</span>
-              <span className="text-foreground font-medium">{workspace.name}</span>
-            </div>
+            <Tabs value={activeTab} onValueChange={(v) => { if (isValidTab(v)) setActiveTab(v); }} className="w-full">
+              {(() => {
+                const breadcrumbItems: PageBreadcrumbItem[] = [
+                  { label: "espaços de trabalho", href: "/workspaces" },
+                  { label: workspace.name.toLowerCase() },
+                ];
+                const tabTriggerClass = "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=active]:font-normal rounded-none px-0 py-0 h-auto text-base font-light text-muted-foreground/80 hover:text-foreground lowercase transition-colors";
+                return (
+                  <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+                    <PageBreadcrumb items={breadcrumbItems} />
+                    <TabsList className="bg-transparent border-b-0 h-auto p-0 flex gap-5">
+                      <TabsTrigger value="tasks" className={tabTriggerClass}>tarefas</TabsTrigger>
+                      <TabsTrigger value="maps" className={tabTriggerClass}>planos</TabsTrigger>
+                      <TabsTrigger value="dashboard" className={tabTriggerClass}>dashboard</TabsTrigger>
+                      <TabsTrigger value="members" className={tabTriggerClass}>membros</TabsTrigger>
+                    </TabsList>
+                  </div>
+                );
+              })()}
 
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8">
-              <div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6">
+              <div className="flex items-center gap-3 min-w-0">
+                {isAdmin ? (
+                  <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        title="escolher cor"
+                        className="shrink-0 w-4 h-4 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                        style={
+                          getColorByIndex(workspace.colorIndex)
+                            ? { backgroundColor: getColorByIndex(workspace.colorIndex)! }
+                            : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
+                        }
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="grid grid-cols-8 gap-1.5">
+                        {COLOR_PALETTE.map((entry) => {
+                          const isSelected = workspace.colorIndex === entry.index;
+                          return (
+                            <button
+                              key={entry.index}
+                              onClick={() => {
+                                colorMutation.mutate(entry.index);
+                                setColorPopoverOpen(false);
+                              }}
+                              className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
+                            >
+                              <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {workspace.colorIndex && (
+                        <button
+                          onClick={() => {
+                            colorMutation.mutate(null);
+                            setColorPopoverOpen(false);
+                          }}
+                          className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
+                        >
+                          remover cor
+                        </button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  getColorByIndex(workspace.colorIndex) && (
+                    <span
+                      className="shrink-0 w-4 h-4 rounded-sm"
+                      style={{ backgroundColor: getColorByIndex(workspace.colorIndex)! }}
+                    />
+                  )
+                )}
                 {isEditingTitle ? (
                   <input
                     ref={titleInputRef}
@@ -564,81 +631,25 @@ export default function WorkspaceDetailPage() {
                         setIsEditingTitle(false);
                       }
                     }}
-                    className="text-4xl font-display font-bold text-foreground bg-transparent border-b-2 border-primary outline-none w-full"
+                    className="text-base font-medium text-foreground bg-transparent border-b border-primary outline-none lowercase min-w-0"
                   />
-                ) : (
-                  <div className="flex items-center gap-3">
-                    {isAdmin ? (
-                      <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <button
-                            title="Escolher cor"
-                            className="shrink-0 w-5 h-5 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                            style={
-                              getColorByIndex(workspace.colorIndex)
-                                ? { backgroundColor: getColorByIndex(workspace.colorIndex)! }
-                                : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
-                            }
-                          />
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-3" align="start">
-                          <div className="grid grid-cols-8 gap-1.5">
-                            {COLOR_PALETTE.map((entry) => {
-                              const isSelected = workspace.colorIndex === entry.index;
-                              return (
-                                <button
-                                  key={entry.index}
-                                  onClick={() => {
-                                    colorMutation.mutate(entry.index);
-                                    setColorPopoverOpen(false);
-                                  }}
-                                  className={`p-0.5 rounded-md transition-all ${isSelected ? "ring-2 ring-primary ring-offset-1" : "hover:scale-110"}`}
-                                >
-                                  <span className="w-7 h-7 rounded-sm block" style={{ backgroundColor: entry.hex }} />
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {workspace.colorIndex && (
-                            <button
-                              onClick={() => {
-                                colorMutation.mutate(null);
-                                setColorPopoverOpen(false);
-                              }}
-                              className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center lowercase"
-                            >
-                              Remover cor
-                            </button>
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      <span
-                        className="shrink-0 w-5 h-5 rounded-sm"
-                        style={
-                          getColorByIndex(workspace.colorIndex)
-                            ? { backgroundColor: getColorByIndex(workspace.colorIndex)! }
-                            : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
-                        }
-                      />
-                    )}
-                    <h1
-                      className={`text-4xl font-display font-bold text-foreground ${isAdmin ? "cursor-pointer hover:text-primary/80 transition-colors" : ""}`}
-                      onClick={startEditingTitle}
-                      title={isAdmin ? "Clique para editar" : undefined}
-                    >
-                      {workspace.name}
-                    </h1>
-                  </div>
-                )}
+                ) : isAdmin ? (
+                  <button
+                    onClick={startEditingTitle}
+                    title="renomear espaço"
+                    className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors lowercase"
+                  >
+                    renomear
+                  </button>
+                ) : null}
                 {workspace.members && workspace.members.length > 0 && (
                   <TooltipProvider delayDuration={200}>
-                    <div className="flex items-center mt-3">
+                    <div className="flex items-center ml-2">
                       <div className="flex -space-x-2">
                         {workspace.members.map((member: any) => (
                           <Tooltip key={member.userId ?? member.user?.id}>
                             <TooltipTrigger asChild>
-                              <Avatar className="w-8 h-8 border-2 border-card ring-0 cursor-default">
+                              <Avatar className="w-7 h-7 border-2 border-card ring-0 cursor-default">
                                 {(member.user?.avatarUrl ?? member.avatarUrl) ? (
                                   <AvatarImage src={member.user?.avatarUrl ?? member.avatarUrl} alt={member.user?.name ?? member.name} />
                                 ) : null}
@@ -688,23 +699,7 @@ export default function WorkspaceDetailPage() {
               </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={(v) => { if (isValidTab(v)) setActiveTab(v); }} className="w-full">
-              <TabsList className="bg-transparent border-b-0 h-auto p-0 flex gap-6 pb-px">
-                <TabsTrigger value="maps" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
-                  <Map className="w-5 h-5 mr-2" /> Planos
-                </TabsTrigger>
-                <TabsTrigger value="tasks" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
-                  <CheckSquare className="w-5 h-5 mr-2" /> Tarefas
-                </TabsTrigger>
-                <TabsTrigger value="dashboard" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
-                  <LayoutDashboard className="w-5 h-5 mr-2" /> Dashboard
-                </TabsTrigger>
-                <TabsTrigger value="members" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 pb-4 pt-2 text-base font-medium text-muted-foreground data-[state=active]:text-primary lowercase">
-                  <Users className="w-5 h-5 mr-2" /> Membros
-                </TabsTrigger>
-              </TabsList>
-
-              <div className="pt-8 pb-16 max-w-6xl mx-auto">
+              <div className="pt-2 pb-16 max-w-6xl mx-auto">
                 <TabsContent value="maps" className="mt-0 outline-none">
                   {isAdmin && (
                     <div className="flex items-center justify-between mb-6">
