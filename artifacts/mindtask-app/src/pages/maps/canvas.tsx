@@ -2078,6 +2078,89 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     imageFileInputRef.current?.click();
   }, []);
 
+  const insertImagesFromFiles = useCallback(async (files: File[], dropFlowPos?: { x: number; y: number }) => {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      toast({ title: 'Tipo de arquivo inválido', description: 'Solte apenas imagens.', variant: 'destructive' });
+      return;
+    }
+    if (imageFiles.length === 1 || !dropFlowPos) {
+      for (const file of imageFiles) {
+        await insertImageFromFile(file, dropFlowPos);
+      }
+      return;
+    }
+
+    const MAX_DIM = 400;
+    const FALLBACK_W = 320;
+    const measuredWidths = await Promise.all(imageFiles.map(file => new Promise<number>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onload = () => {
+        let w = img.naturalWidth || FALLBACK_W;
+        const h = img.naturalHeight || w;
+        if (w > MAX_DIM || h > MAX_DIM) {
+          const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+          w = Math.round(w * scale);
+        }
+        URL.revokeObjectURL(url);
+        resolve(w);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(FALLBACK_W);
+      };
+      img.src = url;
+    })));
+
+    const GAP = 16;
+    const totalW = measuredWidths.reduce((s, w) => s + w, 0) + GAP * (imageFiles.length - 1);
+    let cursorX = dropFlowPos.x - totalW / 2;
+    for (let i = 0; i < imageFiles.length; i++) {
+      const w = measuredWidths[i];
+      const centerX = cursorX + w / 2;
+      await insertImageFromFile(imageFiles[i], { x: centerX, y: dropFlowPos.y });
+      cursorX += w + GAP;
+    }
+  }, [insertImageFromFile]);
+
+  const [isImageDragOver, setIsImageDragOver] = useState(false);
+  const imageDragCounterRef = useRef(0);
+
+  const handleCanvasDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    imageDragCounterRef.current += 1;
+    setIsImageDragOver(true);
+  }, []);
+
+  const handleCanvasDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleCanvasDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    imageDragCounterRef.current = Math.max(0, imageDragCounterRef.current - 1);
+    if (imageDragCounterRef.current === 0) setIsImageDragOver(false);
+  }, []);
+
+  const handleCanvasDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    imageDragCounterRef.current = 0;
+    setIsImageDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    let flowPos: { x: number; y: number } | undefined;
+    try {
+      flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    } catch {
+      flowPos = undefined;
+    }
+    void insertImagesFromFiles(files, flowPos);
+  }, [insertImagesFromFiles, screenToFlowPosition]);
+
   const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -2346,7 +2429,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           />
         )}
 
-        <div ref={reactFlowRef} className="flex-1 w-full h-full">
+        <div
+          ref={reactFlowRef}
+          className="flex-1 w-full h-full relative"
+          onDragEnter={handleCanvasDragEnter}
+          onDragOver={handleCanvasDragOver}
+          onDragLeave={handleCanvasDragLeave}
+          onDrop={handleCanvasDrop}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -2402,6 +2492,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             </Controls>
             <PresenceCursorsOverlay peers={presencePeers} />
           </ReactFlow>
+          {isImageDragOver && (
+            <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-primary/10">
+              <div className="flex flex-col items-center gap-2 text-primary">
+                <Image className="w-8 h-8" />
+                <p className="text-sm font-semibold lowercase">solte para adicionar imagem</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
