@@ -16,7 +16,7 @@ import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useGetMap, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
 import type { ShapeResponse } from "@workspace/api-client-react";
-import { Loader2, ArrowLeft, Plus, Type, CheckSquare, Users, Image, Shapes } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
@@ -2340,15 +2340,6 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           >
             {createCardMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
             <span className="lowercase">Tarefa</span>
-          </Button>
-          <Button
-            disabled
-            variant="outline"
-            title="funcionalidade vindoura"
-            className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none opacity-40 disabled:pointer-events-auto cursor-not-allowed"
-          >
-            <CheckSquare className="w-4 h-4 mr-2" />
-            <span className="lowercase">Aprovação</span>
           </Button>
           <Button
             onMouseDown={handleTextButtonMouseDown}
