@@ -50,10 +50,14 @@ export function AgendaPanel() {
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
           ) : !isConnected ? (
-            <EmptyState
-              text="conecte sua conta google para ver os eventos do dia."
-              cta={<Link href="/settings/integrations"><Button size="sm" className="rounded-xl"><span className="lowercase">Ir para integrações</span></Button></Link>}
-            />
+            <div className="flex flex-col items-start gap-3 py-2">
+              <p className="text-sm text-muted-foreground lowercase">
+                <Link href="/settings/integrations">
+                  <span className="underline underline-offset-2 hover:text-foreground transition-colors cursor-pointer">conecte sua conta google</span>
+                </Link>
+                {" "}para ver os eventos do dia.
+              </p>
+            </div>
           ) : reauthRequired ? (
             <div className="flex items-start gap-2 p-4 rounded-xl bg-destructive/10 text-destructive text-sm">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />

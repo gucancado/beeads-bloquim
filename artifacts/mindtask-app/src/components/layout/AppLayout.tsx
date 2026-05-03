@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
-import { LogOut, CheckSquare, NotebookPen, Folders, FileText, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, CheckSquare, NotebookPen, Folders, FileText, Loader2, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
@@ -146,6 +146,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </div>
               </button>
               <button
+                title="configurações"
+                onClick={() => setLocation("/settings/integrations")}
+                className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+              <button
                 title="sair"
                 onClick={() => logoutMutation.mutate()}
                 className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all"
@@ -170,6 +177,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     {user.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
+              </button>
+              <button
+                title="configurações"
+                onClick={() => setLocation("/settings/integrations")}
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
+              >
+                <Settings className="w-4 h-4" />
               </button>
               <button
                 title="sair"
