@@ -190,7 +190,7 @@ export default function WorkspaceDetailPage() {
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
   const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -202,34 +202,41 @@ export default function WorkspaceDetailPage() {
   const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
   const { data: workspaceMembers } = useListWorkspaceMembers(workspaceId);
 
-  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatuses, selectedAssignees];
+  const { data: me } = useGetMe();
+  const currentUserId = me?.id ?? "";
+
+  const resolvedAssignees = selectedAssignees
+    .map(a => (a === "me" ? currentUserId : a))
+    .filter(Boolean);
+
+  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatuses, resolvedAssignees];
   const { data: workspaceTasks, isLoading: isTasksLoading } = useQuery<any[]>({
     queryKey: tasksQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
       if (selectedStatuses.length > 0) p.set("status", selectedStatuses.join(","));
-      if (selectedAssignees.length > 0) p.set("assignedTo", selectedAssignees.join(","));
+      if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
       const qs = p.toString() ? `?${p.toString()}` : "";
       return customFetch(`/api/workspaces/${workspaceId}/tasks${qs}`);
     },
+    enabled: !selectedAssignees.includes("me") || !!currentUserId,
   });
 
-  const countsQueryKey = [`/api/workspaces/${workspaceId}/tasks/counts`, selectedAssignees];
+  const countsQueryKey = [`/api/workspaces/${workspaceId}/tasks/counts`, resolvedAssignees];
   const { data: statusCounts } = useQuery<Record<string, number>>({
     queryKey: countsQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
-      if (selectedAssignees.length > 0) p.set("assignedTo", selectedAssignees.join(","));
+      if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
       const qs = p.toString() ? `?${p.toString()}` : "";
       return customFetch(`/api/workspaces/${workspaceId}/tasks/counts${qs}`);
     },
+    enabled: !selectedAssignees.includes("me") || !!currentUserId,
   });
 
   const isAdmin = workspace?.role === "admin";
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: me } = useGetMe();
-  const currentUserId = me?.id ?? "";
 
   const { data: memberSuggestions } = useQuery<{ userId: string; name: string; email: string; avatarUrl: string | null }[]>({
     queryKey: [`/api/workspaces/${workspaceId}/members/suggestions`],
@@ -344,8 +351,12 @@ export default function WorkspaceDetailPage() {
 
   const clearAllFilters = () => {
     setSelectedStatuses([]);
-    setSelectedAssignees([]);
+    setSelectedAssignees(["me"]);
   };
+
+  const hasActiveFilters =
+    selectedStatuses.length > 0 ||
+    !(selectedAssignees.length === 1 && selectedAssignees[0] === "me");
 
   const handleCreateMap = (e: React.FormEvent) => {
     e.preventDefault();
@@ -762,9 +773,8 @@ export default function WorkspaceDetailPage() {
 
                 <TabsContent value="tasks" className="mt-0 outline-none">
                   {/* Header row: filters + nova tarefa button */}
-                  <div className="flex flex-wrap items-center gap-3 mb-6">
-                    <div className="flex flex-wrap items-center gap-2 flex-1">
-                      <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">Status:</span>
+                  <div className="flex flex-col gap-3 mb-6">
+                    <div className="flex flex-wrap items-center gap-2">
                       {STATUS_OPTIONS.map(opt => {
                         const isActive = selectedStatuses.includes(opt.value);
                         const cnt = statusCounts?.[opt.value] ?? 0;
@@ -782,18 +792,7 @@ export default function WorkspaceDetailPage() {
                           </button>
                         );
                       })}
-                      {(workspaceMembers && workspaceMembers.length > 0) && (
-                        <>
-                          <span className="w-px h-4 bg-border mx-1" />
-                          <span className="text-xs font-semibold text-muted-foreground tracking-wider mr-1 lowercase">Responsável:</span>
-                          <AssigneeFilterPills
-                            members={workspaceMembers.map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
-                            selected={selectedAssignees}
-                            onToggle={toggleAssignee}
-                          />
-                        </>
-                      )}
-                      {(selectedStatuses.length > 0 || selectedAssignees.length > 0) && (
+                      {hasActiveFilters && (
                         <button
                           onClick={clearAllFilters}
                           className="px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-border transition-all duration-150 cursor-pointer ml-1"
@@ -801,14 +800,28 @@ export default function WorkspaceDetailPage() {
                           <span className="lowercase">Limpar filtros</span>
                         </button>
                       )}
+                      <Button
+                        variant="outline"
+                        className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer shrink-0 lowercase ml-auto"
+                        onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
+                      >
+                        <Plus className="w-4 h-4 mr-1.5" /> criar
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer shrink-0 lowercase"
-                      onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
-                    >
-                      <Plus className="w-4 h-4 mr-1.5" /> criar
-                    </Button>
+                    {(workspaceMembers && workspaceMembers.length > 0) && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AssigneeFilterPills
+                          members={(workspaceMembers ?? [])
+                            .filter(m => m.userId !== currentUserId)
+                            .map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
+                          selected={selectedAssignees}
+                          onToggle={toggleAssignee}
+                          showMe
+                          meLabel="Eu"
+                          meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {isTasksLoading ? (
@@ -868,7 +881,7 @@ export default function WorkspaceDetailPage() {
                         {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
                         {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}
                         {upcomingTasks.length > 0 && renderSection("próximas", upcomingTasks)}
-                        {noDueDateTasks.length > 0 && renderSection("sem fazer", noDueDateTasks)}
+                        {noDueDateTasks.length > 0 && renderSection("sem prazo", noDueDateTasks)}
                       </div>
                     );
                   })()}

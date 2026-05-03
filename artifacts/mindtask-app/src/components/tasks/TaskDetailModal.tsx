@@ -99,9 +99,9 @@ interface TaskDetailModalProps {
 }
 
 const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em"; label: string }[] = [
-  { value: "ate", label: "até" },
-  { value: "entre", label: "entre" },
-  { value: "em", label: "em" },
+  { value: "ate", label: "fazer até" },
+  { value: "entre", label: "fazer entre" },
+  { value: "em", label: "fazer em" },
 ];
 
 function ScheduleModeDropdown({
@@ -832,9 +832,6 @@ export function TaskDetailModal({
                       {/* Due Date + Recurrence */}
                       <div className={scheduleMode === "entre" ? "col-span-2" : ""}>
                         <div className="mb-1.5 flex items-center justify-start gap-2 flex-wrap">
-                          <label className={`text-xs font-semibold tracking-wider flex items-center gap-1 lowercase ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
-                            <Calendar className="w-3 h-3" /> Fazer
-                          </label>
                           <div className="flex items-center gap-1.5">
                             <ScheduleModeDropdown
                               value={scheduleMode}

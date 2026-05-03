@@ -111,6 +111,21 @@ export function TaskListItem({
   const statusRef = useRef<HTMLDivElement>(null);
   const assigneeRef = useRef<HTMLDivElement>(null);
   const dueDateInputRef = useRef<HTMLInputElement>(null);
+  const [editingPrazo, setEditingPrazo] = useState(false);
+  const scheduleWrapperRef = useRef<HTMLDivElement>(null);
+
+  const handleScheduleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && scheduleWrapperRef.current?.contains(next)) return;
+    if (!localTask.dueDate && !localTask.startAt) {
+      setEditingPrazo(false);
+      setPendingMode(null);
+    }
+  };
+
+  useEffect(() => {
+    if (localTask.dueDate && editingPrazo) setEditingPrazo(false);
+  }, [localTask.dueDate, editingPrazo]);
 
   const closeAllDropdowns = useCallback(() => {
     setStatusOpen(false);
@@ -509,72 +524,101 @@ export function TaskListItem({
           )}
         </div>
 
-        {/* Schedule modality */}
-        <select
-          value={effectiveMode as string}
-          onChange={handleScheduleModeChange}
-          onClick={e => e.stopPropagation()}
-          disabled={savingField === "scheduleMode"}
-          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-          title="Modalidade do fazer"
-        >
-          <option value="ate">até</option>
-          <option value="entre">entre</option>
-          <option value="em">em</option>
-        </select>
-
-        {/* Start date (visible only for "entre") */}
-        {effectiveMode === "entre" && (
-          <label
-            className="relative inline-flex items-center gap-1 cursor-pointer shrink-0"
-            onClick={e => e.stopPropagation()}
+        {/* Schedule — collapsed badge when there's no prazo, expanded controls otherwise */}
+        {!localTask.dueDate && !editingPrazo ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingPrazo(true);
+              setTimeout(() => {
+                const input = dueDateInputRef.current;
+                if (input) {
+                  input.focus();
+                  try { (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
+                }
+              }, 0);
+            }}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer"
+            title="Clique para definir prazo"
           >
-            <CalendarIcon className="w-3 h-3 shrink-0 pointer-events-none text-muted-foreground" />
-            <span className={`pointer-events-none select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
-              {localTask.startAt ? formatDueDate(localTask.startAt) : "início"}
-            </span>
-            <input
-              type="date"
-              max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
-              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
-              value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
-              onChange={handleStartAtChange}
+            <CalendarIcon className="w-3 h-3 shrink-0" />
+            <span>sem prazo</span>
+          </button>
+        ) : (
+          <div
+            ref={scheduleWrapperRef}
+            onBlur={handleScheduleBlur}
+            className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"
+          >
+            {/* Schedule modality */}
+            <select
+              value={effectiveMode as string}
+              onChange={handleScheduleModeChange}
               onClick={e => e.stopPropagation()}
-              title="Data de início"
-            />
-          </label>
-        )}
+              disabled={savingField === "scheduleMode"}
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+              title="Modalidade do fazer"
+            >
+              <option value="ate">fazer até</option>
+              <option value="entre">fazer entre</option>
+              <option value="em">fazer em</option>
+            </select>
 
-        {/* Due date — inline editable */}
-        <label
-          className={`relative inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
-          onClick={e => e.stopPropagation()}
-        >
-          <CalendarIcon className={`w-3 h-3 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-          {localTask.dueDate ? (
-            <span
-              className={`pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+            {/* Start date (visible only for "entre") */}
+            {effectiveMode === "entre" && (
+              <label
+                className="relative inline-flex items-center gap-1 cursor-pointer shrink-0"
+                onClick={e => e.stopPropagation()}
+              >
+                <CalendarIcon className="w-3 h-3 shrink-0 pointer-events-none text-muted-foreground" />
+                <span className={`pointer-events-none select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
+                  {localTask.startAt ? formatDueDate(localTask.startAt) : "vazio"}
+                </span>
+                <input
+                  type="date"
+                  max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                  value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
+                  onChange={handleStartAtChange}
+                  onClick={e => e.stopPropagation()}
+                  title="Data de início"
+                />
+              </label>
+            )}
+
+            {/* Due date — inline editable */}
+            <label
+              className={`relative inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
+              onClick={e => e.stopPropagation()}
             >
-              {formatDueDate(localTask.dueDate)}
-            </span>
-          ) : (
-            <span
-              className={`pointer-events-none select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
-            >
-              sem fazer
-            </span>
-          )}
-          <input
-            ref={dueDateInputRef}
-            type="date"
-            min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
-            value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-            onChange={handleDueDateChange}
-            onClick={e => e.stopPropagation()}
-            title="Alterar fazer"
-          />
-        </label>
+              <CalendarIcon className={`w-3 h-3 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
+              {localTask.dueDate ? (
+                <span
+                  className={`pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                >
+                  {formatDueDate(localTask.dueDate)}
+                </span>
+              ) : (
+                <span
+                  className={`pointer-events-none select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                >
+                  vazio
+                </span>
+              )}
+              <input
+                ref={dueDateInputRef}
+                type="date"
+                min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+                onChange={handleDueDateChange}
+                onClick={e => e.stopPropagation()}
+                title="Alterar fazer"
+              />
+            </label>
+          </div>
+        )}
 
         {/* Recurrence indicator */}
         {localTask.isRecurring && localTask.recurrenceConfig && (

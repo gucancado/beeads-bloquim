@@ -227,6 +227,19 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   const [startAtValue, setStartAtValue] = useState(
     data.taskStartAt ? data.taskStartAt.split('T')[0] : '',
   );
+  const [editingNoPrazo, setEditingNoPrazo] = useState(false);
+  const scheduleWrapperRef = useRef<HTMLDivElement>(null);
+
+  const handleScheduleWrapperBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && scheduleWrapperRef.current?.contains(next)) return;
+    if (!data.taskDueDate && !data.taskStartAt) {
+      setEditingNoPrazo(false);
+      setPendingMode(null);
+      setEditingDueDate(false);
+      setEditingStartAt(false);
+    }
+  };
 
   useEffect(() => {
     if (!editingStatus) return;
@@ -250,6 +263,10 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
   useEffect(() => {
     setStartAtValue(data.taskStartAt ? data.taskStartAt.split('T')[0] : '');
   }, [data.taskStartAt]);
+
+  useEffect(() => {
+    if (data.taskDueDate && editingNoPrazo) setEditingNoPrazo(false);
+  }, [data.taskDueDate, editingNoPrazo]);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -771,8 +788,28 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             )}
 
             {/* Task schedule fields — stacks vertically in "entre" mode */}
-            {hasTask && (
-              <div className={`ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : "flex items-center gap-1"}`}>
+            {hasTask && !hasDueDate && !editingNoPrazo && (
+              <button
+                type="button"
+                className="nodrag ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground rounded px-1 hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
+                title="Clique para definir prazo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingNoPrazo(true);
+                  setEditingDueDate(true);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <Calendar className="w-3 h-3 flex-shrink-0" />
+                <span>sem prazo</span>
+              </button>
+            )}
+            {hasTask && (hasDueDate || editingNoPrazo) && (
+              <div
+                ref={scheduleWrapperRef}
+                onBlur={handleScheduleWrapperBlur}
+                className={`ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : "flex items-center gap-1"}`}
+              >
                 {/* Top row: mode select + startAt (only shown for "entre") */}
                 <div className="flex items-center gap-1">
                   <select
@@ -783,9 +820,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                     className="nodrag text-[10px] bg-card border border-border rounded-lg px-1.5 py-0.5 outline-none cursor-pointer"
                     title="Modalidade do fazer"
                   >
-                    <option value="ate">até</option>
-                    <option value="entre">entre</option>
-                    <option value="em">em</option>
+                    <option value="ate">fazer até</option>
+                    <option value="entre">fazer entre</option>
+                    <option value="em">fazer em</option>
                   </select>
                   {currentScheduleMode === "entre" && (
                     editingStartAt ? (

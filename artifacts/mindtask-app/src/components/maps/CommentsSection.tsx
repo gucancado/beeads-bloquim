@@ -272,7 +272,7 @@ function formatActivityText(activity: TaskActivityItem): string {
     case "due_date_changed": {
       const actor = m.actorName ?? activity.actorName ?? "Alguém";
       const formatDate = (d: string | null | undefined) => {
-        if (!d) return "sem fazer";
+        if (!d) return "sem prazo";
         const [year, month, day] = d.slice(0, 10).split("-");
         return `${day}/${month}/${year}`;
       };

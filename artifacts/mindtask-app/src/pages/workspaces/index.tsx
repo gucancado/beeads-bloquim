@@ -167,7 +167,7 @@ function WorkspaceCard({ ws, showHidden }: {
                             <TooltipTrigger asChild>
                               <span className="text-[11px] font-medium text-muted-foreground cursor-default">{detail.noDue}</span>
                             </TooltipTrigger>
-                            <TooltipContent side="top"><p>sem fazer</p></TooltipContent>
+                            <TooltipContent side="top"><p>sem prazo</p></TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       )}
