@@ -344,6 +344,8 @@ lib/
 - **file_uploads**: id, objectPath, fileName, fileSize, mimeType, uploadedBy
 - **attachment_links**: id, fileUploadId, taskId, kind (standard/deliverable)
 - **map_text_elements**: id, mapId, content (Tiptap JSON), positionX/Y, width, height, fontSize, color
+- **task_templates**: id, workspaceId, title, description, priority, createdBy
+- **task_template_subtasks**: id, templateId, title, order
 - **map_shapes**: id, mapId, type (rect/ellipse/line/image), positionX/Y, width, height, rotation, color, filled, strokeStyle, x1/y1/x2/y2, fileUploadId
 - **user_google_calendar_accounts**: id, userId, googleAccountEmail, tokens
 - **user_calendar_preferences**: id, userId, googleCalendarId, calendarName, calendarColor

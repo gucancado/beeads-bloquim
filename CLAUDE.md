@@ -212,6 +212,8 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | file_uploads | Registro de arquivos enviados |
 | attachment_links | Vínculo entre file_uploads e tarefas |
 | map_text_elements | Elementos de texto livre no mapa (Tiptap) |
+| task_templates | Templates reutilizáveis de tarefa |
+| task_template_subtasks | Subtarefas de um template |
 | map_shapes | Formas desenhadas (rect, ellipse, line, image) |
 | user_google_calendar_accounts | Contas Google Calendar vinculadas |
 | user_calendar_preferences | Preferências de calendário |
