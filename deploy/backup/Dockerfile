@@ -19,7 +19,9 @@ RUN apk add --no-cache \
 
 WORKDIR /opt/backup
 
-COPY backup-db.sh restore-db.sh prune-old-backups.sh /opt/backup/
+# Build context is the monorepo root (Coolify/Easypanel default), so we
+# reference the scripts by their full path within the repo.
+COPY deploy/backup/backup-db.sh deploy/backup/restore-db.sh deploy/backup/prune-old-backups.sh /opt/backup/
 RUN chmod +x /opt/backup/*.sh
 
 # Default command keeps the container alive (idle). Coolify/Easypanel
