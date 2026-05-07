@@ -277,7 +277,7 @@ const COPY_TABLES_IN_ORDER = [
  * Copy users without avatar_url first, then patch avatars after copying objects. */
 
 async function copyTable(name, opts = {}) {
-  const { exclude_columns = [], where = "" } = opts;
+  const { exclude_columns = [], where = "", orderBy = "" } = opts;
   const colsRes = await sourcePool.query(
     `SELECT column_name FROM information_schema.columns
      WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`,
@@ -306,7 +306,7 @@ async function copyTable(name, opts = {}) {
   }
 
   const colList = finalCols.map((c) => `"${c}"`).join(", ");
-  const sql = `SELECT ${colList} FROM "${name}" ${where}`;
+  const sql = `SELECT ${colList} FROM "${name}" ${where} ${orderBy}`;
   const rows = (await sourcePool.query(sql)).rows;
   if (rows.length === 0) {
     console.log(`  [${name}] 0 rows — nothing to copy`);
@@ -565,8 +565,16 @@ async function migrateAvatars() {
     console.log(`\n=== Migration starting (${DRY_RUN ? "DRY-RUN" : "LIVE"}) ===`);
 
     // Tables 1:1 (FK-safe order). users include avatar_url copy; we'll patch storage_path after.
+    // Per-table ORDER BY for tables with self-references / inter-row FKs.
+    const ORDER_BY = {
+      // tasks.parent_task_id → tasks.id (approval tasks are children of approvable parent)
+      tasks: 'ORDER BY parent_task_id NULLS FIRST, "created_at" ASC',
+      // card_connections has FK to cards on both ends; cards table itself runs after,
+      // so this is harmless — but we order by created_at for determinism
+      card_connections: 'ORDER BY "created_at" ASC',
+    };
     for (const t of COPY_TABLES_IN_ORDER) {
-      await copyTable(t);
+      await copyTable(t, { orderBy: ORDER_BY[t] ?? "" });
     }
 
     // Attachments (with object copy and id remap)
