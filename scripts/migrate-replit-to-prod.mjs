@@ -380,7 +380,10 @@ async function migrateAttachments() {
       continue;
     }
 
-    const newAttachmentId = randomUUID();
+    // Use the source attachment_link.id as the new attachment.id so re-runs are
+    // idempotent (ON CONFLICT DO NOTHING actually triggers on PK conflict).
+    // Without this, randomUUID() produced new IDs on every run → duplicates.
+    const newAttachmentId = r.link_id;
     const filename = safeName(r.file_name);
     const newStoragePath = `workspace/${r.derived_workspace_id}/${r.entity_type}/${r.entity_id}/${newAttachmentId}-${filename}`;
 
@@ -524,8 +527,11 @@ async function migrateAvatars() {
       continue;
     }
 
+    // Deterministic path: avoids duplicate uploads in re-runs.
+    // Same user+filename+ext always produces the same R2 key.
     const filename = `avatar.${ext}`;
-    const newStoragePath = `user/${u.id}/avatar/${randomUUID()}-${filename}`;
+    const deterministicSuffix = u.id; // user can only have one current avatar
+    const newStoragePath = `user/${u.id}/avatar/${deterministicSuffix}-${filename}`;
     const newAvatarUrl = `/api/users/${u.id}/avatar`;
 
     if (DRY_RUN) {
