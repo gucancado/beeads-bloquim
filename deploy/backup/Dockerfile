@@ -3,11 +3,11 @@
 # Lightweight backup runner: pg_dump → gzip → S3 (Cloudflare R2 compatible).
 # Used by an Easypanel scheduled task; not part of the app runtime.
 
-FROM alpine:3.20
+FROM alpine:3.21
 
 # postgresql17-client must match the major version of the Postgres server.
-# Easypanel's official Postgres template currently ships PG 17 — bump here if
-# you upgrade the server.
+# Supabase ships Postgres 17.x; we use Alpine 3.21 because it's the first
+# release that packages postgresql17-client (3.20 only has 16).
 RUN apk add --no-cache \
       bash \
       ca-certificates \
