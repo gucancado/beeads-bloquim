@@ -22,6 +22,7 @@ WORKDIR /opt/backup
 COPY backup-db.sh restore-db.sh prune-old-backups.sh /opt/backup/
 RUN chmod +x /opt/backup/*.sh
 
-# Default command runs the backup. Easypanel cron schedules invoke it on a
-# timer; you can override CMD per-invocation (e.g. for prune or restore).
-CMD ["/opt/backup/backup-db.sh"]
+# Default command keeps the container alive (idle). Coolify/Easypanel
+# scheduled tasks invoke `/opt/backup/backup-db.sh` (and prune/restore)
+# inside this running container at the configured cadence.
+CMD ["sleep", "infinity"]
