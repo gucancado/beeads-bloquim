@@ -42,6 +42,7 @@ pg_dump \
     --no-owner \
     --no-privileges \
     --quote-all-identifiers \
+    --schema=public \
     ${PG_DUMP_EXTRA_ARGS:-} \
   | gzip -9 \
   | aws s3 cp - "${S3_URL}" \
