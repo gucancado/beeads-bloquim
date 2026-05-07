@@ -15,6 +15,7 @@ import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex, type ShapeKind } f
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import type { ShapeResponse } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes } from "lucide-react";
@@ -371,6 +372,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const shapeToolRef = useRef<'line' | 'rect' | 'ellipse' | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const { uploadFile } = useUpload();
   const lastMouseFlowPosRef = useRef<{ x: number; y: number } | null>(null);
   const { data: mapData, isLoading } = useGetMap(workspaceId, mapId, {
     query: { refetchInterval: 3000, throwOnError: false, retry: false },
@@ -650,10 +652,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       y1: shape.y1 ?? null,
       x2: shape.x2 ?? null,
       y2: shape.y2 ?? null,
-      fileUploadId: shape.fileUploadId ?? null,
+      attachmentId: shape.attachmentId ?? null,
       fileName: shape.fileName ?? null,
       mimeType: shape.mimeType ?? null,
-      downloadUrl: shape.fileUploadId
+      downloadUrl: shape.attachmentId
         ? `/api/workspaces/${workspaceId}/maps/${mapId}/shapes/${shape.id}/download`
         : null,
       workspaceId,
@@ -1964,61 +1966,27 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       toast({ title: 'Tipo de arquivo inválido', description: 'Selecione uma imagem.', variant: 'destructive' });
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'Arquivo muito grande', description: 'O limite é de 10 MB.', variant: 'destructive' });
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: 'Arquivo muito grande', description: 'O limite é de 50 MB.', variant: 'destructive' });
       return;
     }
 
     setImageUploading(true);
     try {
-      const urlRes = await fetch('/api/storage/uploads/request-url', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      const uploadResult = await uploadFile(file, {
+        bucket: 'attachments',
+        entityKind: 'map',
+        entityId: mapId,
       });
-      if (!urlRes.ok) {
-        let msg = 'Não foi possível preparar o upload.';
-        try {
-          const body = await urlRes.json();
-          if (body?.error) msg = body.error;
-        } catch { /* ignore */ }
-        toast({ title: 'Falha no upload', description: msg, variant: 'destructive' });
-        return;
-      }
-      const { uploadURL, objectPath } = await urlRes.json();
-
-      let putRes: Response;
-      try {
-        putRes = await fetch(uploadURL, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type },
+      if (!uploadResult) {
+        toast({
+          title: 'Falha no upload',
+          description: 'Não foi possível enviar a imagem para o storage.',
+          variant: 'destructive',
         });
-      } catch {
-        toast({ title: 'Falha no upload', description: 'Erro de rede ao enviar a imagem.', variant: 'destructive' });
         return;
       }
-      if (!putRes.ok) {
-        toast({ title: 'Falha no upload', description: 'O servidor de armazenamento recusou o arquivo.', variant: 'destructive' });
-        return;
-      }
-
-      let fileUploadId: string;
-      try {
-        const fuRes = await customFetch<{ fileUploadId: string }>(
-          `/api/workspaces/${workspaceId}/maps/${mapId}/shapes/uploads`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ objectPath, fileName: file.name, fileSize: file.size, mimeType: file.type }),
-          },
-        );
-        fileUploadId = fuRes.fileUploadId;
-      } catch {
-        toast({ title: 'Falha ao registrar imagem', description: 'Tente novamente em alguns instantes.', variant: 'destructive' });
-        return;
-      }
+      const attachmentId = uploadResult.attachmentId;
 
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -2059,7 +2027,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       }
 
       createShapeMut.mutate(
-        { workspaceId, mapId, data: { type: 'image', positionX: posX, positionY: posY, width: w, height: h, fileUploadId } },
+        { workspaceId, mapId, data: { type: 'image', positionX: posX, positionY: posY, width: w, height: h, attachmentId } },
         {
           onSuccess: (shape) => {
             const newNode = buildShapeNode(shape);
@@ -2074,7 +2042,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     } finally {
       setImageUploading(false);
     }
-  }, [workspaceId, mapId, createShapeMut, buildShapeNode, setNodes, queryClient, screenToFlowPosition, getViewport]);
+  }, [workspaceId, mapId, createShapeMut, buildShapeNode, setNodes, queryClient, screenToFlowPosition, getViewport, uploadFile]);
 
   const handleImageButtonClick = useCallback(() => {
     imageFileInputRef.current?.click();

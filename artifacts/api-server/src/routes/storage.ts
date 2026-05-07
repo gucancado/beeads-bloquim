@@ -1,170 +1,325 @@
-import { Router, type IRouter, type Request, type Response } from "express";
-import { Readable } from "stream";
+import { randomUUID } from "node:crypto";
+import { Router, type IRouter, type Response } from "express";
+import { z } from "zod/v4";
+import { db } from "@workspace/db";
 import {
-  RequestUploadUrlBody,
-  RequestUploadUrlResponse,
-} from "@workspace/api-zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
-import { requireAuth, optionalAuth, AuthRequest } from "../middlewares/auth";
+  attachments,
+  cards,
+  maps,
+  taskComments,
+  tasks,
+  workspaceMembers,
+} from "@workspace/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
+import {
+  buildStoragePath,
+  type BucketName,
+  sanitizeFilename,
+  validateFileUpload,
+  type AttachmentEntityKind,
+} from "@workspace/storage";
+
+import { requireAuth, type AuthRequest } from "../middlewares/auth";
+import { requireStorage } from "../lib/featureFlags";
+import { getStorage } from "../lib/storage";
 import { logger } from "../lib/logger";
 
 const log = logger.child({ module: "storage" });
 
 const router: IRouter = Router();
-const objectStorageService = new ObjectStorageService();
 
-/**
- * POST /storage/uploads/request-url
- *
- * Request a presigned URL for file upload.
- * The client sends JSON metadata (name, size, contentType) — NOT the file.
- * Then uploads the file directly to the returned presigned URL.
- * Protected: requires authenticated user (Bearer token).
- */
-const BACKEND_MAX_FILE_SIZE = 10 * 1024 * 1024;
-const BACKEND_BLOCKED_EXTENSIONS = [".exe", ".bat"];
-const BACKEND_BLOCKED_MIME_TYPES = [
-  "application/x-msdownload",
-  "application/x-msdos-program",
-  "application/bat",
-  "application/x-bat",
-];
+// ---------------------------------------------------------------------------
+// POST /storage/uploads/request-url
+//
+// Returns a presigned PUT URL for direct client upload, AND pre-creates an
+// attachment row in the DB so the file is tracked from the moment the URL is
+// issued. The client uploads the file with PUT to `uploadUrl` and immediately
+// gets back a usable `attachmentId` — no separate "commit" call required.
+//
+// If the client never PUTs the file, the row is orphaned and a future GC job
+// will clean both the row and any uploaded bytes.
+// ---------------------------------------------------------------------------
 
-router.post("/storage/uploads/request-url", requireAuth, async (req: AuthRequest, res: Response) => {
-  const parsed = RequestUploadUrlBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Missing or invalid required fields" });
-    return;
-  }
-
-  try {
-    const { name, size, contentType } = parsed.data;
-
-    if (size > BACKEND_MAX_FILE_SIZE) {
-      res.status(400).json({ error: "O arquivo excede o limite de 10 MB", code: "FILE_TOO_LARGE" });
-      return;
-    }
-
-    const nameLower = name.toLowerCase();
-    if (BACKEND_BLOCKED_EXTENSIONS.some((ext) => nameLower.endsWith(ext))) {
-      res.status(400).json({ error: "Este tipo de arquivo não é permitido (.exe e .bat)", code: "FILE_TYPE_NOT_ALLOWED" });
-      return;
-    }
-
-    const contentTypeLower = contentType.toLowerCase();
-    if (BACKEND_BLOCKED_MIME_TYPES.some((mime) => contentTypeLower === mime)) {
-      res.status(400).json({ error: "Este tipo de arquivo não é permitido (.exe e .bat)", code: "FILE_TYPE_NOT_ALLOWED" });
-      return;
-    }
-
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-
-    res.json(
-      RequestUploadUrlResponse.parse({
-        uploadURL,
-        objectPath,
-        metadata: { name, size, contentType },
-      }),
-    );
-  } catch (error) {
-    log.error({ err: error }, "Error generating upload URL");
-    res.status(500).json({ error: "Failed to generate upload URL" });
-  }
+const requestUrlSchema = z.object({
+  bucket: z.enum(["attachments", "avatars"]),
+  entityKind: z.enum(["task", "card", "comment", "map", "plan"]),
+  entityId: z.uuid(),
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive(),
+  /** Only meaningful for `entityKind: "task"`. */
+  kind: z.enum(["standard", "deliverable"]).optional(),
 });
 
-/**
- * GET /storage/public-objects/*
- *
- * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
- * These are unconditionally public — no authentication or ACL checks.
- * IMPORTANT: Always provide this endpoint when object storage is set up.
- */
-router.get("/storage/public-objects/*filePath", async (req: Request, res: Response) => {
-  try {
-    const raw = req.params.filePath;
-    const filePath = Array.isArray(raw) ? raw.join("/") : raw;
-    const file = await objectStorageService.searchPublicObject(filePath);
-    if (!file) {
-      res.status(404).json({ error: "File not found" });
+router.post(
+  "/storage/uploads/request-url",
+  requireAuth,
+  requireStorage,
+  async (req: AuthRequest, res: Response) => {
+    const parsed = requestUrlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "validation_failed",
+        message: "Invalid upload request payload",
+        details: parsed.error.issues,
+      });
       return;
     }
 
-    const response = await objectStorageService.downloadObject(file);
+    const { bucket, entityKind, entityId, filename, contentType, sizeBytes, kind } =
+      parsed.data;
+    const userId = req.user!.userId;
 
-    res.status(response.status);
-    response.headers.forEach((value, key) => res.setHeader(key, value));
-
-    if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
+    const validation = validateFileUpload({
+      filename,
+      mimeType: contentType,
+      sizeBytes,
+    });
+    if (validation) {
+      res.status(400).json({
+        error: validation.code,
+        message: validation.message,
+      });
+      return;
     }
-  } catch (error) {
-    log.error({ err: error }, "Error serving public object");
-    res.status(500).json({ error: "Failed to serve public object" });
-  }
-});
 
-/**
- * GET /storage/objects/*
- *
- * Serve object entities from PRIVATE_OBJECT_DIR.
- * ACL-based access control:
- * - Public objects (visibility: "public") are served to anyone.
- * - Private objects require authentication and the requester must be the owner.
- * - Objects in the uploads/ path (user avatar namespace) with no ACL metadata
- *   are treated as publicly readable for backward compatibility with avatars
- *   uploaded before the ACL policy was enforced.
- */
-router.get("/storage/objects/*path", optionalAuth, async (req: Request, res: Response) => {
-  try {
-    const raw = req.params.path;
-    const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
-    const objectPath = `/objects/${wildcardPath}`;
-    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    const ownership = await resolveEntityWorkspace(entityKind, entityId);
+    if (!ownership) {
+      res.status(404).json({
+        error: "entity_not_found",
+        message: `${entityKind} ${entityId} not found`,
+      });
+      return;
+    }
 
-    const authReq = req as AuthRequest;
-    const userId = authReq.user?.userId;
-    const isAvatarPath = wildcardPath.startsWith("uploads/");
-    const canAccess = await objectStorageService.canAccessObjectEntity({
-      userId,
-      objectFile,
-      requestedPermission: ObjectPermission.READ,
-      allowPublicFallback: isAvatarPath,
+    const isMember = await userIsWorkspaceMember(ownership.workspaceId, userId);
+    if (!isMember) {
+      res.status(403).json({
+        error: "forbidden",
+        message: "Not a member of the entity's workspace",
+      });
+      return;
+    }
+
+    const attachmentId = randomUUID();
+    const safeName = sanitizeFilename(filename);
+    const storagePath = buildStoragePath({
+      workspaceId: ownership.workspaceId,
+      entityKind,
+      entityId,
+      attachmentId,
+      filename: safeName,
     });
 
-    if (!canAccess) {
-      if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-      } else {
-        res.status(403).json({ error: "Forbidden" });
-      }
+    const storage = getStorage();
+    let signed;
+    try {
+      signed = await storage.createUploadUrl({
+        bucket,
+        storagePath,
+        contentType,
+      });
+    } catch (err) {
+      log.error({ err, storagePath, bucket }, "createUploadUrl failed");
+      res.status(502).json({
+        error: "storage_error",
+        message: "Failed to create upload URL",
+      });
       return;
     }
 
-    const response = await objectStorageService.downloadObject(objectFile);
+    // Pre-create the attachment row. CHECK constraint on the table forces
+    // at least one of (task|card|comment|map|plan)_id to be set.
+    const insertValues = {
+      id: attachmentId,
+      workspaceId: ownership.workspaceId,
+      bucket,
+      storagePath,
+      originalFilename: safeName,
+      mimeType: contentType,
+      fileSize: sizeBytes,
+      kind: kind ?? "standard",
+      uploadedBy: userId,
+      taskId: entityKind === "task" ? entityId : null,
+      cardId: entityKind === "card" ? entityId : null,
+      commentId: entityKind === "comment" ? entityId : null,
+      mapId: entityKind === "map" ? entityId : null,
+      planId: entityKind === "plan" ? entityId : null,
+    } as const;
 
-    res.status(response.status);
-    response.headers.forEach((value, key) => res.setHeader(key, value));
-
-    if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
-    }
-  } catch (error) {
-    if (error instanceof ObjectNotFoundError) {
-      log.warn({ err: error }, "Object not found");
-      res.status(404).json({ error: "Object not found" });
+    try {
+      await db.insert(attachments).values(insertValues);
+    } catch (err) {
+      log.error({ err, attachmentId }, "failed to insert attachment row");
+      res.status(500).json({
+        error: "db_error",
+        message: "Failed to register attachment",
+      });
       return;
     }
-    log.error({ err: error }, "Error serving object");
-    res.status(500).json({ error: "Failed to serve object" });
-  }
-});
+
+    res.status(201).json({
+      attachmentId,
+      bucket,
+      storagePath,
+      uploadUrl: signed.uploadUrl,
+      method: signed.method,
+      headers: signed.headers,
+      expiresAt: signed.expiresAt.toISOString(),
+    });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /storage/attachments/:attachmentId/download
+//
+// Backend-proxied download with a permission check. We stream the object via
+// the API server (rather than redirect to a signed URL) so we can enforce the
+// workspace membership at request time and audit downloads later if needed.
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/storage/attachments/:attachmentId/download",
+  requireAuth,
+  requireStorage,
+  async (req: AuthRequest, res: Response) => {
+    const { attachmentId } = req.params;
+    const userId = req.user!.userId;
+
+    if (!isUuid(attachmentId)) {
+      res.status(400).json({ error: "invalid_id" });
+      return;
+    }
+
+    const [row] = await db
+      .select({
+        bucket: attachments.bucket,
+        storagePath: attachments.storagePath,
+        fileName: attachments.originalFilename,
+        mimeType: attachments.mimeType,
+        workspaceId: attachments.workspaceId,
+      })
+      .from(attachments)
+      .where(and(eq(attachments.id, attachmentId), isNull(attachments.deletedAt)))
+      .limit(1);
+
+    if (!row) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+
+    const isMember = await userIsWorkspaceMember(row.workspaceId, userId);
+    if (!isMember) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+
+    const storage = getStorage();
+    let stream;
+    try {
+      stream = await storage.getReadStream({
+        bucket: row.bucket as BucketName,
+        storagePath: row.storagePath,
+      });
+    } catch (err) {
+      log.error(
+        { err, attachmentId, storagePath: row.storagePath },
+        "getReadStream failed",
+      );
+      res.status(404).json({ error: "object_not_found" });
+      return;
+    }
+
+    res.setHeader("Content-Type", row.mimeType ?? stream.contentType);
+    if (stream.contentLength !== undefined) {
+      res.setHeader("Content-Length", String(stream.contentLength));
+    }
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(row.fileName)}`,
+    );
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+
+    stream.stream.pipe(res);
+  },
+);
 
 export default router;
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+async function resolveEntityWorkspace(
+  entityKind: AttachmentEntityKind,
+  entityId: string,
+): Promise<{ workspaceId: string } | null> {
+  switch (entityKind) {
+    case "task": {
+      const [row] = await db
+        .select({ workspaceId: tasks.workspaceId })
+        .from(tasks)
+        .where(eq(tasks.id, entityId))
+        .limit(1);
+      if (!row?.workspaceId) return null;
+      return { workspaceId: row.workspaceId };
+    }
+    case "card": {
+      const [row] = await db
+        .select({ workspaceId: maps.workspaceId })
+        .from(cards)
+        .innerJoin(maps, eq(maps.id, cards.mapId))
+        .where(eq(cards.id, entityId))
+        .limit(1);
+      if (!row?.workspaceId) return null;
+      return { workspaceId: row.workspaceId };
+    }
+    case "comment": {
+      const [row] = await db
+        .select({ workspaceId: tasks.workspaceId })
+        .from(taskComments)
+        .innerJoin(tasks, eq(tasks.id, taskComments.taskId))
+        .where(eq(taskComments.id, entityId))
+        .limit(1);
+      if (!row?.workspaceId) return null;
+      return { workspaceId: row.workspaceId };
+    }
+    case "map": {
+      const [row] = await db
+        .select({ workspaceId: maps.workspaceId })
+        .from(maps)
+        .where(eq(maps.id, entityId))
+        .limit(1);
+      if (!row?.workspaceId) return null;
+      return { workspaceId: row.workspaceId };
+    }
+    case "plan": {
+      // No `plans` entity yet. Reject until the schema gains one — keeps the
+      // contract honest instead of silently accepting orphan attachments.
+      return null;
+    }
+  }
+}
+
+async function userIsWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> {
+  const [member] = await db
+    .select({ id: workspaceMembers.id })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+  return Boolean(member);
+}
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value: string | undefined): value is string {
+  return Boolean(value && UUID_REGEX.test(value));
+}

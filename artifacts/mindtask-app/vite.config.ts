@@ -1,35 +1,69 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-const rawPort = process.env.PORT;
+const monorepoRoot = path.resolve(import.meta.dirname, "..", "..");
+
+// Load .env from the monorepo root so we can share secrets/ports across artifacts.
+const env = loadEnv(process.env.NODE_ENV ?? "development", monorepoRoot, "");
+for (const [key, value] of Object.entries(env)) {
+  if (process.env[key] === undefined) {
+    process.env[key] = value;
+  }
+}
+
+const rawPort = process.env.WEB_PORT ?? process.env.PORT;
 
 if (!rawPort) {
   throw new Error(
-    "PORT environment variable is required but was not provided.",
+    "WEB_PORT (or PORT) environment variable is required but was not provided.",
   );
 }
 
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+  throw new Error(`Invalid WEB_PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
+const basePath = process.env.BASE_PATH ?? "/";
 
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
+const isReplit = process.env.REPL_ID !== undefined;
+
+const replitPlugins: PluginOption[] = [];
+if (isReplit) {
+  // Replit-specific plugins are loaded only when running on Replit.
+  // They are listed in optionalDependencies and may not be installed locally.
+  try {
+    const cartographer = await import("@replit/vite-plugin-cartographer");
+    replitPlugins.push(
+      cartographer.cartographer({ root: path.resolve(import.meta.dirname, "..") }),
+    );
+  } catch {
+    // optional dep not installed; ignore silently outside Replit
+  }
+  try {
+    const devBanner = await import("@replit/vite-plugin-dev-banner");
+    replitPlugins.push(devBanner.devBanner());
+  } catch {
+    // optional dep not installed; ignore silently outside Replit
+  }
+  try {
+    const runtimeErrorModal = await import("@replit/vite-plugin-runtime-error-modal");
+    replitPlugins.push(runtimeErrorModal.default());
+  } catch {
+    // optional dep not installed; ignore silently outside Replit
+  }
 }
 
 export default defineConfig({
   base: basePath,
+  envDir: monorepoRoot,
   plugins: [
     react(),
     tailwindcss(),
+    ...replitPlugins,
   ],
   resolve: {
     alias: {
@@ -66,6 +100,15 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    proxy: process.env.VITE_API_BASE_URL
+      ? {
+          "/api": {
+            target: process.env.VITE_API_BASE_URL,
+            changeOrigin: true,
+            ws: true,
+          },
+        }
+      : undefined,
   },
   preview: {
     port,

@@ -31,7 +31,7 @@ interface ShapeNodeData {
   y1?: number | null;
   x2?: number | null;
   y2?: number | null;
-  fileUploadId?: string | null;
+  attachmentId?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
   downloadUrl?: string | null;

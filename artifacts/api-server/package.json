@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch ./src/index.ts",
+    "dev": "tsx watch --env-file=../../.env ./src/index.ts",
     "build": "tsx ./build.ts",
     "start": "node dist/index.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,9 +12,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@google-cloud/storage": "^7.19.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/storage": "workspace:*",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2",

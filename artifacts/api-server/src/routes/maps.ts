@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachmentLinks, mapShapes, fileUploads } from "@workspace/db/schema";
+import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachments, mapShapes } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -84,7 +84,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskApprovalDecision: tasks.approvalStatus,
       taskApprovalOrder: tasks.approvalOrder,
       taskParentApprovalStatus: tasks.parentApprovalStatus,
-      taskAttachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
+      taskAttachmentCount: sql<number>`(SELECT COUNT(*) FROM attachments WHERE task_id = ${tasks.id} AND deleted_at IS NULL)`,
       taskSubtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
       taskSubtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
       taskCommentCount: sql<number>`((SELECT COUNT(*) FROM task_comments WHERE task_id = ${tasks.id}) + (SELECT COUNT(*) FROM task_comments tc JOIN tasks ct ON ct.id = tc.task_id WHERE ct.parent_task_id = ${tasks.id} AND ct.is_approval_task = true))`,
@@ -137,15 +137,15 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       y1: mapShapes.y1,
       x2: mapShapes.x2,
       y2: mapShapes.y2,
-      fileUploadId: mapShapes.fileUploadId,
-      fileName: fileUploads.fileName,
-      mimeType: fileUploads.mimeType,
-      fileSize: fileUploads.fileSize,
+      attachmentId: mapShapes.attachmentId,
+      fileName: attachments.originalFilename,
+      mimeType: attachments.mimeType,
+      fileSize: attachments.fileSize,
       createdAt: mapShapes.createdAt,
       updatedAt: mapShapes.updatedAt,
     })
     .from(mapShapes)
-    .leftJoin(fileUploads, eq(fileUploads.id, mapShapes.fileUploadId))
+    .leftJoin(attachments, eq(attachments.id, mapShapes.attachmentId))
     .where(eq(mapShapes.mapId, mapId));
 
   res.json({ ...map, cards: cardList, connections: connectionList, textElements: textElementList, shapes: shapeList });

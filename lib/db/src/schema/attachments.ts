@@ -6,8 +6,15 @@ import {
   integer,
   index,
   pgEnum,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./users";
+import { workspaces } from "./workspaces";
+import { tasks } from "./tasks";
+import { cards } from "./cards";
+import { maps } from "./maps";
+import { taskComments } from "./comments";
 
 export const attachmentKindEnum = pgEnum("attachment_kind", [
   "standard",
@@ -16,31 +23,80 @@ export const attachmentKindEnum = pgEnum("attachment_kind", [
 
 export type AttachmentKind = "standard" | "deliverable";
 
-export const fileUploads = pgTable("file_uploads", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  objectPath: text("object_path").notNull(),
-  fileName: text("file_name").notNull(),
-  fileSize: integer("file_size").notNull(),
-  mimeType: text("mime_type").notNull(),
-  uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+/**
+ * Unified attachments table. Replaces the legacy file_uploads + attachment_links
+ * pair. An attachment belongs to a workspace and is anchored to exactly one of
+ * task / card / comment / plan via a CHECK constraint.
+ *
+ * The actual file lives in object storage (S3-compatible: Cloudflare R2 in
+ * prod). The DB only stores metadata + the storage path needed to fetch it.
+ */
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "cascade" }),
+    cardId: uuid("card_id").references(() => cards.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id").references(() => taskComments.id, {
+      onDelete: "cascade",
+    }),
+    mapId: uuid("map_id").references(() => maps.id, { onDelete: "cascade" }),
+    // No FK yet — `plans` table doesn't exist in the schema. Treated as a
+    // free-form correlation id; will be tied to a real table in a future migration.
+    planId: uuid("plan_id"),
 
-export const attachmentLinks = pgTable("attachment_links", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  fileUploadId: uuid("file_upload_id").notNull().references(() => fileUploads.id, { onDelete: "cascade" }),
-  entityType: text("entity_type").notNull(),
-  entityId: uuid("entity_id").notNull(),
-  kind: attachmentKindEnum("kind").notNull().default("standard"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => [
-  index("idx_attachment_links_entity").on(
-    table.entityType,
-    table.entityId,
-    table.createdAt,
-  ),
-  index("idx_attachment_links_file_upload").on(table.fileUploadId),
-]);
+    /** Logical bucket name — "attachments" | "avatars" | "public-assets" */
+    bucket: text("bucket").notNull(),
+    /** Object key inside the bucket */
+    storagePath: text("storage_path").notNull(),
 
-export type FileUpload = typeof fileUploads.$inferSelect;
-export type AttachmentLink = typeof attachmentLinks.$inferSelect;
+    originalFilename: text("original_filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+
+    kind: attachmentKindEnum("kind").notNull().default("standard"),
+
+    uploadedBy: uuid("uploaded_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    /** Soft delete — file may still exist in storage until a GC job purges it. */
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("idx_attachments_workspace_created").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("idx_attachments_task")
+      .on(table.taskId, table.createdAt)
+      .where(sql`${table.taskId} IS NOT NULL`),
+    index("idx_attachments_card")
+      .on(table.cardId, table.createdAt)
+      .where(sql`${table.cardId} IS NOT NULL`),
+    index("idx_attachments_comment")
+      .on(table.commentId, table.createdAt)
+      .where(sql`${table.commentId} IS NOT NULL`),
+    index("idx_attachments_map")
+      .on(table.mapId, table.createdAt)
+      .where(sql`${table.mapId} IS NOT NULL`),
+    index("idx_attachments_alive")
+      .on(table.workspaceId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    // At least one anchor must be set (task | card | comment | map | plan).
+    check(
+      "attachments_has_anchor",
+      sql`(${table.taskId} IS NOT NULL)
+       OR (${table.cardId} IS NOT NULL)
+       OR (${table.commentId} IS NOT NULL)
+       OR (${table.mapId} IS NOT NULL)
+       OR (${table.planId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export type Attachment = typeof attachments.$inferSelect;
+export type InsertAttachment = typeof attachments.$inferInsert;

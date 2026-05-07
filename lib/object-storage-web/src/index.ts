@@ -1,2 +1,8 @@
-export { ObjectUploader } from "./ObjectUploader";
-export { useUpload } from "./use-upload";
+export { useUpload, useAvatarUpload, UploadError } from "./use-upload";
+export type {
+  UploadBucket,
+  UploadEntityKind,
+  UploadAttachmentInput,
+  UploadAttachmentResult,
+  UseUploadOptions,
+} from "./use-upload";

@@ -4,6 +4,7 @@ import { userGoogleCalendarAccounts, userCalendarPreferences } from "@workspace/
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, AuthRequest } from "../../middlewares/auth";
+import { requireGoogleCalendar } from "../../lib/featureFlags";
 import { logger } from "../../lib/logger";
 import { encrypt, decrypt } from "../../lib/encryption";
 import {
@@ -20,6 +21,9 @@ import {
 
 const log = logger.child({ module: "google-calendar" });
 const router: IRouter = Router();
+
+// All Google Calendar endpoints require the integration to be enabled via env vars.
+router.use(requireGoogleCalendar);
 
 interface CachedEvents {
   events: TodayEvent[];

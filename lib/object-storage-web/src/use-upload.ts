@@ -1,172 +1,217 @@
-import { useState, useCallback } from "react";
-import type { UppyFile } from "@uppy/core";
+import { useCallback, useState } from "react";
 
-interface UploadMetadata {
-  name: string;
-  size: number;
-  contentType: string;
+export type UploadBucket = "attachments" | "avatars";
+export type UploadEntityKind = "task" | "card" | "comment" | "map" | "plan";
+
+export interface UploadAttachmentInput {
+  bucket: UploadBucket;
+  entityKind: UploadEntityKind;
+  entityId: string;
+  /** Only meaningful when entityKind === "task". */
+  kind?: "standard" | "deliverable";
 }
 
-interface UploadResponse {
-  uploadURL: string;
-  objectPath: string;
-  metadata: UploadMetadata;
+export interface UploadAttachmentResult {
+  attachmentId: string;
+  bucket: UploadBucket;
+  storagePath: string;
 }
 
-interface UseUploadOptions {
-  /** Base path where object storage routes are mounted (default: "/api/storage") */
-  basePath?: string;
-  onSuccess?: (response: UploadResponse) => void;
-  onError?: (error: Error) => void;
+interface RequestUrlResponse {
+  attachmentId: string;
+  bucket: UploadBucket;
+  storagePath: string;
+  uploadUrl: string;
+  method: "PUT";
+  headers: Record<string, string>;
+  expiresAt: string;
+}
+
+interface AvatarRequestUrlResponse {
+  uploadUrl: string;
+  method: "PUT";
+  headers: Record<string, string>;
+  expiresAt: string;
+  avatarUrl: string;
+}
+
+export interface UseUploadOptions {
+  /** Base path of the API (default: "/api"). */
+  apiBase?: string;
+  onSuccess?: (result: UploadAttachmentResult) => void;
+  onError?: (error: UploadError) => void;
+}
+
+export class UploadError extends Error {
+  readonly code: string;
+  readonly status: number | null;
+  constructor(message: string, code: string, status: number | null = null) {
+    super(message);
+    this.name = "UploadError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+async function readErrorBody(response: Response): Promise<UploadError> {
+  let payload: { error?: string; message?: string } | null = null;
+  try {
+    payload = (await response.json()) as { error?: string; message?: string };
+  } catch {
+    /* ignore */
+  }
+  const code = payload?.error ?? `http_${response.status}`;
+  const message =
+    payload?.message ?? payload?.error ?? `Upload request failed (${response.status})`;
+  return new UploadError(message, code, response.status);
 }
 
 /**
- * React hook for handling file uploads with presigned URLs.
+ * React hook for uploading an attachment via the new single-call presigned URL flow:
+ *   1. POST /api/storage/uploads/request-url with metadata + entity binding.
+ *      Backend creates the `attachments` row AND returns a presigned PUT URL.
+ *   2. PUT the file directly to the URL using the signed Content-Type header.
  *
- * This hook implements the two-step presigned URL upload flow:
- * 1. Request a presigned URL from your backend (sends JSON metadata, NOT the file)
- * 2. Upload the file directly to the presigned URL
- *
- * @example
- * ```tsx
- * function FileUploader() {
- *   const { uploadFile, isUploading, error } = useUpload({
- *     onSuccess: (response) => {
- *       console.log("Uploaded to:", response.objectPath);
- *     },
- *   });
- *
- *   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
- *     const file = e.target.files?.[0];
- *     if (file) {
- *       await uploadFile(file);
- *     }
- *   };
- *
- *   return (
- *     <div>
- *       <input type="file" onChange={handleFileChange} disabled={isUploading} />
- *       {isUploading && <p>Uploading...</p>}
- *       {error && <p>Error: {error.message}</p>}
- *     </div>
- *   );
- * }
- * ```
+ * No second "commit" call is required — the row exists from step 1.
  */
 export function useUpload(options: UseUploadOptions = {}) {
-  const basePath = options.basePath ?? "/api/storage";
+  const apiBase = options.apiBase ?? "/api";
   const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
   const [progress, setProgress] = useState(0);
-
-  const requestUploadUrl = useCallback(
-    async (file: File): Promise<UploadResponse> => {
-      const response = await fetch(`${basePath}/uploads/request-url`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type || "application/octet-stream",
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to get upload URL");
-      }
-
-      return response.json();
-    },
-    []
-  );
-
-  const uploadToPresignedUrl = useCallback(
-    async (file: File, uploadURL: string): Promise<void> => {
-      const response = await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type || "application/octet-stream",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to upload file to storage");
-      }
-    },
-    []
-  );
+  const [error, setError] = useState<UploadError | null>(null);
 
   const uploadFile = useCallback(
-    async (file: File): Promise<UploadResponse | null> => {
+    async (
+      file: File,
+      input: UploadAttachmentInput,
+    ): Promise<UploadAttachmentResult | null> => {
       setIsUploading(true);
-      setError(null);
       setProgress(0);
+      setError(null);
 
       try {
-        setProgress(10);
-        const uploadResponse = await requestUploadUrl(file);
+        const requestRes = await fetch(`${apiBase}/storage/uploads/request-url`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bucket: input.bucket,
+            entityKind: input.entityKind,
+            entityId: input.entityId,
+            filename: file.name,
+            contentType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+            kind: input.kind,
+          }),
+        });
 
-        setProgress(30);
-        await uploadToPresignedUrl(file, uploadResponse.uploadURL);
+        if (!requestRes.ok) {
+          throw await readErrorBody(requestRes);
+        }
+        setProgress(20);
 
+        const data = (await requestRes.json()) as RequestUrlResponse;
+
+        const putRes = await fetch(data.uploadUrl, {
+          method: data.method,
+          body: file,
+          headers: data.headers,
+        });
+        if (!putRes.ok) {
+          throw new UploadError(
+            `Storage upload failed (${putRes.status})`,
+            "storage_put_failed",
+            putRes.status,
+          );
+        }
         setProgress(100);
-        options.onSuccess?.(uploadResponse);
-        return uploadResponse;
+
+        const result: UploadAttachmentResult = {
+          attachmentId: data.attachmentId,
+          bucket: data.bucket,
+          storagePath: data.storagePath,
+        };
+        options.onSuccess?.(result);
+        return result;
       } catch (err) {
-        const error = err instanceof Error ? err : new Error("Upload failed");
-        setError(error);
-        options.onError?.(error);
+        const e =
+          err instanceof UploadError
+            ? err
+            : new UploadError(
+                err instanceof Error ? err.message : "Upload failed",
+                "unknown",
+              );
+        setError(e);
+        options.onError?.(e);
         return null;
       } finally {
         setIsUploading(false);
       }
     },
-    [requestUploadUrl, uploadToPresignedUrl, options]
+    [apiBase, options],
   );
 
-  const getUploadParameters = useCallback(
-    async (
-      file: UppyFile<Record<string, unknown>, Record<string, unknown>>
-    ): Promise<{
-      method: "PUT";
-      url: string;
-      headers?: Record<string, string>;
-    }> => {
-      const response = await fetch(`${basePath}/uploads/request-url`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type || "application/octet-stream",
-        }),
-      });
+  return { uploadFile, isUploading, progress, error };
+}
 
-      if (!response.ok) {
-        throw new Error("Failed to get upload URL");
+/**
+ * Avatar upload uses a dedicated endpoint that ALSO updates the user's
+ * avatar_storage_path. Returns the new public URL the frontend should display.
+ */
+export function useAvatarUpload(options: { apiBase?: string } = {}) {
+  const apiBase = options.apiBase ?? "/api";
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<UploadError | null>(null);
+
+  const uploadAvatar = useCallback(
+    async (file: File): Promise<{ avatarUrl: string } | null> => {
+      setIsUploading(true);
+      setError(null);
+      try {
+        const reqRes = await fetch(`${apiBase}/auth/me/avatar/upload-url`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+          }),
+        });
+        if (!reqRes.ok) {
+          throw await readErrorBody(reqRes);
+        }
+        const data = (await reqRes.json()) as AvatarRequestUrlResponse;
+
+        const putRes = await fetch(data.uploadUrl, {
+          method: data.method,
+          body: file,
+          headers: data.headers,
+        });
+        if (!putRes.ok) {
+          throw new UploadError(
+            `Avatar upload failed (${putRes.status})`,
+            "storage_put_failed",
+            putRes.status,
+          );
+        }
+        return { avatarUrl: data.avatarUrl };
+      } catch (err) {
+        const e =
+          err instanceof UploadError
+            ? err
+            : new UploadError(
+                err instanceof Error ? err.message : "Avatar upload failed",
+                "unknown",
+              );
+        setError(e);
+        return null;
+      } finally {
+        setIsUploading(false);
       }
-
-      const data = await response.json();
-      return {
-        method: "PUT",
-        url: data.uploadURL,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-      };
     },
-    []
+    [apiBase],
   );
 
-  return {
-    uploadFile,
-    getUploadParameters,
-    isUploading,
-    error,
-    progress,
-  };
+  return { uploadAvatar, isUploading, error };
 }

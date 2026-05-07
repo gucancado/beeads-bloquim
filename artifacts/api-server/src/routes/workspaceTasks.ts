@@ -1,7 +1,6 @@
 import { Router, IRouter } from "express";
-import { Readable } from "stream";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, fileUploads, attachmentLinks, taskComments } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, taskComments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -16,7 +15,7 @@ import { resolveSchedule, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { getStorage } from "../lib/storage";
 import {
   getApprovalChainInfo,
   computeTerminalCardId,
@@ -31,7 +30,6 @@ import {
   taskBelongsToWorkspace,
   listTaskAttachments,
   listTaskDeliverableAttachments,
-  createTaskAttachment,
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
   updateTaskAttachmentKind,
@@ -150,7 +148,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
-      attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
+      attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachments WHERE task_id = ${tasks.id} AND deleted_at IS NULL)`,
       subtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
       subtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
       commentCount: sql<number>`((SELECT COUNT(*) FROM task_comments WHERE task_id = ${tasks.id}) + (SELECT COUNT(*) FROM task_comments tc JOIN tasks ct ON ct.id = tc.task_id WHERE ct.parent_task_id = ${tasks.id} AND ct.is_approval_task = true))`,
@@ -924,14 +922,6 @@ router.post("/:taskId/duplicate", requireAuth, requireWorkspaceRole(["admin", "e
 
 const attachmentKindSchema = z.enum(["standard", "deliverable"]);
 
-const createAttachmentSchema = z.object({
-  objectPath: z.string().min(1),
-  fileName: z.string().min(1),
-  fileSize: z.number().int().positive(),
-  mimeType: z.string().min(1),
-  kind: attachmentKindSchema.optional(),
-});
-
 const updateAttachmentKindSchema = z.object({
   kind: attachmentKindSchema,
 });
@@ -955,24 +945,8 @@ router.get("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "
   res.json(await listTaskAttachments(taskId));
 });
 
-router.post("/:taskId/attachments", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
-  const { workspaceId, taskId } = req.params;
-  const actorId = req.user!.userId;
-
-  const parsed = createAttachmentSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Validation error", message: parsed.error.message });
-    return;
-  }
-
-  if (!(await taskBelongsToWorkspace(workspaceId, taskId))) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  const created = await createTaskAttachment(taskId, actorId, parsed.data);
-  res.status(201).json(created);
-});
+// POST /:taskId/attachments removed — clients now call POST /api/storage/uploads/request-url
+// which both creates the attachment row AND returns a presigned URL in one call.
 
 router.patch("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, attachmentId } = req.params;
@@ -1014,8 +988,6 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspac
   res.json({ success: true });
 });
 
-const objectStorageService = new ObjectStorageService();
-
 router.get("/:taskId/attachments/:attachmentId/download", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId, attachmentId } = req.params;
 
@@ -1025,12 +997,11 @@ router.get("/:taskId/attachments/:attachmentId/download", requireAuth, requireWo
   }
 
   // Approval tasks proxy the parent task's deliverables in their listing
-  // (see GET /:taskId/attachments). The attachment_links rows themselves
-  // belong to the *parent* task, so we must look them up against the parent
-  // id; otherwise the approver always 404s when previewing or downloading.
-  // We additionally constrain the lookup to `kind=deliverable` so an
-  // approver can't use the approval task ID to download non-deliverable
-  // attachments of the parent (info disclosure).
+  // (see GET /:taskId/attachments). The attachment row belongs to the parent
+  // task, so we look it up against the parent id; otherwise the approver
+  // always 404s. We constrain to kind=deliverable so an approver can't use
+  // an approval task ID to download non-deliverable attachments of the
+  // parent (info disclosure).
   const meta = await getApprovalTaskParent(taskId);
   const isApproval = !!(meta?.isApprovalTask && meta.parentTaskId);
   const lookupTaskId = isApproval ? meta!.parentTaskId! : taskId;
@@ -1045,26 +1016,27 @@ router.get("/:taskId/attachments/:attachmentId/download", requireAuth, requireWo
     return;
   }
 
+  const storage = getStorage();
+  if (!storage.enabled) {
+    res.status(503).json({ error: "storage_disabled" });
+    return;
+  }
+
   try {
-    const objectFile = await objectStorageService.getObjectEntityFile(attachment.objectPath);
-    const response = await objectStorageService.downloadObject(objectFile);
-
-    const encoded = encodeURIComponent(attachment.fileName).replace(/'/g, "%27");
-    res.setHeader("Content-Disposition", `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`);
-    res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
-    response.headers.forEach((value, key) => {
-      if (key.toLowerCase() !== "content-disposition" && key.toLowerCase() !== "content-type") {
-        res.setHeader(key, value);
-      }
+    const stream = await storage.getReadStream({
+      bucket: attachment.bucket,
+      storagePath: attachment.storagePath,
     });
-    res.status(200);
-
-    if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
+    res.setHeader("Content-Type", attachment.mimeType || stream.contentType);
+    if (stream.contentLength !== undefined) {
+      res.setHeader("Content-Length", String(stream.contentLength));
     }
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
+    );
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    stream.stream.pipe(res);
   } catch (error) {
     log.error({ err: error }, "Error downloading attachment");
     res.status(500).json({ error: "Failed to download attachment" });

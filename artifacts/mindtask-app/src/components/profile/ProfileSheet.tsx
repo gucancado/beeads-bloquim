@@ -8,6 +8,7 @@ import { Loader2, Save, Building2, Pencil, EyeOff, Camera, Plug } from "lucide-r
 import { Link } from "wouter";
 import { useMyWorkspaces, useUpdateMe } from "@/hooks/useProfile";
 import { useGetMe } from "@workspace/api-client-react";
+import { useAvatarUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -37,13 +38,13 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
   const { data: user } = useGetMe({ query: { retry: false } });
   const { data: myWorkspaces, isLoading: loadingWorkspaces } = useMyWorkspaces();
   const updateMe = useUpdateMe();
+  const { uploadAvatar, isUploading: isUploadingAvatar } = useAvatarUpload();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [editingName, setEditingName] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (user?.name) setName(user.name);
@@ -81,47 +82,19 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
       return;
     }
 
-    setIsUploadingAvatar(true);
     try {
-      const urlRes = await fetch("/api/storage/uploads/request-url", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
-        }),
-      });
-
-      if (!urlRes.ok) {
-        throw new Error("Falha ao obter URL de upload");
+      const result = await uploadAvatar(file);
+      if (!result) {
+        throw new Error("upload failed");
       }
-
-      const { uploadURL, objectPath } = await urlRes.json();
-
-      const uploadRes = await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error("Falha ao fazer upload da imagem");
-      }
-
-      const avatarUrl = `/api/storage${objectPath}`;
-      await updateMe.mutateAsync({ avatarUrl });
+      // The backend already updated the user's avatar_storage_path; just
+      // invalidate the cached profile so the new URL renders.
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-
       toast({ title: "Foto de perfil atualizada com sucesso." });
     } catch (err) {
       console.error(err);
       toast({ title: "Erro ao atualizar foto de perfil.", variant: "destructive" });
     } finally {
-      setIsUploadingAvatar(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };

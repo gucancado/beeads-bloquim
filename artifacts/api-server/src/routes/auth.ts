@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Router, IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
@@ -5,19 +6,22 @@ import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, signToken, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
-
-const log = logger.child({ module: "auth" });
 import { loginLimiter, registerLimiter } from "../middlewares/rateLimit";
 import { z } from "zod";
-import { ObjectStorageService } from "../lib/objectStorage";
+import {
+  sanitizeFilename,
+  validateFileUpload,
+} from "@workspace/storage";
+import { getStorage } from "../lib/storage";
+import { requireStorage } from "../lib/featureFlags";
 import {
   AUTH_COOKIE_NAME,
   authCookieOptions,
   clearAuthCookieOptions,
 } from "../lib/cookies";
 
+const log = logger.child({ module: "auth" });
 const router: IRouter = Router();
-const objectStorageService = new ObjectStorageService();
 
 const registerSchema = z.object({
   name: z.string().min(1),
@@ -92,6 +96,19 @@ router.post("/logout", (_req, res) => {
   res.json({ success: true, message: "Logged out" });
 });
 
+function avatarUrlFor(user: { id: string; avatarStoragePath: string | null }): string | null {
+  return user.avatarStoragePath ? `/api/users/${user.id}/avatar` : null;
+}
+
+/**
+ * Avatar URL stored in `users.avatar_url` is denormalised from
+ * `avatar_storage_path` so legacy SELECTs that read `users.avatarUrl` keep
+ * working. Whenever the storage path changes, this must be kept in sync.
+ */
+function denormalisedAvatarUrl(userId: string, storagePath: string | null): string | null {
+  return storagePath ? `/api/users/${userId}/avatar` : null;
+}
+
 router.get("/me", requireAuth, async (req: AuthRequest, res) => {
   const [user] = await db
     .select()
@@ -104,17 +121,19 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  res.json({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, avatarUrl: user.avatarUrl ?? null });
+  res.json({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt,
+    avatarUrl: avatarUrlFor(user),
+  });
 });
-
-const AVATAR_STORAGE_PATH_PREFIX = "/api/storage/objects/";
 
 const updateMeSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  avatarUrl: z.union([
-    z.string().startsWith(AVATAR_STORAGE_PATH_PREFIX),
-    z.null(),
-  ]).optional(),
+  /** Set to null to clear the avatar. To set/replace, use POST /me/avatar/upload-url first. */
+  avatarUrl: z.literal(null).optional(),
 });
 
 router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
@@ -126,30 +145,14 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-  if (parsed.data.avatarUrl !== undefined) updates.avatarUrl = parsed.data.avatarUrl;
+  if (parsed.data.avatarUrl === null) {
+    updates.avatarStoragePath = null;
+    updates.avatarUrl = null;
+  }
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "Validation error", message: "No fields to update" });
     return;
-  }
-
-  if (parsed.data.avatarUrl) {
-    const avatarUrl = parsed.data.avatarUrl;
-    if (avatarUrl.startsWith(AVATAR_STORAGE_PATH_PREFIX)) {
-      const objectPath = `/objects/${avatarUrl.slice(AVATAR_STORAGE_PATH_PREFIX.length)}`;
-      try {
-        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-        const { setObjectAclPolicy } = await import("../lib/objectAcl");
-        await setObjectAclPolicy(objectFile, {
-          owner: req.user!.userId,
-          visibility: "public",
-        });
-      } catch (err) {
-        log.error({ err }, "Failed to set ACL for avatar object");
-        res.status(400).json({ error: "Invalid avatar", message: "Could not associate the uploaded file. Please try uploading again." });
-        return;
-      }
-    }
   }
 
   const [updated] = await db
@@ -163,8 +166,88 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  res.json({ id: updated.id, name: updated.name, email: updated.email, createdAt: updated.createdAt, avatarUrl: updated.avatarUrl ?? null });
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    email: updated.email,
+    createdAt: updated.createdAt,
+    avatarUrl: avatarUrlFor(updated),
+  });
 });
+
+// ---------------------------------------------------------------------------
+// Avatar upload — issues a presigned URL on the `avatars` bucket and updates
+// the user's `avatar_storage_path` to the new path. Frontend reads the avatar
+// via GET /api/users/:userId/avatar (proxied stream).
+// ---------------------------------------------------------------------------
+
+const avatarUploadUrlSchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().regex(/^image\//, "contentType must be an image/* MIME type"),
+  sizeBytes: z.number().int().positive(),
+});
+
+router.post(
+  "/me/avatar/upload-url",
+  requireAuth,
+  requireStorage,
+  async (req: AuthRequest, res) => {
+    const parsed = avatarUploadUrlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "validation_failed", details: parsed.error.issues });
+      return;
+    }
+    const { filename, contentType, sizeBytes } = parsed.data;
+    // Avatars are capped tighter than generic attachments — 5 MB.
+    const validation = validateFileUpload({
+      filename,
+      mimeType: contentType,
+      sizeBytes,
+      maxSizeBytes: 5 * 1024 * 1024,
+    });
+    if (validation) {
+      res.status(400).json({ error: validation.code, message: validation.message });
+      return;
+    }
+
+    const userId = req.user!.userId;
+    const safeName = sanitizeFilename(filename);
+    const objectId = randomUUID();
+    const storagePath = `user/${userId}/avatar/${objectId}-${safeName}`;
+
+    const storage = getStorage();
+    let signed;
+    try {
+      signed = await storage.createUploadUrl({
+        bucket: "avatars",
+        storagePath,
+        contentType,
+      });
+    } catch (err) {
+      log.error({ err, storagePath }, "createUploadUrl failed for avatar");
+      res.status(502).json({ error: "storage_error" });
+      return;
+    }
+
+    // Persist the new path immediately. If the client never PUTs the file the
+    // user effectively has a broken avatar — but no worse than before, and a
+    // future GC job can reconcile orphan paths against bucket contents.
+    const newAvatarUrl = denormalisedAvatarUrl(userId, storagePath);
+    const [updated] = await db
+      .update(users)
+      .set({ avatarStoragePath: storagePath, avatarUrl: newAvatarUrl })
+      .where(eq(users.id, userId))
+      .returning();
+
+    res.status(201).json({
+      uploadUrl: signed.uploadUrl,
+      method: signed.method,
+      headers: signed.headers,
+      expiresAt: signed.expiresAt.toISOString(),
+      avatarUrl: avatarUrlFor(updated),
+    });
+  },
+);
 
 router.get("/me/workspaces", requireAuth, async (req: AuthRequest, res) => {
   const rows = await db

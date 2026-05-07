@@ -1,15 +1,15 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2, Download, Star } from "lucide-react";
 import {
   useListTaskAttachments,
-  useCreateTaskAttachment,
   useDeleteTaskAttachment,
   useUpdateTaskAttachmentKind,
   getListTaskAttachmentsQueryKey,
   customFetch,
 } from "@workspace/api-client-react";
 import type { AttachmentResponse } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
 import { AttachmentThumbnail } from "@/components/tasks/attachments/AttachmentThumbnail";
 import { AttachmentViewerModal } from "@/components/tasks/attachments/AttachmentViewerModal";
@@ -19,44 +19,18 @@ import {
   getAttachmentDownloadUrl,
 } from "@/components/tasks/attachments/attachmentTypes";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const BLOCKED_EXTENSIONS = [".exe", ".bat"];
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const BLOCKED_EXTENSIONS = [".exe", ".bat", ".cmd", ".sh", ".ps1", ".msi", ".scr"];
 
 function validateFile(file: File): string | null {
   if (file.size > MAX_FILE_SIZE) {
-    return "O arquivo excede o limite de 10 MB";
+    return "O arquivo excede o limite de 50 MB";
   }
   const nameLower = file.name.toLowerCase();
   if (BLOCKED_EXTENSIONS.some((ext) => nameLower.endsWith(ext))) {
-    return "Este tipo de arquivo não é permitido (.exe e .bat)";
+    return `Este tipo de arquivo (${BLOCKED_EXTENSIONS.find((e) => nameLower.endsWith(e))}) não é permitido`;
   }
   return null;
-}
-
-async function uploadFileWithAuth(file: File): Promise<{ objectPath: string } | null> {
-  const urlRes = await fetch("/api/storage/uploads/request-url", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
-  });
-
-  if (!urlRes.ok) return null;
-  const { uploadURL, objectPath } = await urlRes.json();
-
-  let putRes: Response;
-  try {
-    putRes = await fetch(uploadURL, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-    });
-  } catch {
-    return null;
-  }
-
-  if (!putRes.ok) return null;
-  return { objectPath };
 }
 
 type AttachmentMode = "full" | "deliverables-readonly";
@@ -124,9 +98,9 @@ function AttachmentsSectionWorkspace({
     query: { enabled: !!taskId },
   });
 
-  const createAttachmentMut = useCreateTaskAttachment();
   const deleteAttachmentMut = useDeleteTaskAttachment();
   const updateKindMut = useUpdateTaskAttachmentKind();
+  const { uploadFile } = useUpload();
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -139,21 +113,15 @@ function AttachmentsSectionWorkspace({
           toast({ title: validationError, variant: "destructive" });
           continue;
         }
-        const uploadResult = await uploadFileWithAuth(file);
-        if (!uploadResult) {
+        const result = await uploadFile(file, {
+          bucket: "attachments",
+          entityKind: "task",
+          entityId: taskId,
+        });
+        if (!result) {
           toast({ title: `Falha ao fazer upload de "${file.name}"`, variant: "destructive" });
           continue;
         }
-        await createAttachmentMut.mutateAsync({
-          workspaceId,
-          taskId,
-          data: {
-            objectPath: uploadResult.objectPath,
-            fileName: file.name,
-            fileSize: file.size,
-            mimeType: file.type || "application/octet-stream",
-          },
-        });
         queryClient.invalidateQueries({ queryKey: attachmentsKey });
       }
     } catch {
@@ -161,7 +129,7 @@ function AttachmentsSectionWorkspace({
     } finally {
       setUploading(false);
     }
-  }, [createAttachmentMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
+  }, [uploadFile, taskId, queryClient, attachmentsKey, toast]);
 
   const handleRemove = useCallback(async (attachmentId: string) => {
     try {
@@ -243,20 +211,7 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl, mode, allowKindTog
     enabled: !!taskId,
   });
 
-  const createMut = useMutation({
-    mutationFn: (data: { objectPath: string; fileName: string; fileSize: number; mimeType: string }) =>
-      customFetch<AttachmentResponse>(`/api/my-tasks/${taskId}/attachments`, {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (attachmentId: string) =>
-      customFetch<{ success: boolean }>(`/api/my-tasks/${taskId}/attachments/${attachmentId}`, {
-        method: "DELETE",
-      }),
-  });
+  const { uploadFile } = useUpload();
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -269,17 +224,15 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl, mode, allowKindTog
           toast({ title: validationError, variant: "destructive" });
           continue;
         }
-        const uploadResult = await uploadFileWithAuth(file);
-        if (!uploadResult) {
+        const result = await uploadFile(file, {
+          bucket: "attachments",
+          entityKind: "task",
+          entityId: taskId,
+        });
+        if (!result) {
           toast({ title: `Falha ao fazer upload de "${file.name}"`, variant: "destructive" });
           continue;
         }
-        await createMut.mutateAsync({
-          objectPath: uploadResult.objectPath,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type || "application/octet-stream",
-        });
         queryClient.invalidateQueries({ queryKey: attachmentsKey });
       }
     } catch {
@@ -287,16 +240,18 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl, mode, allowKindTog
     } finally {
       setUploading(false);
     }
-  }, [createMut, taskId, queryClient, attachmentsKey, toast]);
+  }, [uploadFile, taskId, queryClient, attachmentsKey, toast]);
 
   const handleRemove = useCallback(async (attachmentId: string) => {
     try {
-      await deleteMut.mutateAsync(attachmentId);
+      await customFetch<{ success: boolean }>(`/api/my-tasks/${taskId}/attachments/${attachmentId}`, {
+        method: "DELETE",
+      });
       queryClient.invalidateQueries({ queryKey: attachmentsKey });
     } catch {
       toast({ title: "Erro ao remover anexo", variant: "destructive" });
     }
-  }, [deleteMut, taskId, queryClient, attachmentsKey, toast]);
+  }, [taskId, queryClient, attachmentsKey, toast]);
 
   const handleDownload = useCallback((attachment: AttachmentResponse) => {
     const url = `/api/my-tasks/${taskId}/attachments/${attachment.id}/download`;

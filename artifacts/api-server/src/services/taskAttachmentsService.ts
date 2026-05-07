@@ -1,39 +1,80 @@
 import { db } from "@workspace/db";
-import { tasks, fileUploads, attachmentLinks } from "@workspace/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { tasks, attachments } from "@workspace/db/schema";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import type { BucketName } from "@workspace/storage";
+
+import { getStorage } from "../lib/storage";
 
 export type AttachmentKind = "standard" | "deliverable";
 
 export interface AttachmentRow {
   id: string;
-  fileUploadId: string;
-  objectPath: string;
+  bucket: BucketName;
+  storagePath: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
-  uploadedBy: string;
+  uploadedBy: string | null;
   createdAt: Date;
   kind: AttachmentKind;
 }
 
 export interface AttachmentDownloadInfo {
-  objectPath: string;
+  bucket: BucketName;
+  storagePath: string;
   fileName: string;
-  mimeType: string | null;
+  mimeType: string;
 }
 
 export interface CreateAttachmentInput {
-  objectPath: string;
+  bucket: BucketName;
+  storagePath: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
   kind?: AttachmentKind;
 }
 
+const SELECT_FIELDS = {
+  id: attachments.id,
+  bucket: attachments.bucket,
+  storagePath: attachments.storagePath,
+  fileName: attachments.originalFilename,
+  fileSize: attachments.fileSize,
+  mimeType: attachments.mimeType,
+  uploadedBy: attachments.uploadedBy,
+  createdAt: attachments.createdAt,
+  kind: attachments.kind,
+} as const;
+
+type SelectedRow = {
+  id: string;
+  bucket: string;
+  storagePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedBy: string | null;
+  createdAt: Date;
+  kind: AttachmentKind;
+};
+
+function rowToAttachment(row: SelectedRow): AttachmentRow {
+  return {
+    id: row.id,
+    bucket: row.bucket as BucketName,
+    storagePath: row.storagePath,
+    fileName: row.fileName,
+    fileSize: row.fileSize,
+    mimeType: row.mimeType,
+    uploadedBy: row.uploadedBy,
+    createdAt: row.createdAt,
+    kind: row.kind,
+  };
+}
+
 /**
  * Returns `true` when the given task exists inside the given workspace.
- * Used by the attachment routes to enforce workspace scoping before any
- * downstream DB or storage work runs.
  */
 export async function taskBelongsToWorkspace(
   workspaceId: string,
@@ -54,9 +95,6 @@ export interface TaskOwnership {
 
 /**
  * Returns ownership info for a task, or `null` if the task does not exist.
- * Used by the personal-task attachment routes (`/api/my-tasks`) to decide
- * between 404 (no task), 403 (task belongs to someone else) and 400 (task
- * is a workspace task and must use the workspace endpoint).
  */
 export async function getTaskOwnership(
   taskId: string,
@@ -74,8 +112,7 @@ export async function getTaskOwnership(
 
 /**
  * Returns `(isApprovalTask, parentTaskId)` for a task, or `null` when the
- * task does not exist. Used by attachment routes to redirect approval-task
- * attachment listings to the parent task's deliverables.
+ * task does not exist.
  */
 export async function getApprovalTaskParent(
   taskId: string,
@@ -91,106 +128,64 @@ export async function getApprovalTaskParent(
   return row ?? null;
 }
 
-/** Lists attachments for a task in upload order (oldest first). */
+/** Lists non-deleted attachments for a task in upload order (oldest first). */
 export async function listTaskAttachments(
   taskId: string,
 ): Promise<AttachmentRow[]> {
-  return db
-    .select({
-      id: attachmentLinks.id,
-      fileUploadId: fileUploads.id,
-      objectPath: fileUploads.objectPath,
-      fileName: fileUploads.fileName,
-      fileSize: fileUploads.fileSize,
-      mimeType: fileUploads.mimeType,
-      uploadedBy: fileUploads.uploadedBy,
-      createdAt: attachmentLinks.createdAt,
-      kind: attachmentLinks.kind,
-    })
-    .from(attachmentLinks)
-    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
-    .where(
-      and(
-        eq(attachmentLinks.entityType, "task"),
-        eq(attachmentLinks.entityId, taskId),
-      ),
-    )
-    .orderBy(asc(attachmentLinks.createdAt));
+  const rows = await db
+    .select(SELECT_FIELDS)
+    .from(attachments)
+    .where(and(eq(attachments.taskId, taskId), isNull(attachments.deletedAt)))
+    .orderBy(asc(attachments.createdAt));
+  return rows.map(rowToAttachment);
 }
 
 /**
  * Lists only the `deliverable`-kind attachments of a task. Used to expose
- * deliverables of the parent task on each approval task's attachment listing
- * (read-only view inside the approval modal).
+ * deliverables of the parent task on each approval task's attachment listing.
  */
 export async function listTaskDeliverableAttachments(
   taskId: string,
 ): Promise<AttachmentRow[]> {
-  return db
-    .select({
-      id: attachmentLinks.id,
-      fileUploadId: fileUploads.id,
-      objectPath: fileUploads.objectPath,
-      fileName: fileUploads.fileName,
-      fileSize: fileUploads.fileSize,
-      mimeType: fileUploads.mimeType,
-      uploadedBy: fileUploads.uploadedBy,
-      createdAt: attachmentLinks.createdAt,
-      kind: attachmentLinks.kind,
-    })
-    .from(attachmentLinks)
-    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+  const rows = await db
+    .select(SELECT_FIELDS)
+    .from(attachments)
     .where(
       and(
-        eq(attachmentLinks.entityType, "task"),
-        eq(attachmentLinks.entityId, taskId),
-        eq(attachmentLinks.kind, "deliverable"),
+        eq(attachments.taskId, taskId),
+        eq(attachments.kind, "deliverable"),
+        isNull(attachments.deletedAt),
       ),
     )
-    .orderBy(asc(attachmentLinks.createdAt));
+    .orderBy(asc(attachments.createdAt));
+  return rows.map(rowToAttachment);
 }
 
 /**
- * Creates a `file_uploads` row + `attachment_links` row binding the upload to
- * the task. Returns the joined view used by the HTTP response.
+ * Creates an attachment row scoped to a task. The actual file is uploaded
+ * separately by the client to the presigned URL returned by the storage route.
  */
 export async function createTaskAttachment(
+  workspaceId: string,
   taskId: string,
   actorId: string,
   input: CreateAttachmentInput,
 ): Promise<AttachmentRow> {
-  const [fileUpload] = await db
-    .insert(fileUploads)
+  const [row] = await db
+    .insert(attachments)
     .values({
-      objectPath: input.objectPath,
-      fileName: input.fileName,
+      workspaceId,
+      taskId,
+      bucket: input.bucket,
+      storagePath: input.storagePath,
+      originalFilename: input.fileName,
       fileSize: input.fileSize,
       mimeType: input.mimeType,
+      kind: input.kind ?? "standard",
       uploadedBy: actorId,
     })
-    .returning();
-
-  const [link] = await db
-    .insert(attachmentLinks)
-    .values({
-      fileUploadId: fileUpload.id,
-      entityType: "task",
-      entityId: taskId,
-      kind: input.kind ?? "standard",
-    })
-    .returning();
-
-  return {
-    id: link.id,
-    fileUploadId: fileUpload.id,
-    objectPath: fileUpload.objectPath,
-    fileName: fileUpload.fileName,
-    fileSize: fileUpload.fileSize,
-    mimeType: fileUpload.mimeType,
-    uploadedBy: fileUpload.uploadedBy,
-    createdAt: link.createdAt,
-    kind: link.kind,
-  };
+    .returning(SELECT_FIELDS);
+  return rowToAttachment(row);
 }
 
 /**
@@ -203,92 +198,80 @@ export async function updateTaskAttachmentKind(
   attachmentId: string,
   kind: AttachmentKind,
 ): Promise<AttachmentRow | null> {
-  const [link] = await db
-    .select({ id: attachmentLinks.id })
-    .from(attachmentLinks)
+  const [row] = await db
+    .update(attachments)
+    .set({ kind })
     .where(
       and(
-        eq(attachmentLinks.id, attachmentId),
-        eq(attachmentLinks.entityType, "task"),
-        eq(attachmentLinks.entityId, taskId),
+        eq(attachments.id, attachmentId),
+        eq(attachments.taskId, taskId),
+        isNull(attachments.deletedAt),
       ),
     )
-    .limit(1);
-  if (!link) return null;
-
-  await db
-    .update(attachmentLinks)
-    .set({ kind })
-    .where(eq(attachmentLinks.id, attachmentId));
-
-  const [row] = await db
-    .select({
-      id: attachmentLinks.id,
-      fileUploadId: fileUploads.id,
-      objectPath: fileUploads.objectPath,
-      fileName: fileUploads.fileName,
-      fileSize: fileUploads.fileSize,
-      mimeType: fileUploads.mimeType,
-      uploadedBy: fileUploads.uploadedBy,
-      createdAt: attachmentLinks.createdAt,
-      kind: attachmentLinks.kind,
-    })
-    .from(attachmentLinks)
-    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
-    .where(eq(attachmentLinks.id, attachmentId))
-    .limit(1);
-
-  return row ?? null;
+    .returning(SELECT_FIELDS);
+  return row ? rowToAttachment(row) : null;
 }
 
 /**
- * Deletes the attachment link, then garbage-collects the underlying upload if
- * no other links reference it. Returns `false` when the attachment did not
- * exist for the given task (so the route can return 404).
+ * Soft-deletes an attachment (sets deleted_at). The underlying file remains in
+ * object storage until a future GC job purges it; this preserves history for
+ * comments/activities that may reference the attachment.
+ *
+ * Returns `false` when the attachment does not exist or already deleted.
  */
 export async function deleteTaskAttachment(
   taskId: string,
   attachmentId: string,
 ): Promise<boolean> {
-  const [link] = await db
-    .select({
-      id: attachmentLinks.id,
-      fileUploadId: attachmentLinks.fileUploadId,
-    })
-    .from(attachmentLinks)
+  const [row] = await db
+    .update(attachments)
+    .set({ deletedAt: sql`now()` })
     .where(
       and(
-        eq(attachmentLinks.id, attachmentId),
-        eq(attachmentLinks.entityType, "task"),
-        eq(attachmentLinks.entityId, taskId),
+        eq(attachments.id, attachmentId),
+        eq(attachments.taskId, taskId),
+        isNull(attachments.deletedAt),
       ),
     )
+    .returning({ id: attachments.id });
+  return Boolean(row);
+}
+
+/**
+ * Hard-deletes an attachment from both DB and object storage. Used by admin
+ * tooling and by the GC job; not exposed via the regular delete endpoint.
+ */
+export async function purgeAttachment(
+  attachmentId: string,
+): Promise<void> {
+  const [row] = await db
+    .select({
+      bucket: attachments.bucket,
+      storagePath: attachments.storagePath,
+    })
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
     .limit(1);
-
-  if (!link) return false;
-
-  await db.delete(attachmentLinks).where(eq(attachmentLinks.id, link.id));
-
-  const [otherLinks] = await db
-    .select({ id: attachmentLinks.id })
-    .from(attachmentLinks)
-    .where(eq(attachmentLinks.fileUploadId, link.fileUploadId))
-    .limit(1);
-
-  if (!otherLinks) {
-    await db.delete(fileUploads).where(eq(fileUploads.id, link.fileUploadId));
+  if (!row) return;
+  const storage = getStorage();
+  if (storage.enabled) {
+    try {
+      await storage.remove({
+        bucket: row.bucket as BucketName,
+        storagePath: row.storagePath,
+      });
+    } catch {
+      // ignore — purge proceeds with DB delete even if file is already gone
+    }
   }
-
-  return true;
+  await db.delete(attachments).where(eq(attachments.id, attachmentId));
 }
 
 /**
  * Resolves the storage info needed to stream a task attachment download.
  * Returns `null` if the attachment does not belong to the given task, or
  * (when `requireKind` is provided) when the attachment exists but its
- * `kind` doesn't match. Used to scope approval-task downloads strictly to
- * the parent task's `deliverable` attachments — otherwise an approver who
- * guessed an attachment id could download arbitrary parent files.
+ * `kind` doesn't match.
  */
 export async function getTaskAttachmentForDownload(
   taskId: string,
@@ -296,30 +279,30 @@ export async function getTaskAttachmentForDownload(
   requireKind?: AttachmentKind,
 ): Promise<AttachmentDownloadInfo | null> {
   const conditions = [
-    eq(attachmentLinks.id, attachmentId),
-    eq(attachmentLinks.entityType, "task"),
-    eq(attachmentLinks.entityId, taskId),
+    eq(attachments.id, attachmentId),
+    eq(attachments.taskId, taskId),
+    isNull(attachments.deletedAt),
   ];
   if (requireKind) {
-    conditions.push(eq(attachmentLinks.kind, requireKind));
+    conditions.push(eq(attachments.kind, requireKind));
   }
 
-  const [attachment] = await db
+  const [row] = await db
     .select({
-      id: attachmentLinks.id,
-      objectPath: fileUploads.objectPath,
-      fileName: fileUploads.fileName,
-      mimeType: fileUploads.mimeType,
+      bucket: attachments.bucket,
+      storagePath: attachments.storagePath,
+      fileName: attachments.originalFilename,
+      mimeType: attachments.mimeType,
     })
-    .from(attachmentLinks)
-    .innerJoin(fileUploads, eq(fileUploads.id, attachmentLinks.fileUploadId))
+    .from(attachments)
     .where(and(...conditions))
     .limit(1);
 
-  if (!attachment) return null;
+  if (!row) return null;
   return {
-    objectPath: attachment.objectPath,
-    fileName: attachment.fileName,
-    mimeType: attachment.mimeType,
+    bucket: row.bucket as BucketName,
+    storagePath: row.storagePath,
+    fileName: row.fileName,
+    mimeType: row.mimeType,
   };
 }

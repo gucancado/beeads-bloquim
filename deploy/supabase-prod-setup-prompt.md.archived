@@ -1,0 +1,176 @@
+# Prompt — configuração do Supabase `bloquim-prod`
+
+Use este prompt no Claude (web ou Claude Code) **depois** de:
+
+1. Ter criado o projeto `bloquim-prod` no dashboard do Supabase (region: South America São Paulo, RLS automático ON, automatically expose tables OFF).
+2. Ter conectado um MCP server do Supabase nesse Claude apontando especificamente para o projeto `bloquim-prod`. (No Claude.ai: Settings → Connectors → Supabase → adicionar/trocar para o novo project_ref. No Claude Code: configurar `mcp.json` com o token e project_ref desse projeto.)
+3. Ter o repositório `beeads-bloquim` clonado localmente, com Node 24 e pnpm 9 instalados (apenas necessário se for o Claude Code aplicando o schema).
+
+---
+
+## Como usar
+
+- **Claude AI (web)**: copie o bloco abaixo, cole numa conversa nova com MCP do `bloquim-prod` ativo, e siga as instruções que ele pedir (ex: rodar `drizzle-kit push` na sua máquina e colar a saída).
+- **Claude Code (terminal local)**: rode dentro do diretório do repo. Ele aplica o schema diretamente via shell e usa o MCP para o resto.
+
+---
+
+## Prompt (copie tudo abaixo)
+
+> Você está configurando o projeto Supabase **bloquim-prod** para o app Bloquim/MindTask. O MCP do Supabase nesta sessão está apontado para esse projeto. Sua tarefa tem 5 partes — execute em ordem e me reporte o resultado de cada uma.
+>
+> **Contexto técnico do app**:
+> - Backend Node 24 + Express conecta ao Postgres via `pg.Pool` usando uma connection string de Session pooler (porta 5432). Não usa Supabase Auth, não usa supabase-js no backend.
+> - Schema gerenciado por Drizzle ORM. Migrations SQL versionadas em `lib/db/drizzle/0000_*.sql` até `lib/db/drizzle/0024_*.sql`.
+> - Em produção, frontend e backend ficam atrás do mesmo domínio, roteamento por path (`/` → SPA, `/api/*` → Express).
+> - Storage será Supabase Storage (Fase 3 ainda não implementada — `STORAGE_PROVIDER=disabled` por enquanto), mas já vamos preparar buckets e policies para quando a camada `StorageService` ficar pronta.
+>
+> ### Parte 1 — Sanidade do projeto
+>
+> 1. Chame `mcp__supabase__get_project_url` e me mostre.
+> 2. Chame `mcp__supabase__list_tables` no schema `public`. Espero **0 tabelas** num projeto recém-criado. Se tiver tabelas existentes, **pare** e me alerte — significa que o MCP está apontando pro projeto errado (ou já tem dados que não esperávamos).
+> 3. Chame `mcp__supabase__get_advisors` para ver o estado inicial (deve estar limpo).
+>
+> ### Parte 2 — Aplicar schema do Drizzle
+>
+> Não tente aplicar as 25 migrations do `lib/db/drizzle/` uma por uma via `apply_migration` — é frágil porque o drizzle-kit cria também tabelas internas de tracking. Em vez disso:
+>
+> - **Se você é Claude Code (tem shell)**: rode no terminal do repo:
+>   ```powershell
+>   $env:DATABASE_URL = "<COLE A SESSION POOLER URL DO bloquim-prod COM A SENHA REAL>"
+>   pnpm --filter @workspace/db run push
+>   ```
+>   Ou em bash:
+>   ```bash
+>   DATABASE_URL='<COLE>' pnpm --filter @workspace/db run push
+>   ```
+>   Confirme que o output termina em `[✓] Changes applied`.
+>
+> - **Se você é Claude web (sem shell)**: peça ao usuário para rodar o comando acima na máquina dele e colar o output da saída. Não prossiga sem confirmação.
+>
+> ### Parte 3 — Verificar schema aplicado
+>
+> 1. `mcp__supabase__list_tables` em `public`. Devem aparecer aproximadamente estas tabelas (lista esperada — confira que todas estão presentes):
+>    - `users`
+>    - `workspaces`, `workspace_members`
+>    - `maps`, `map_visited`, `map_text_elements`, `map_shapes`
+>    - `cards`, `card_connections`
+>    - `tasks`, `task_approvals`, `task_activities`, `task_subtasks`, `task_comments`, `task_templates`, `task_template_subtasks`
+>    - `file_uploads`, `attachment_links`
+>    - `user_google_calendar_accounts`, `user_calendar_preferences`
+>
+>    Liste exatamente o que veio e me reporte qualquer divergência.
+>
+> 2. Confirme via `mcp__supabase__execute_sql`:
+>    ```sql
+>    SELECT enumtypid::regtype AS type, array_agg(enumlabel ORDER BY enumsortorder) AS values
+>    FROM pg_enum GROUP BY enumtypid ORDER BY type;
+>    ```
+>    Deve listar enums: `task_status`, `task_priority`, `card_visual_status`, `task_activity_type`, `approval_status`, `approval_mode`, `parent_approval_status`, `schedule_mode`, `attachment_kind`.
+>
+> ### Parte 4 — Storage buckets e policies
+>
+> Crie 3 buckets via `execute_sql` (a tabela `storage.buckets` é manipulada por SQL):
+>
+> ```sql
+> -- Anexos (privados — acesso só via signed URL gerada pelo backend)
+> INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+> VALUES ('bloquim-attachments', 'bloquim-attachments', false, 52428800, NULL)
+> ON CONFLICT (id) DO NOTHING;
+>
+> -- Avatares (privados, signed URL longa cacheada no frontend)
+> INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+> VALUES ('bloquim-avatars', 'bloquim-avatars', false, 5242880,
+>         ARRAY['image/png','image/jpeg','image/webp','image/gif'])
+> ON CONFLICT (id) DO NOTHING;
+>
+> -- Assets públicos do sistema (ícones, imagens institucionais)
+> INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+> VALUES ('bloquim-public-assets', 'bloquim-public-assets', true, 10485760, NULL)
+> ON CONFLICT (id) DO NOTHING;
+> ```
+>
+> Em seguida, crie policies que **bloqueiam acesso direto via anon/authenticated** — todo upload e download passa pelo backend usando a service_role key:
+>
+> ```sql
+> -- Bloquim usa service_role no backend; nenhuma policy adicional para anon/authenticated.
+> -- Garante que RLS está habilitado em storage.objects (já vem ON por padrão no Supabase).
+> ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+>
+> -- Sem policies = sem acesso para anon/authenticated. service_role bypassa RLS,
+> -- então o backend ainda consegue tudo. Bucket público (bloquim-public-assets) é
+> -- servido via CDN do Supabase sem precisar de policy.
+> ```
+>
+> Confirme com:
+> ```sql
+> SELECT id, name, public, file_size_limit FROM storage.buckets ORDER BY id;
+> ```
+>
+> ### Parte 5 — Resumo final para o `.env.production`
+>
+> Me devolva, formatado para colar direto no Easypanel:
+>
+> 1. **Project ref**: extraído do `get_project_url` (parte do subdomínio antes de `.supabase.co`).
+> 2. **Project URL** (`SUPABASE_URL`): saída de `get_project_url`.
+> 3. **Service role key**: chame `mcp__supabase__get_publishable_keys` se a tool existir; se não, instrua o usuário a copiar manualmente do dashboard em **Settings → API → `service_role` key (secret)** e me reportar.
+> 4. **Anon key**: idem (informe que é apenas para uso futuro de Storage público; o backend não usa).
+> 5. **DATABASE_URL prod**: monte a partir da Session pooler URL e da senha real (peça ao usuário se ainda não tiver). Formato:
+>    `postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-1-sa-east-1.pooler.supabase.com:5432/postgres`
+> 6. **Advisors finais**: rode `get_advisors` mais uma vez. Se aparecerem warnings de RLS desabilitado em alguma tabela do `public`, me alerte mas **não corrija automaticamente** — o app Bloquim acessa via service_role e não usa RLS no schema `public`. O alerta é informativo.
+> 7. Rode `get_logs` para o último intervalo curto (ex: últimos 5 minutos) e me mostre se houve algum erro durante o setup.
+>
+> ### Formato esperado da entrega final
+>
+> Me devolva um bloco como este, pronto pra eu colar no painel de Environment do Easypanel para o serviço `bloquim-api`:
+>
+> ```
+> # === bloquim-prod ===
+> DATABASE_URL=postgresql://postgres.XXXX:XXXX@aws-1-sa-east-1.pooler.supabase.com:5432/postgres
+> SUPABASE_URL=https://XXXX.supabase.co
+> SUPABASE_SERVICE_ROLE_KEY=<chave>
+> # Buckets já criados:
+> SUPABASE_STORAGE_BUCKET_ATTACHMENTS=bloquim-attachments
+> SUPABASE_STORAGE_BUCKET_AVATARS=bloquim-avatars
+> SUPABASE_STORAGE_BUCKET_PUBLIC=bloquim-public-assets
+> ```
+>
+> Mais um bloco com observações:
+>
+> - Lista de tabelas criadas vs esperadas (e qualquer diferença).
+> - Lista de buckets criados.
+> - Lista de advisors finais (mesmo que apenas informativos).
+> - Quaisquer erros encontrados nos logs.
+>
+> **Importante**:
+>
+> - **Nunca cole a service_role key em conversas públicas ou commit no Git.**
+> - Não habilite RLS nas tabelas do `public` — quebraria o app, que não usa Supabase Auth.
+> - Não rode `apply_migration` para o schema do app — use `drizzle-kit push` como instruído na Parte 2.
+> - Se algo falhar, **pare e reporte** em vez de tentar corrigir por conta própria. Schema de prod merece cuidado.
+
+---
+
+## Checklist do que você (humano) precisa fazer antes
+
+- [ ] Criar projeto `bloquim-prod` no Supabase (dashboard).
+- [ ] Anotar a senha do banco gerada na criação.
+- [ ] Conectar o MCP do Supabase na conversa do Claude apontando para `bloquim-prod`.
+- [ ] Ter o repositório `beeads-bloquim` clonado localmente com pnpm install já feito.
+- [ ] Colar o prompt acima.
+
+## Depois do prompt rodar
+
+1. Cole o bloco de envs final no campo Environment do serviço `bloquim-api` no Easypanel (aba Environment).
+2. Adicione também as envs que NÃO vêm do Supabase (gere com openssl):
+   ```
+   JWT_SECRET=<openssl rand -hex 32>
+   INTEGRATIONS_ENCRYPTION_KEY=<openssl rand -base64 32>
+   ALLOWED_ORIGINS=https://<seu-dominio>
+   API_PORT=5000
+   NODE_ENV=production
+   LOG_LEVEL=info
+   STORAGE_PROVIDER=disabled
+   GOOGLE_CALENDAR_ENABLED=false
+   ```
+3. Faça o primeiro deploy seguindo `deploy/README.md`.

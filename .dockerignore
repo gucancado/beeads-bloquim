@@ -1,0 +1,47 @@
+.git
+.github
+.gitignore
+.gitattributes
+
+# Local env files — secrets should come from the Easypanel UI
+.env
+.env.local
+.env.*.local
+
+# Editor/OS junk
+.vscode
+.idea
+.cursor
+.DS_Store
+Thumbs.db
+
+# Replit metadata (build images don't need this)
+.replit
+.replitignore
+.cache
+.local
+.canvas
+.expo
+.expo-shared
+
+# Existing build output (will be rebuilt inside the image)
+**/node_modules
+**/dist
+**/out-tsc
+**/.turbo
+*.tsbuildinfo
+
+# Logs and reports
+*.log
+**/coverage
+**/test-results
+
+# Plans / docs that aren't needed in the image
+artifacts/mockup-sandbox
+artifacts/*/test-results
+attached_assets
+
+# Already covered, but explicit:
+**/pnpm-debug.log
+**/yarn-error.log
+**/npm-debug.log

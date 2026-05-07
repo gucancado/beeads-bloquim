@@ -1,7 +1,6 @@
 import { Router, IRouter } from "express";
-import { Readable } from "stream";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks, fileUploads, attachmentLinks } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -15,12 +14,11 @@ import { tryActivateTask } from "../services/taskActivation";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { getStorage } from "../lib/storage";
 import { parseDateNoon } from "../services/taskVisualSyncService";
 import {
   getTaskOwnership,
   listTaskAttachments,
-  createTaskAttachment,
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
 } from "../services/taskAttachmentsService";
@@ -183,7 +181,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
-      attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachment_links WHERE entity_type = 'task' AND entity_id = ${tasks.id})`,
+      attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachments WHERE task_id = ${tasks.id} AND deleted_at IS NULL)`,
       subtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
       subtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
       commentCount: sql<number>`((SELECT COUNT(*) FROM task_comments WHERE task_id = ${tasks.id}) + (SELECT COUNT(*) FROM task_comments tc JOIN tasks ct ON ct.id = tc.task_id WHERE ct.parent_task_id = ${tasks.id} AND ct.is_approval_task = true))`,
@@ -703,18 +701,10 @@ router.put("/:taskId/subtasks", requireAuth, async (req: AuthRequest, res) => {
   return res.json(result);
 });
 
-const createAttachmentSchema = z.object({
-  objectPath: z.string().min(1),
-  fileName: z.string().min(1),
-  fileSize: z.number().int().positive(),
-  mimeType: z.string().min(1),
-  kind: z.enum(["standard", "deliverable"]).optional(),
-});
-
 /**
  * Authorize a personal-task attachment request. Returns the HTTP error
  * payload to send (and the route should `return` immediately), or `null`
- * when the caller may proceed. Centralised so all 4 attachment routes apply
+ * when the caller may proceed. Centralised so all attachment routes apply
  * the same 404 / 403 / 400 contract.
  */
 async function authorizePersonalTaskAccess(
@@ -740,21 +730,9 @@ router.get("/:taskId/attachments", requireAuth, async (req: AuthRequest, res) =>
   return res.json(await listTaskAttachments(taskId));
 });
 
-router.post("/:taskId/attachments", requireAuth, async (req: AuthRequest, res) => {
-  const userId = req.user!.userId;
-  const { taskId } = req.params;
-
-  const parsed = createAttachmentSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Validation error", message: parsed.error.message });
-  }
-
-  const denied = await authorizePersonalTaskAccess(taskId, userId);
-  if (denied) return res.status(denied.status).json(denied.body);
-
-  const created = await createTaskAttachment(taskId, userId, parsed.data);
-  return res.status(201).json(created);
-});
+// Note: POST /:taskId/attachments is removed in the new storage flow. The
+// client now calls POST /api/storage/uploads/request-url which both creates
+// the attachment row AND returns a presigned URL in a single call.
 
 router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
@@ -769,8 +747,6 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: Aut
   return res.json({ success: true });
 });
 
-const objectStorageService = new ObjectStorageService();
-
 router.get("/:taskId/attachments/:attachmentId/download", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const { taskId, attachmentId } = req.params;
@@ -781,26 +757,26 @@ router.get("/:taskId/attachments/:attachmentId/download", requireAuth, async (re
   const attachment = await getTaskAttachmentForDownload(taskId, attachmentId);
   if (!attachment) return res.status(404).json({ error: "Attachment not found" });
 
+  const storage = getStorage();
+  if (!storage.enabled) {
+    return res.status(503).json({ error: "storage_disabled" });
+  }
+
   try {
-    const objectFile = await objectStorageService.getObjectEntityFile(attachment.objectPath);
-    const response = await objectStorageService.downloadObject(objectFile);
-
-    const encoded = encodeURIComponent(attachment.fileName).replace(/'/g, "%27");
-    res.setHeader("Content-Disposition", `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`);
-    res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
-    response.headers.forEach((value, key) => {
-      if (key.toLowerCase() !== "content-disposition" && key.toLowerCase() !== "content-type") {
-        res.setHeader(key, value);
-      }
+    const stream = await storage.getReadStream({
+      bucket: attachment.bucket,
+      storagePath: attachment.storagePath,
     });
-    res.status(200);
-
-    if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
+    res.setHeader("Content-Type", attachment.mimeType || stream.contentType);
+    if (stream.contentLength !== undefined) {
+      res.setHeader("Content-Length", String(stream.contentLength));
     }
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
+    );
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    return stream.stream.pipe(res);
   } catch (error) {
     log.error({ err: error }, "Error downloading attachment");
     return res.status(500).json({ error: "Failed to download attachment" });

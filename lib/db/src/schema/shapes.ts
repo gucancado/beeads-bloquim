@@ -8,7 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 import { maps } from "./maps";
-import { fileUploads } from "./attachments";
+import { attachments } from "./attachments";
 
 export const mapShapes = pgTable("map_shapes", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -28,7 +28,8 @@ export const mapShapes = pgTable("map_shapes", {
   y1: doublePrecision("y1"),
   x2: doublePrecision("x2"),
   y2: doublePrecision("y2"),
-  fileUploadId: uuid("file_upload_id").references(() => fileUploads.id, {
+  /** Image shapes reference an attachments row in the `attachments` bucket. */
+  attachmentId: uuid("attachment_id").references(() => attachments.id, {
     onDelete: "set null",
   }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -50,11 +51,11 @@ export const insertMapShapeSchema = z
     y1: z.number().nullable().optional(),
     x2: z.number().nullable().optional(),
     y2: z.number().nullable().optional(),
-    fileUploadId: z.string().uuid().nullable().optional(),
+    attachmentId: z.string().uuid().nullable().optional(),
   })
-  .refine((d) => d.type !== "image" || !!d.fileUploadId, {
-    message: "fileUploadId is required when type is image",
-    path: ["fileUploadId"],
+  .refine((d) => d.type !== "image" || !!d.attachmentId, {
+    message: "attachmentId is required when type is image",
+    path: ["attachmentId"],
   });
 
 export const updateMapShapeSchema = z.object({
