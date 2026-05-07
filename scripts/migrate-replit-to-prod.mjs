@@ -117,6 +117,22 @@ function parseObjectPath(path) {
   return { bucketName: parts[0], objectName: parts.slice(1).join("/") };
 }
 
+/**
+ * file_uploads.object_path is stored as the app's "external" path
+ * (e.g. "/objects/uploads/<uuid>"). Convert to the actual Replit storage
+ * location by stripping "/objects/" and prepending PRIVATE_OBJECT_DIR.
+ *
+ * Idempotent: if the path is already absolute (starts with "/replit-objstore-"
+ * or just doesn't have the "/objects/" prefix), returns as-is.
+ */
+function resolveReplitObjectPath(objectPathFromDb) {
+  if (objectPathFromDb.startsWith("/objects/")) {
+    const entityId = objectPathFromDb.slice("/objects/".length); // "uploads/<uuid>"
+    return `${REPLIT_PRIVATE_OBJECT_DIR}/${entityId}`;
+  }
+  return objectPathFromDb;
+}
+
 async function replitObjectExists(objectPath) {
   try {
     const { bucketName, objectName } = parseObjectPath(objectPath);
@@ -369,22 +385,24 @@ async function migrateAttachments() {
     const newStoragePath = `workspace/${r.derived_workspace_id}/${r.entity_type}/${r.entity_id}/${newAttachmentId}-${filename}`;
 
     // Upload object to R2
+    const replitObjectPath = resolveReplitObjectPath(r.object_path);
     let objectMoved = false;
     if (DRY_RUN) {
-      console.log(`  DRY: would copy ${r.object_path} → s3://${R2_ATTACHMENTS}/${newStoragePath}`);
+      const exists = await replitObjectExists(replitObjectPath);
+      console.log(`  DRY: would copy ${replitObjectPath} ${exists ? "✓" : "✗ NOT FOUND"} → s3://${R2_ATTACHMENTS}/${newStoragePath}`);
       objectMoved = true;
     } else {
       try {
         if (await r2Has(R2_ATTACHMENTS, newStoragePath)) {
           objectMoved = true;
         } else {
-          const obj = await replitDownload(r.object_path);
+          const obj = await replitDownload(replitObjectPath);
           await r2Put(R2_ATTACHMENTS, newStoragePath, obj.body, r.mime_type || obj.contentType);
           objectMoved = true;
           copiedObjects++;
         }
       } catch (e) {
-        console.error(`  ERR object ${r.object_path} → R2: ${e.message}`);
+        console.error(`  ERR object ${r.object_path} (resolved: ${replitObjectPath}) → R2: ${e.message}`);
         errors++;
         continue;
       }
