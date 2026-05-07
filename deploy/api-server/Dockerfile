@@ -13,8 +13,11 @@ WORKDIR /repo
 # Copy the entire monorepo (pruned via .dockerignore)
 COPY . .
 
-# Install all workspace deps with the lockfile
-RUN pnpm install --frozen-lockfile
+# Install all workspace deps with the lockfile.
+# --prod=false forces inclusion of devDependencies even when NODE_ENV=production
+# is injected by the build platform (Coolify/Easypanel set it by default).
+# tsx, esbuild, etc. live in devDependencies and are needed for the build step.
+RUN pnpm install --frozen-lockfile --prod=false
 
 # Build the api-server (esbuild → dist/index.cjs)
 RUN pnpm --filter @workspace/api-server build

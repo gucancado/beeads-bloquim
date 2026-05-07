@@ -10,7 +10,9 @@ WORKDIR /repo
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
+# --prod=false ensures vite, @vitejs/plugin-react, tailwind, etc. (devDeps) are
+# installed even when NODE_ENV=production is injected by the build platform.
+RUN pnpm install --frozen-lockfile --prod=false
 
 # Build args for Vite. The frontend hits the API via the same origin (path /api),
 # so VITE_API_BASE_URL is left unset on purpose (no proxy in prod).
