@@ -4,6 +4,7 @@ import { workspaces, workspaceMembers, users, maps, cards, tasks } from "@worksp
 import { eq, and, inArray, sql, ne } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
+import { invalidateRole, invalidateWorkspace } from "../lib/permissionsCache";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -156,6 +157,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     userId,
     role: "admin",
   });
+  invalidateRole(workspace.id, userId);
 
   res.status(201).json({ ...workspace, role: "admin" });
 });
@@ -249,6 +251,7 @@ router.patch("/:workspaceId/hidden", requireAuth, requireWorkspaceRole(["admin"]
 
 router.delete("/:workspaceId", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
   await db.delete(workspaces).where(eq(workspaces.id, req.params.workspaceId));
+  invalidateWorkspace(req.params.workspaceId);
   res.json({ success: true, message: "Workspace deleted" });
 });
 
@@ -331,6 +334,7 @@ router.post("/:workspaceId/members", requireAuth, requireWorkspaceRole(["admin"]
     .insert(workspaceMembers)
     .values({ workspaceId: req.params.workspaceId, userId: targetUser.id, role: parsed.data.role })
     .returning();
+  invalidateRole(req.params.workspaceId, targetUser.id);
 
   res.status(201).json({
     ...member,
@@ -367,6 +371,7 @@ async function handleUpdateMemberRole(req: AuthRequest, res: Response) {
     .set({ role: parsed.data.role })
     .where(and(eq(workspaceMembers.id, memberId), eq(workspaceMembers.workspaceId, workspaceId)))
     .returning();
+  invalidateRole(workspaceId, updated.userId);
 
   const [user] = await db.select().from(users).where(eq(users.id, updated.userId)).limit(1);
 
@@ -382,7 +387,14 @@ router.put("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(
 
 router.delete("/:workspaceId/members/:memberId", requireAuth, requireWorkspaceRole(["admin"]), async (req, res) => {
   const { workspaceId, memberId } = req.params;
+  // Capture userId before delete so we can invalidate the right cache key.
+  const [target] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.id, memberId), eq(workspaceMembers.workspaceId, workspaceId)))
+    .limit(1);
   await db.delete(workspaceMembers).where(and(eq(workspaceMembers.id, memberId), eq(workspaceMembers.workspaceId, workspaceId)));
+  if (target) invalidateRole(workspaceId, target.userId);
   res.json({ success: true, message: "Member removed" });
 });
 

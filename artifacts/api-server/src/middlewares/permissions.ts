@@ -8,10 +8,31 @@ import {
 } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { AuthRequest } from "./auth";
+import { getCachedRole, setCachedRole } from "../lib/permissionsCache";
 
 type WorkspaceRole = "admin" | "editor" | "executor";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function loadRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
+  const cached = getCachedRole(workspaceId, userId);
+  if (cached !== undefined) return cached;
+
+  const [member] = await db
+    .select({ role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  const role = (member?.role as WorkspaceRole) ?? null;
+  setCachedRole(workspaceId, userId, role);
+  return role;
+}
 
 export function requireWorkspaceRole(allowedRoles: WorkspaceRole[]) {
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -28,28 +49,19 @@ export function requireWorkspaceRole(allowedRoles: WorkspaceRole[]) {
       return;
     }
 
-    const [member] = await db
-      .select()
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.userId, userId)
-        )
-      )
-      .limit(1);
+    const role = await loadRole(workspaceId, userId);
 
-    if (!member) {
+    if (!role) {
       res.status(403).json({ error: "Forbidden", message: "Not a member of this workspace" });
       return;
     }
 
-    if (!allowedRoles.includes(member.role as WorkspaceRole)) {
+    if (!allowedRoles.includes(role)) {
       res.status(403).json({ error: "Forbidden", message: "Insufficient permissions" });
       return;
     }
 
-    (req as any).memberRole = member.role;
+    (req as any).memberRole = role;
     next();
   };
 }
@@ -169,16 +181,5 @@ export async function requireConnectionInMap(
 }
 
 export async function getMemberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
-  const [member] = await db
-    .select()
-    .from(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, userId)
-      )
-    )
-    .limit(1);
-
-  return (member?.role as WorkspaceRole) ?? null;
+  return loadRole(workspaceId, userId);
 }
