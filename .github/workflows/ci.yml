@@ -52,10 +52,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply DB schema
-        run: |
-          # drizzle-kit push reads DATABASE_URL from env when no --env-file is given;
-          # bypass the package script (which insists on ../../.env) by calling the bin directly.
-          node lib/db/node_modules/drizzle-kit/bin.cjs push --config lib/db/drizzle.config.ts --force
+        # drizzle-kit resolves `schema: "./src/schema/*.ts"` from the cwd, not
+        # from the config file path. Run from inside lib/db so the relative
+        # glob actually finds the schema files.
+        working-directory: lib/db
+        run: node node_modules/drizzle-kit/bin.cjs push --config ./drizzle.config.ts --force
 
       - name: Build api-server
         run: pnpm --filter @workspace/api-server run build
