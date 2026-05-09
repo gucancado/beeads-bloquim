@@ -6,6 +6,20 @@ import { users, workspaces } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 
+// Tests delete users and workspaces. If they ever run against the production
+// database, they will wipe real data. Match by project ref (unique per
+// Supabase project) — not by pooler host, which is shared regionally.
+const PROD_PROJECT_REFS = ["ljilttjsrceddoydnneu"];
+const dbUrl = process.env.DATABASE_URL ?? "";
+for (const ref of PROD_PROJECT_REFS) {
+  if (dbUrl.includes(ref)) {
+    throw new Error(
+      `Refusing to run tests: DATABASE_URL points at production project ` +
+        `"${ref}". Set DATABASE_URL to a disposable test database first.`,
+    );
+  }
+}
+
 export type TestUser = {
   email: string;
   password: string;

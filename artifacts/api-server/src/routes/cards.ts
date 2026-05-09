@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { cards, tasks, cardConnections, taskActivities, users } from "@workspace/db/schema";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
-import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
+import { requireWorkspaceRole, requireCardInMap, requireMapInWorkspace, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 import { toVisualStatus } from "../services/taskVisualSyncService";
@@ -69,7 +69,7 @@ function getApprovalTaskStatusForCards(parentStatus: string): TaskStatus {
   }
 }
 
-router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
+router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireMapInWorkspace, async (req: AuthRequest, res) => {
   const parsed = createCardSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
@@ -106,7 +106,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
   res.status(201).json(updated);
 });
 
-router.get("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req, res) => {
+router.get("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), requireCardInMap, async (req, res) => {
   const { cardId } = req.params;
 
   const [card] = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
@@ -124,7 +124,7 @@ router.get("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
   res.json({ ...card, task });
 });
 
-router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
+router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireCardInMap, async (req, res) => {
   const parsed = updateCardSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error" });
@@ -161,7 +161,7 @@ router.put("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), a
   res.json(updated);
 });
 
-router.delete("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
+router.delete("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireCardInMap, async (req, res) => {
   const { cardId } = req.params;
 
   await db.transaction(async (tx) => {
@@ -183,7 +183,7 @@ router.delete("/:cardId", requireAuth, requireWorkspaceRole(["admin", "editor"])
   res.json({ success: true, message: "Card deleted" });
 });
 
-router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
+router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireCardInMap, async (req: AuthRequest, res) => {
   const { cardId, workspaceId, mapId } = req.params;
 
   const [card] = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
@@ -246,7 +246,7 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
   res.status(201).json(task);
 });
 
-router.delete("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req, res) => {
+router.delete("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireCardInMap, async (req, res) => {
   const { cardId } = req.params;
 
   const [card] = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
@@ -264,7 +264,7 @@ router.delete("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "edit
   res.json({ success: true, message: "Task unlinked and deleted" });
 });
 
-router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/:cardId/task/status", requireAuth, requireCardInMap, async (req: AuthRequest, res) => {
   const { cardId, workspaceId } = req.params;
   const userId = req.user!.userId;
 
@@ -495,7 +495,7 @@ router.patch("/:cardId/task/status", requireAuth, async (req: AuthRequest, res) 
   res.json(updatedTask);
 });
 
-router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
+router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireCardInMap, async (req: AuthRequest, res) => {
   const { cardId } = req.params;
   const userId = req.user!.userId;
 

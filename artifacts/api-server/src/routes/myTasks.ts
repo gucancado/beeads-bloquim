@@ -497,40 +497,46 @@ router.patch("/:taskId/association", requireAuth, async (req: AuthRequest, res) 
     updateData.mapId = parsed.data.mapId;
   }
 
-  const [updated] = await db.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
+  // Wrap the mutating sequence (UPDATE task + DELETE old card + INSERT new card)
+  // in a transaction. Without this, a crash between the DELETE and the INSERT
+  // leaves the task pointing at a workspace it has no card in.
+  const updated = await db.transaction(async (tx) => {
+    const [u] = await tx.update(tasks).set(updateData).where(eq(tasks.id, taskId)).returning();
 
-  const effectiveNewMapId = updateData.mapId !== undefined ? (updateData.mapId as string | null) : existing.mapId;
-  const previousMapId = existing.mapId;
-  const mapChanged = effectiveNewMapId !== previousMapId;
+    const effectiveNewMapId = updateData.mapId !== undefined ? (updateData.mapId as string | null) : existing.mapId;
+    const previousMapId = existing.mapId;
+    const mapChanged = effectiveNewMapId !== previousMapId;
 
-  if (mapChanged) {
-    if (previousMapId) {
-      await db.delete(cards).where(and(eq(cards.mapId, previousMapId), eq(cards.taskId, taskId)));
-    }
+    if (mapChanged) {
+      if (previousMapId) {
+        await tx.delete(cards).where(and(eq(cards.mapId, previousMapId), eq(cards.taskId, taskId)));
+      }
 
-    if (effectiveNewMapId !== null) {
-      const [existingCard] = await db
-        .select({ id: cards.id })
-        .from(cards)
-        .where(and(eq(cards.mapId, effectiveNewMapId), eq(cards.taskId, taskId)));
+      if (effectiveNewMapId !== null) {
+        const [existingCard] = await tx
+          .select({ id: cards.id })
+          .from(cards)
+          .where(and(eq(cards.mapId, effectiveNewMapId), eq(cards.taskId, taskId)));
 
-      if (!existingCard) {
-        const overdue = computeOverdue(existing.dueDate, existing.status ?? "pending");
-        const statusVisual = overdue && existing.status !== "completed" && existing.status !== "blocked" && existing.status !== "draft"
-          ? "overdue"
-          : (existing.status as "pending" | "in_progress" | "completed" | "blocked" | "draft") ?? "pending";
+        if (!existingCard) {
+          const overdue = computeOverdue(existing.dueDate, existing.status ?? "pending");
+          const statusVisual = overdue && existing.status !== "completed" && existing.status !== "blocked" && existing.status !== "draft"
+            ? "overdue"
+            : (existing.status as "pending" | "in_progress" | "completed" | "blocked" | "draft") ?? "pending";
 
-        await db.insert(cards).values({
-          mapId: effectiveNewMapId,
-          taskId,
-          title: existing.title,
-          statusVisual,
-          positionX: 0,
-          positionY: 0,
-        });
+          await tx.insert(cards).values({
+            mapId: effectiveNewMapId,
+            taskId,
+            title: existing.title,
+            statusVisual,
+            positionX: 0,
+            positionY: 0,
+          });
+        }
       }
     }
-  }
+    return u;
+  });
 
   return res.json(updated);
 });
@@ -683,19 +689,24 @@ router.put("/:taskId/subtasks", requireAuth, async (req: AuthRequest, res) => {
 
   const incoming = parsed.data.subtasks.filter(s => s.text.trim() !== "");
 
-  await db.delete(subtasks).where(eq(subtasks.taskId, taskId));
+  // Atomic delete-then-insert: a partial failure between the two would
+  // leave the task with zero subtasks, even though the client expected its
+  // payload to land.
+  await db.transaction(async (tx) => {
+    await tx.delete(subtasks).where(eq(subtasks.taskId, taskId));
 
-  if (incoming.length > 0) {
-    await db.insert(subtasks).values(
-      incoming.map((s, idx) => ({
-        id: s.id,
-        taskId,
-        text: s.text.trim(),
-        completed: s.completed ?? false,
-        order: s.order ?? idx,
-      }))
-    );
-  }
+    if (incoming.length > 0) {
+      await tx.insert(subtasks).values(
+        incoming.map((s, idx) => ({
+          id: s.id,
+          taskId,
+          text: s.text.trim(),
+          completed: s.completed ?? false,
+          order: s.order ?? idx,
+        }))
+      );
+    }
+  });
 
   const result = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
   return res.json(result);

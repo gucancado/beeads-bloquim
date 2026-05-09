@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { taskComments, cards, tasks, users, workspaceMembers } from "@workspace/db/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
-import { requireWorkspaceRole } from "../middlewares/permissions";
+import { requireWorkspaceRole, requireCardInMap } from "../middlewares/permissions";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -16,6 +16,7 @@ router.get(
   "/:cardId/comments",
   requireAuth,
   requireWorkspaceRole(["admin", "editor", "executor"]),
+  requireCardInMap,
   async (req: AuthRequest, res) => {
     const { cardId } = req.params;
 
@@ -50,6 +51,7 @@ router.post(
   "/:cardId/comments",
   requireAuth,
   requireWorkspaceRole(["admin", "editor", "executor"]),
+  requireCardInMap,
   async (req: AuthRequest, res) => {
     const { cardId } = req.params;
     const userId = req.user!.userId;
@@ -81,14 +83,29 @@ router.patch(
   "/:cardId/comments/:commentId",
   requireAuth,
   requireWorkspaceRole(["admin", "editor", "executor"]),
+  requireCardInMap,
   async (req: AuthRequest, res) => {
-    const { workspaceId, commentId } = req.params;
+    const { workspaceId, cardId, commentId } = req.params;
     const userId = req.user!.userId;
+
+    // requireCardInMap already verified card is in this workspace's map.
+    // Now verify the comment is on the task this card points at — without
+    // this, an admin/author could flip the `hidden` flag on any comment
+    // in any workspace just by passing a real cardId from their workspace.
+    const [card] = await db
+      .select({ taskId: cards.taskId })
+      .from(cards)
+      .where(eq(cards.id, cardId))
+      .limit(1);
+    if (!card?.taskId) {
+      res.status(404).json({ error: "Not found", message: "Card has no task" });
+      return;
+    }
 
     const [comment] = await db
       .select()
       .from(taskComments)
-      .where(eq(taskComments.id, commentId))
+      .where(and(eq(taskComments.id, commentId), eq(taskComments.taskId, card.taskId)))
       .limit(1);
 
     if (!comment) {
@@ -113,7 +130,7 @@ router.patch(
     const [updated] = await db
       .update(taskComments)
       .set({ hidden: !comment.hidden, updatedAt: new Date() })
-      .where(eq(taskComments.id, commentId))
+      .where(and(eq(taskComments.id, commentId), eq(taskComments.taskId, card.taskId)))
       .returning();
 
     res.json(updated);

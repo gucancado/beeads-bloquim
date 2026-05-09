@@ -1,6 +1,11 @@
 import { Response, NextFunction } from "express";
 import { db } from "@workspace/db";
-import { workspaceMembers } from "@workspace/db/schema";
+import {
+  workspaceMembers,
+  cards,
+  cardConnections,
+  maps,
+} from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { AuthRequest } from "./auth";
 
@@ -47,6 +52,120 @@ export function requireWorkspaceRole(allowedRoles: WorkspaceRole[]) {
     (req as any).memberRole = member.role;
     next();
   };
+}
+
+/**
+ * Validates that :cardId belongs to :mapId and :mapId belongs to :workspaceId.
+ * Without this, a user with a valid membership in workspace A can pass a
+ * cardId from workspace B in the URL and have requireWorkspaceRole pass —
+ * because requireWorkspaceRole only checks membership in :workspaceId, not
+ * that the rest of the URL refers to that workspace's resources.
+ *
+ * Run AFTER requireWorkspaceRole.
+ */
+export async function requireCardInMap(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const { workspaceId, mapId, cardId } = req.params;
+  if (!cardId || !mapId || !workspaceId) {
+    res.status(400).json({ error: "Bad Request", message: "missing path params" });
+    return;
+  }
+  if (!UUID_REGEX.test(cardId) || !UUID_REGEX.test(mapId)) {
+    res.status(400).json({ error: "Bad Request", message: "invalid id" });
+    return;
+  }
+
+  const [row] = await db
+    .select({ id: cards.id })
+    .from(cards)
+    .innerJoin(maps, eq(maps.id, cards.mapId))
+    .where(
+      and(
+        eq(cards.id, cardId),
+        eq(cards.mapId, mapId),
+        eq(maps.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  next();
+}
+
+/**
+ * Validates that :mapId belongs to :workspaceId. Run AFTER requireWorkspaceRole.
+ */
+export async function requireMapInWorkspace(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const { workspaceId, mapId } = req.params;
+  if (!mapId || !workspaceId) {
+    res.status(400).json({ error: "Bad Request", message: "missing path params" });
+    return;
+  }
+  if (!UUID_REGEX.test(mapId)) {
+    res.status(400).json({ error: "Bad Request", message: "invalid id" });
+    return;
+  }
+
+  const [row] = await db
+    .select({ id: maps.id })
+    .from(maps)
+    .where(and(eq(maps.id, mapId), eq(maps.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  next();
+}
+
+/**
+ * Validates that :connectionId belongs to :mapId, and :mapId belongs to
+ * :workspaceId. Run AFTER requireWorkspaceRole.
+ */
+export async function requireConnectionInMap(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const { workspaceId, mapId, connectionId } = req.params;
+  if (!connectionId || !mapId || !workspaceId) {
+    res.status(400).json({ error: "Bad Request", message: "missing path params" });
+    return;
+  }
+  if (!UUID_REGEX.test(connectionId) || !UUID_REGEX.test(mapId)) {
+    res.status(400).json({ error: "Bad Request", message: "invalid id" });
+    return;
+  }
+
+  const [row] = await db
+    .select({ id: cardConnections.id })
+    .from(cardConnections)
+    .innerJoin(maps, eq(maps.id, cardConnections.mapId))
+    .where(
+      and(
+        eq(cardConnections.id, connectionId),
+        eq(cardConnections.mapId, mapId),
+        eq(maps.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  next();
 }
 
 export async function getMemberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
