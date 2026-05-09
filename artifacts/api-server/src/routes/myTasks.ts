@@ -205,7 +205,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       sql`${tasks.dueDate} ASC NULLS LAST`,
       sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
       asc(tasks.createdAt)
-    );
+    )
+    .limit(500);
 
   return res.json(taskList);
 });
@@ -432,7 +433,8 @@ router.get("/:taskId/activities", requireAuth, async (req: AuthRequest, res) => 
     .from(taskActivities)
     .leftJoin(users, eq(taskActivities.actorId, users.id))
     .where(eq(taskActivities.taskId, taskId))
-    .orderBy(asc(taskActivities.createdAt));
+    .orderBy(asc(taskActivities.createdAt))
+    .limit(200);
 
   return res.json(activities);
 });

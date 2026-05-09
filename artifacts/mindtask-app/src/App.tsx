@@ -17,7 +17,14 @@ import SettingsIntegrationsPage from "@/pages/settings/integrations";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { throwOnError: false, retry: false },
+    queries: {
+      throwOnError: false,
+      retry: false,
+      // Default staleTime is 0 — every component mount triggers a refetch.
+      // 30s kills the redundant refetch storm; routes that need fresher data
+      // (canvas map polling) override per-query.
+      staleTime: 30_000,
+    },
     mutations: { throwOnError: false },
   },
 });

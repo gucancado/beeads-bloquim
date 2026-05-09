@@ -28,7 +28,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       ),
     )
     .where(eq(userMapAccess.userId, userId))
-    .orderBy(desc(userMapAccess.lastAccessedAt));
+    .orderBy(desc(userMapAccess.lastAccessedAt))
+    .limit(50);
 
   res.json(rows);
 });

@@ -5,6 +5,7 @@ import {
   uuid,
   doublePrecision,
   boolean,
+  index,
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 import { maps } from "./maps";
@@ -34,7 +35,9 @@ export const mapShapes = pgTable("map_shapes", {
   }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_map_shapes_map").on(table.mapId),
+]);
 
 export const insertMapShapeSchema = z
   .object({

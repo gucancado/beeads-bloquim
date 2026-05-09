@@ -5,6 +5,7 @@ import {
   uuid,
   doublePrecision,
   integer,
+  index,
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 import { maps } from "./maps";
@@ -23,7 +24,9 @@ export const mapTextElements = pgTable("map_text_elements", {
   color: text("color").notNull().default("#374151"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_map_text_elements_map").on(table.mapId),
+]);
 
 export const insertMapTextElementSchema = z.object({
   positionX: z.number().optional().default(0),
