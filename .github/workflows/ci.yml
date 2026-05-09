@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bloquim_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Tests delete users/workspaces; helpers.ts refuses any DATABASE_URL
+      # containing the prod project ref, so this local dsn is always safe.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bloquim_test
+      # Required by api-server boot path; tests don't actually open a port,
+      # but app.ts loads index.ts → reads it.
+      API_PORT: "5000"
+      JWT_SECRET: ci-test-secret-please-do-not-reuse
+      ALLOWED_ORIGINS: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply DB schema
+        run: |
+          # drizzle-kit push reads DATABASE_URL from env when no --env-file is given;
+          # bypass the package script (which insists on ../../.env) by calling the bin directly.
+          node lib/db/node_modules/drizzle-kit/bin.cjs push --config lib/db/drizzle.config.ts --force
+
+      - name: Build api-server
+        run: pnpm --filter @workspace/api-server run build
+
+      - name: Test api-server
+        run: pnpm --filter @workspace/api-server run test

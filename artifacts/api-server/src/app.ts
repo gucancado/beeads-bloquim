@@ -6,6 +6,7 @@ import router from "./routes";
 import { errorHandler } from "./middlewares/errorHandler";
 import { requestLogger } from "./middlewares/requestLogger";
 import { corsOptions } from "./lib/cors";
+import { attachSentryErrorHandler } from "./lib/sentry";
 
 const app: Express = express();
 
@@ -20,6 +21,9 @@ app.use(requestLogger);
 
 app.use("/api", router);
 
+// Sentry must wrap errors before our handler turns them into JSON responses,
+// otherwise Sentry never sees them.
+attachSentryErrorHandler(app);
 app.use(errorHandler);
 
 export default app;
