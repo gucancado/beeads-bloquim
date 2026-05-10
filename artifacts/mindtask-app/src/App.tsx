@@ -15,6 +15,8 @@ import MyTasksPage from "@/pages/my-tasks";
 import TemplatesPage from "@/pages/templates";
 import SettingsIntegrationsPage from "@/pages/settings/integrations";
 import SettingsMcpPage from "@/pages/settings/mcp";
+import PrivacidadePage from "@/pages/privacidade";
+import TermosPage from "@/pages/termos";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,6 +95,8 @@ function Router() {
       <Route path="/my-templates" component={TemplatesPage} />
       <Route path="/settings/integrations" component={SettingsIntegrationsPage} />
       <Route path="/settings/mcp" component={SettingsMcpPage} />
+      <Route path="/privacidade" component={PrivacidadePage} />
+      <Route path="/termos" component={TermosPage} />
       <Route component={NotFound} />
     </Switch>
   );
