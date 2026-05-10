@@ -39,7 +39,6 @@ Thumbs.db
 # Plans / docs that aren't needed in the image
 artifacts/mockup-sandbox
 artifacts/*/test-results
-attached_assets
 
 # Already covered, but explicit:
 **/pnpm-debug.log

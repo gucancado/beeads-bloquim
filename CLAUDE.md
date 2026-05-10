@@ -22,7 +22,7 @@ MindTask é uma plataforma web de planejamento e gestão de tarefas baseada em m
 | API codegen | Orval (OpenAPI → React Query hooks + Zod schemas) |
 | Build | esbuild (CJS bundle para api-server) |
 | Realtime | WebSocket (presença de usuários no mapa) |
-| Object Storage | Replit Object Storage (upload presigned URL) |
+| Object Storage | Cloudflare R2 (S3-compatible, presigned URLs via `lib/storage`) |
 | Rich Text | Tiptap (editor de texto nos TextNodes e descrições) |
 
 ## Estrutura do Monorepo
@@ -149,12 +149,12 @@ lib/
     src/schema/
       users.ts                  # users
       workspaces.ts             # workspaces, workspace_members
-      maps.ts                   # maps, map_visited (recentes)
+      maps.ts                   # maps, user_map_access (recentes)
       cards.ts                  # cards, card_connections
       tasks.ts                  # tasks, task_approvals, task_activities, task_subtasks
       comments.ts               # task_comments
       textElements.ts           # map_text_elements
-      attachments.ts            # file_uploads, attachment_links
+      attachments.ts            # attachments (unificado)
       shapes.ts                 # map_shapes
       integrations.ts           # user_google_calendar_accounts, user_calendar_preferences
   object-storage-web/
@@ -201,7 +201,7 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | workspaces | Espaços de trabalho |
 | workspace_members | Membros com papel (admin/editor/executor) |
 | maps | Mapas mentais de um workspace |
-| map_visited | Registro de mapas visitados recentemente |
+| user_map_access | Registro de mapas visitados recentemente |
 | cards | Cards no mapa (posição, título, statusVisual) |
 | card_connections | Conexões (edges) entre cards |
 | tasks | Tarefas vinculadas a cards (status, prioridade, prazo, recorrência, aprovações) |
@@ -209,8 +209,7 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | task_activities | Log de atividades (mudanças de status, atribuições, etc.) |
 | task_subtasks | Subtarefas de uma tarefa |
 | task_comments | Comentários em tarefas |
-| file_uploads | Registro de arquivos enviados |
-| attachment_links | Vínculo entre file_uploads e tarefas |
+| attachments | Arquivos anexados (unificado — task/card/comment/shape via `entity_kind`+`entity_id`) |
 | map_text_elements | Elementos de texto livre no mapa (Tiptap) |
 | task_templates | Templates reutilizáveis de tarefa |
 | task_template_subtasks | Subtarefas de um template |
@@ -367,9 +366,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 - `requireAuth` middleware extrai userId do cookie/header e anexa em `req.userId`
 - `requireWorkspaceRole(["admin", "editor"])` verifica papel no workspace
 
-### Proxy de Rotas (Replit)
-- `/api/*` → API server (porta do api-server)
-- `/*` → Frontend Vite (porta do mindtask-app)
+### Proxy de Rotas (Coolify)
+- `/api/*` → `bloquim-api` (Express, porta `API_PORT`)
+- `/*` → `bloquim-web` (Vite SPA, porta `WEB_PORT`)
+- Reverse proxy gerenciado pelo Coolify; ambos sobem como containers separados no projeto `bloquim`.
 
 ### Sincronização Visual
 Ao atualizar `task.status`, o `taskVisualSyncService` atualiza automaticamente `card.statusVisual`. Cores: pending=azul, in_progress=âmbar, completed=esmeralda, overdue=vermelho, blocked=cinza, draft=slate.
@@ -381,5 +381,4 @@ Ao atualizar `task.status`, o `taskVisualSyncService` atualiza automaticamente `
 3. **Após alterar schema do banco** em `lib/db/src/schema/`, rodar: `pnpm --filter @workspace/db run push`
 4. **Hooks customizados** (não gerados pelo Orval) ficam diretamente em `lib/api-client-react/src/` (ex: `text-elements.ts`)
 5. **Componentes de UI** usam shadcn/ui em `artifacts/mindtask-app/src/components/ui/`
-6. **Não alterar `artifact.toml` ou `.replit`** diretamente — usar ferramentas do ambiente
-7. **Manter imports consistentes**: `@workspace/db`, `@workspace/api-client-react`, `@workspace/api-zod`, `@workspace/object-storage-web`
+6. **Manter imports consistentes**: `@workspace/db`, `@workspace/api-client-react`, `@workspace/api-zod`, `@workspace/object-storage-web`

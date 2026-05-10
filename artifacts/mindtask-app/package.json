@@ -85,10 +85,5 @@
     "@workspace/db": "workspace:*",
     "reactflow": "^11.11.4",
     "zustand": "^5.0.12"
-  },
-  "optionalDependencies": {
-    "@replit/vite-plugin-cartographer": "catalog:",
-    "@replit/vite-plugin-dev-banner": "catalog:",
-    "@replit/vite-plugin-runtime-error-modal": "catalog:"
   }
 }

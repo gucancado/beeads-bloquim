@@ -1,27 +1,8 @@
-import { defineConfig, type PluginOption } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { mockupPreviewPlugin } from "./mockupPreviewPlugin";
-
-const isReplit = process.env.REPL_ID !== undefined;
-const replitPlugins: PluginOption[] = [];
-if (isReplit) {
-  try {
-    const runtimeErrorModal = await import("@replit/vite-plugin-runtime-error-modal");
-    replitPlugins.push(runtimeErrorModal.default());
-  } catch {
-    // optional dep not installed; ignore silently outside Replit
-  }
-  try {
-    const cartographer = await import("@replit/vite-plugin-cartographer");
-    replitPlugins.push(
-      cartographer.cartographer({ root: path.resolve(import.meta.dirname, "..") }),
-    );
-  } catch {
-    // optional dep not installed; ignore silently outside Replit
-  }
-}
 
 const rawPort = process.env.PORT;
 
@@ -51,7 +32,6 @@ export default defineConfig({
     mockupPreviewPlugin(),
     react(),
     tailwindcss(),
-    ...replitPlugins,
   ],
   resolve: {
     alias: {

@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv, type PluginOption } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -29,46 +29,16 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH ?? "/";
 
-const isReplit = process.env.REPL_ID !== undefined;
-
-const replitPlugins: PluginOption[] = [];
-if (isReplit) {
-  // Replit-specific plugins are loaded only when running on Replit.
-  // They are listed in optionalDependencies and may not be installed locally.
-  try {
-    const cartographer = await import("@replit/vite-plugin-cartographer");
-    replitPlugins.push(
-      cartographer.cartographer({ root: path.resolve(import.meta.dirname, "..") }),
-    );
-  } catch {
-    // optional dep not installed; ignore silently outside Replit
-  }
-  try {
-    const devBanner = await import("@replit/vite-plugin-dev-banner");
-    replitPlugins.push(devBanner.devBanner());
-  } catch {
-    // optional dep not installed; ignore silently outside Replit
-  }
-  try {
-    const runtimeErrorModal = await import("@replit/vite-plugin-runtime-error-modal");
-    replitPlugins.push(runtimeErrorModal.default());
-  } catch {
-    // optional dep not installed; ignore silently outside Replit
-  }
-}
-
 export default defineConfig({
   base: basePath,
   envDir: monorepoRoot,
   plugins: [
     react(),
     tailwindcss(),
-    ...replitPlugins,
   ],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
       react: path.resolve(import.meta.dirname, "node_modules/react"),
       "react-dom": path.resolve(import.meta.dirname, "node_modules/react-dom"),
       "react/jsx-runtime": path.resolve(import.meta.dirname, "node_modules/react/jsx-runtime"),

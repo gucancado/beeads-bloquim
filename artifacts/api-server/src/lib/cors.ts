@@ -13,10 +13,6 @@ function buildAllowedOrigins(): string[] {
   const fromEnv = parseAllowedOriginsEnv();
   const isProduction = process.env.NODE_ENV === "production";
 
-  if (!isProduction && process.env.REPLIT_DEV_DOMAIN) {
-    fromEnv.push(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-  }
-
   if (isProduction && fromEnv.length === 0) {
     throw new Error(
       "ALLOWED_ORIGINS environment variable is required in production",
