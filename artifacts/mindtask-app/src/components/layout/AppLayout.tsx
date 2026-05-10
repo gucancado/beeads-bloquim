@@ -33,7 +33,7 @@ function SettingsDropdown({ onProfile, onNavigate }: { onProfile: () => void; on
           <PlugIcon className="w-4 h-4 mr-2" /> integrações
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onNavigate("/settings/mcp")} className="lowercase cursor-pointer">
-          <ZapIcon className="w-4 h-4 mr-2" /> conector mcp (claude)
+          <ZapIcon className="w-4 h-4 mr-2" /> mcp
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
