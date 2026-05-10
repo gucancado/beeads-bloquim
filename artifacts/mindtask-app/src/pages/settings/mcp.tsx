@@ -140,7 +140,7 @@ export default function SettingsMcpPage() {
           </div>
 
           {/* Bloco 2 — Conectar no Claude (collapsible) */}
-          <Collapsible className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden mb-6">
+          <Collapsible className="rounded-3xl border border-border/60 overflow-hidden mb-6">
             <CollapsibleTrigger className="group/coll w-full p-6 flex items-center gap-4 text-left hover:bg-accent/20 transition-colors">
               <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Plug className="w-6 h-6 text-primary" />
@@ -210,17 +210,14 @@ export default function SettingsMcpPage() {
           </Collapsible>
 
           {/* Bloco 3 — Tools disponíveis */}
-          <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+          <div className="rounded-3xl border border-border/60 overflow-hidden">
             <div className="p-6 flex items-start justify-between gap-4 border-b border-border/50">
               <div className="min-w-0">
-                <h2 className="text-lg font-display font-semibold lowercase">Ferramentas disponíveis</h2>
-                <p className="text-sm text-muted-foreground mt-1 lowercase">
-                  {loading
-                    ? "Carregando..."
-                    : error
-                      ? "Não foi possível carregar a lista."
-                      : `${totalTools} ${totalTools === 1 ? "ferramenta disponível" : "ferramentas disponíveis"}`}
-                </p>
+                <h2 className="text-lg font-display font-semibold lowercase">
+                  {loading || error
+                    ? "Ferramentas disponíveis"
+                    : `${totalTools} ${totalTools === 1 ? "ferramenta disponível" : "ferramentas disponíveis"}`}
+                </h2>
               </div>
               {!loading && (
                 <Button
