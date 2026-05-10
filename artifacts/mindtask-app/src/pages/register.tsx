@@ -46,7 +46,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-background">
+    <div className="min-h-screen w-full flex bg-background relative">
       <ThemeToggleFloat />
       <div className="flex-1 flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8">
@@ -114,6 +114,11 @@ export default function RegisterPage() {
           </p>
         </div>
       </div>
+      <footer className="absolute bottom-0 left-0 right-0 py-4 px-6 flex items-center justify-center gap-4 text-xs text-muted-foreground/80">
+        <Link href="/privacidade" className="hover:text-foreground hover:underline lowercase">política de privacidade</Link>
+        <span aria-hidden="true">·</span>
+        <Link href="/termos" className="hover:text-foreground hover:underline lowercase">termos de serviço</Link>
+      </footer>
     </div>
   );
 }
