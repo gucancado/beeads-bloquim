@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { User as UserIcon, FileText as FileTextIcon, Plug as PlugIcon } from "lucide-react";
+import { User as UserIcon, FileText as FileTextIcon, Plug as PlugIcon, Zap as ZapIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SidebarWorkspaceList } from "@/components/layout/SidebarWorkspaceList";
 import { GlobalTaskSearch } from "@/components/layout/GlobalTaskSearch";
@@ -31,6 +31,9 @@ function SettingsDropdown({ onProfile, onNavigate }: { onProfile: () => void; on
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onNavigate("/settings/integrations")} className="lowercase cursor-pointer">
           <PlugIcon className="w-4 h-4 mr-2" /> integrações
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onNavigate("/settings/mcp")} className="lowercase cursor-pointer">
+          <ZapIcon className="w-4 h-4 mr-2" /> conector mcp (claude)
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

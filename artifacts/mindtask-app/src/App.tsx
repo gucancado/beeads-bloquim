@@ -14,6 +14,7 @@ import CanvasPage from "@/pages/maps/canvas";
 import MyTasksPage from "@/pages/my-tasks";
 import TemplatesPage from "@/pages/templates";
 import SettingsIntegrationsPage from "@/pages/settings/integrations";
+import SettingsMcpPage from "@/pages/settings/mcp";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,7 @@ function Router() {
       <Route path="/my-tasks" component={MyTasksPage} />
       <Route path="/my-templates" component={TemplatesPage} />
       <Route path="/settings/integrations" component={SettingsIntegrationsPage} />
+      <Route path="/settings/mcp" component={SettingsMcpPage} />
       <Route component={NotFound} />
     </Switch>
   );
