@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
-import { Loader2, ListTodo, GripVertical, ChevronLeft, ChevronDown } from "lucide-react";
+import { Loader2, ListTodo, GripVertical } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -31,7 +31,6 @@ interface SidebarWorkspace {
   colorIndex: number | null;
   createdAt: string;
   sortOrder: number | null;
-  expanded: boolean;
   maps: SidebarMap[];
 }
 
@@ -70,13 +69,7 @@ function CollapsedWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) 
   );
 }
 
-function SortableWorkspaceItem({
-  workspace,
-  onToggleExpanded,
-}: {
-  workspace: SidebarWorkspace;
-  onToggleExpanded: (workspaceId: string, expanded: boolean) => void;
-}) {
+function SortableWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) {
   const [location] = useLocation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: workspace.id,
@@ -114,22 +107,9 @@ function SortableWorkspaceItem({
             <span className="truncate">{workspace.name}</span>
           </span>
         </Link>
-        {hasMaps && (
-          <button
-            onClick={() => onToggleExpanded(workspace.id, !workspace.expanded)}
-            className="shrink-0 w-6 h-6 mr-1 rounded-lg flex items-center justify-center text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
-            tabIndex={-1}
-          >
-            {workspace.expanded ? (
-              <ChevronDown className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronLeft className="w-3.5 h-3.5" />
-            )}
-          </button>
-        )}
       </div>
 
-      {hasMaps && workspace.expanded && (
+      {hasMaps && (
         <div className="ml-[38px] space-y-0.5 mb-1">
           {workspace.maps.map((map) => {
             const isMapActive = location === `/workspaces/${workspace.id}/maps/${map.id}`;
@@ -159,7 +139,6 @@ interface Props {
 }
 
 export function SidebarWorkspaceList({ collapsed, enabled }: Props) {
-  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery<SidebarWorkspace[]>({
     queryKey: ["/api/sidebar/workspaces"],
     queryFn: () => customFetch("/api/sidebar/workspaces"),
@@ -181,24 +160,6 @@ export function SidebarWorkspaceList({ collapsed, enabled }: Props) {
         body: JSON.stringify({ workspaceIds }),
       }),
   });
-
-  const toggleExpandedMutation = useMutation({
-    mutationFn: ({ workspaceId, expanded }: { workspaceId: string; expanded: boolean }) =>
-      customFetch(`/api/sidebar/workspaces/${workspaceId}/expanded`, {
-        method: "PATCH",
-        body: JSON.stringify({ expanded }),
-      }),
-    onError: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sidebar/workspaces"] });
-    },
-  });
-
-  const handleToggleExpanded = (workspaceId: string, expanded: boolean) => {
-    setItems((prev) =>
-      prev.map((ws) => (ws.id === workspaceId ? { ...ws, expanded } : ws))
-    );
-    toggleExpandedMutation.mutate({ workspaceId, expanded });
-  };
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -237,11 +198,7 @@ export function SidebarWorkspaceList({ collapsed, enabled }: Props) {
           <SortableContext items={items.map((ws) => ws.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-0.5">
               {items.map((ws) => (
-                <SortableWorkspaceItem
-                  key={ws.id}
-                  workspace={ws}
-                  onToggleExpanded={handleToggleExpanded}
-                />
+                <SortableWorkspaceItem key={ws.id} workspace={ws} />
               ))}
               {items.length === 0 && (
                 <p className="px-3 text-sm text-sidebar-foreground/40 italic lowercase">
