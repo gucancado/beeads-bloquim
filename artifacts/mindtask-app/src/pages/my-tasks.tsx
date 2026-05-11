@@ -107,11 +107,8 @@ export default function MyTasksPage() {
     if (deepLinkTaskId) {
       if (!standaloneTask && !openCard && !createSheetOpen) {
         if (deepLinkTaskMeta !== undefined) {
-          if (deepLinkTaskMeta && deepLinkTaskMeta.workspaceId) {
-            navigate(`/workspaces/${deepLinkTaskMeta.workspaceId}/tasks/${deepLinkTaskId}`, { replace: true });
-          } else {
-            setStandaloneTask({ workspaceId: "", id: deepLinkTaskId, mapId: null, cardId: null, title: "" });
-          }
+          const wsId = deepLinkTaskMeta?.workspaceId ?? "";
+          setStandaloneTask({ workspaceId: wsId, id: deepLinkTaskId, mapId: null, cardId: null, title: "" });
         }
       }
     } else {
@@ -149,9 +146,7 @@ export default function MyTasksPage() {
   };
 
   const openTaskItem = (task: any) => {
-    if (task.workspaceId) {
-      navigate(`/workspaces/${task.workspaceId}/tasks/${task.id}`);
-    } else if (task.cardId && task.mapId) {
+    if (task.workspaceId && task.cardId && task.mapId) {
       setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: task.cardId });
       navigate(`/my-tasks/tasks/${task.id}`);
     } else {
@@ -286,7 +281,7 @@ export default function MyTasksPage() {
           onClose={handleClosePanel}
           onDeleteCard={handleDeleteCardFromPanel}
           onDuplicated={(newTaskId) => {
-            navigate(`/workspaces/${openCard.workspaceId}/tasks/${newTaskId}`);
+            navigate(`/my-tasks/tasks/${newTaskId}`);
           }}
         />
       )}
@@ -297,9 +292,7 @@ export default function MyTasksPage() {
         open={!!standaloneTask}
         onClose={handleCloseSheet}
         onDuplicated={(newTaskId) => {
-          if (standaloneTask?.workspaceId) {
-            navigate(`/workspaces/${standaloneTask.workspaceId}/tasks/${newTaskId}`);
-          }
+          navigate(`/my-tasks/tasks/${newTaskId}`);
         }}
       />
 
