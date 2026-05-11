@@ -117,7 +117,7 @@ function SortableWorkspaceItem({
         {hasMaps && (
           <button
             onClick={() => onToggleExpanded(workspace.id, !workspace.expanded)}
-            className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-sidebar-foreground/30 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all opacity-0 group-hover/ws:opacity-100"
+            className="shrink-0 w-6 h-6 mr-1 rounded-lg flex items-center justify-center text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
             tabIndex={-1}
           >
             {workspace.expanded ? (
