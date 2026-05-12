@@ -34,6 +34,13 @@ export function getStatusColorHex(status: string) {
 
 const WEEKDAY_NAMES_PT = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
+/** Returns the YYYY-MM-DD that comes one day after the given YYYY-MM-DD. */
+export function addOneDayYmd(ymd: string): string {
+  const d = new Date(ymd + "T12:00:00.000Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function formatDueDate(dateStr: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

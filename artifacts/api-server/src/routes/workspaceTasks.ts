@@ -196,7 +196,7 @@ const createTaskSchema = z.object({
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   startAt: z.string().nullable().optional(),
-  scheduleMode: z.enum(["ate", "entre", "em"]).optional(),
+  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -291,6 +291,7 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     | {
         id: string;
         title: string;
+        description: string | null;
         status: string;
         priority: string;
         scheduleMode: string | null;
@@ -311,6 +312,7 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
       .select({
         id: tasks.id,
         title: tasks.title,
+        description: tasks.description,
         status: tasks.status,
         priority: tasks.priority,
         scheduleMode: tasks.scheduleMode,

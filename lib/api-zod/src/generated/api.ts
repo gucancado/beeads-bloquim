@@ -40,6 +40,22 @@ export const LoginResponse = zod.object({
     email: zod.string(),
     createdAt: zod.date(),
     avatarUrl: zod.string().nullish(),
+    whatsapp: zod.string().nullish(),
+    classes: zod.array(
+      zod
+        .enum([
+          "gerente_contas",
+          "gestor_trafego",
+          "gestor_midias_sociais",
+          "analista_dados",
+          "designer",
+          "tecnico",
+        ])
+        .describe(
+          "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+        ),
+    ),
+    pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
   }),
 });
 
@@ -60,6 +76,22 @@ export const GetMeResponse = zod.object({
   email: zod.string(),
   createdAt: zod.date(),
   avatarUrl: zod.string().nullish(),
+  whatsapp: zod.string().nullish(),
+  classes: zod.array(
+    zod
+      .enum([
+        "gerente_contas",
+        "gestor_trafego",
+        "gestor_midias_sociais",
+        "analista_dados",
+        "designer",
+        "tecnico",
+      ])
+      .describe(
+        "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+      ),
+  ),
+  pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
 });
 
 /**
@@ -114,6 +146,22 @@ export const GetWorkspaceResponse = zod.object({
         email: zod.string(),
         createdAt: zod.date(),
         avatarUrl: zod.string().nullish(),
+        whatsapp: zod.string().nullish(),
+        classes: zod.array(
+          zod
+            .enum([
+              "gerente_contas",
+              "gestor_trafego",
+              "gestor_midias_sociais",
+              "analista_dados",
+              "designer",
+              "tecnico",
+            ])
+            .describe(
+              "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+            ),
+        ),
+        pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
       }),
       createdAt: zod.date(),
     }),
@@ -187,6 +235,22 @@ export const ListWorkspaceMembersResponseItem = zod.object({
     email: zod.string(),
     createdAt: zod.date(),
     avatarUrl: zod.string().nullish(),
+    whatsapp: zod.string().nullish(),
+    classes: zod.array(
+      zod
+        .enum([
+          "gerente_contas",
+          "gestor_trafego",
+          "gestor_midias_sociais",
+          "analista_dados",
+          "designer",
+          "tecnico",
+        ])
+        .describe(
+          "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+        ),
+    ),
+    pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
   }),
   createdAt: zod.date(),
 });
@@ -229,6 +293,22 @@ export const PatchWorkspaceMemberRoleResponse = zod.object({
     email: zod.string(),
     createdAt: zod.date(),
     avatarUrl: zod.string().nullish(),
+    whatsapp: zod.string().nullish(),
+    classes: zod.array(
+      zod
+        .enum([
+          "gerente_contas",
+          "gestor_trafego",
+          "gestor_midias_sociais",
+          "analista_dados",
+          "designer",
+          "tecnico",
+        ])
+        .describe(
+          "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+        ),
+    ),
+    pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
   }),
   createdAt: zod.date(),
 });
@@ -256,6 +336,22 @@ export const UpdateWorkspaceMemberResponse = zod.object({
     email: zod.string(),
     createdAt: zod.date(),
     avatarUrl: zod.string().nullish(),
+    whatsapp: zod.string().nullish(),
+    classes: zod.array(
+      zod
+        .enum([
+          "gerente_contas",
+          "gestor_trafego",
+          "gestor_midias_sociais",
+          "analista_dados",
+          "designer",
+          "tecnico",
+        ])
+        .describe(
+          "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+        ),
+    ),
+    pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
   }),
   createdAt: zod.date(),
 });
@@ -338,7 +434,7 @@ export const GetMapResponse = zod.object({
       updatedAt: zod.date(),
       taskDueDate: zod.date().nullish(),
       taskStartAt: zod.date().nullish(),
-      taskScheduleMode: zod.enum(["ate", "entre", "em"]).nullish(),
+      taskScheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).nullish(),
       taskAssigneeName: zod.string().nullish(),
       taskAssigneeId: zod.string().uuid().nullish(),
       taskOverdue: zod.boolean().optional(),
@@ -487,11 +583,27 @@ export const GetCardResponse = zod.object({
           email: zod.string(),
           createdAt: zod.date(),
           avatarUrl: zod.string().nullish(),
+          whatsapp: zod.string().nullish(),
+          classes: zod.array(
+            zod
+              .enum([
+                "gerente_contas",
+                "gestor_trafego",
+                "gestor_midias_sociais",
+                "analista_dados",
+                "designer",
+                "tecnico",
+              ])
+              .describe(
+                "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+              ),
+          ),
+          pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
         })
         .nullish(),
       dueDate: zod.date().nullish(),
       startAt: zod.date().nullish(),
-      scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
+      scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
       priority: zod.enum(["low", "medium", "high", "critical"]),
       status: zod.enum([
         "pending",
@@ -547,7 +659,7 @@ export const UpdateCardResponse = zod.object({
   updatedAt: zod.date(),
   taskDueDate: zod.date().nullish(),
   taskStartAt: zod.date().nullish(),
-  taskScheduleMode: zod.enum(["ate", "entre", "em"]).nullish(),
+  taskScheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).nullish(),
   taskAssigneeName: zod.string().nullish(),
   taskAssigneeId: zod.string().uuid().nullish(),
   taskOverdue: zod.boolean().optional(),
@@ -611,7 +723,7 @@ export const CreateTaskBody = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
+  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -663,11 +775,27 @@ export const UpdateTaskStatusResponse = zod.object({
       email: zod.string(),
       createdAt: zod.date(),
       avatarUrl: zod.string().nullish(),
+      whatsapp: zod.string().nullish(),
+      classes: zod.array(
+        zod
+          .enum([
+            "gerente_contas",
+            "gestor_trafego",
+            "gestor_midias_sociais",
+            "analista_dados",
+            "designer",
+            "tecnico",
+          ])
+          .describe(
+            "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+          ),
+      ),
+      pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
     })
     .nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
+  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",
@@ -697,7 +825,7 @@ export const UpdateTaskDetailsBody = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
+  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -715,11 +843,27 @@ export const UpdateTaskDetailsResponse = zod.object({
       email: zod.string(),
       createdAt: zod.date(),
       avatarUrl: zod.string().nullish(),
+      whatsapp: zod.string().nullish(),
+      classes: zod.array(
+        zod
+          .enum([
+            "gerente_contas",
+            "gestor_trafego",
+            "gestor_midias_sociais",
+            "analista_dados",
+            "designer",
+            "tecnico",
+          ])
+          .describe(
+            "Identifier of a user role\/class. The list is extensible — clients\nshould display unknown identifiers verbatim instead of erroring.\n",
+          ),
+      ),
+      pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
     })
     .nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
+  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",
@@ -760,7 +904,7 @@ export const GetMyTasksResponseItem = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em"]).optional(),
+  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",

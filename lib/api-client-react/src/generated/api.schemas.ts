@@ -45,6 +45,7 @@ export const ScheduleMode = {
   ate: "ate",
   entre: "entre",
   em: "em",
+  sem_prazo: "sem_prazo",
 } as const;
 
 export type CardVisualStatus =
@@ -80,12 +81,40 @@ export interface LoginRequest {
   password: string;
 }
 
+export type UserPronouns = (typeof UserPronouns)[keyof typeof UserPronouns];
+
+export const UserPronouns = {
+  name_only: "name_only",
+  ela_dela: "ela_dela",
+  ele_dele: "ele_dele",
+  elu_delu: "elu_delu",
+} as const;
+
+/**
+ * Identifier of a user role/class. The list is extensible — clients
+should display unknown identifiers verbatim instead of erroring.
+
+ */
+export type UserClass = (typeof UserClass)[keyof typeof UserClass];
+
+export const UserClass = {
+  gerente_contas: "gerente_contas",
+  gestor_trafego: "gestor_trafego",
+  gestor_midias_sociais: "gestor_midias_sociais",
+  analista_dados: "analista_dados",
+  designer: "designer",
+  tecnico: "tecnico",
+} as const;
+
 export interface UserResponse {
   id: string;
   name: string;
   email: string;
   createdAt: string;
   avatarUrl?: string | null;
+  whatsapp?: string | null;
+  classes: UserClass[];
+  pronouns: UserPronouns;
 }
 
 export interface AuthResponse {

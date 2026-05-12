@@ -23,6 +23,7 @@ import {
 const log = logger.child({ module: "auth" });
 const router: IRouter = Router();
 
+
 const registerSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
@@ -127,13 +128,28 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
     email: user.email,
     createdAt: user.createdAt,
     avatarUrl: avatarUrlFor(user),
+    whatsapp: user.whatsapp,
+    classes: user.classes,
+    pronouns: user.pronouns,
   });
 });
+
+const USER_CLASS_ENUM = [
+  "gerente_contas",
+  "gestor_trafego",
+  "gestor_midias_sociais",
+  "analista_dados",
+  "designer",
+  "tecnico",
+] as const;
 
 const updateMeSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   /** Set to null to clear the avatar. To set/replace, use POST /me/avatar/upload-url first. */
   avatarUrl: z.literal(null).optional(),
+  whatsapp: z.string().trim().max(30).nullable().optional(),
+  classes: z.array(z.enum(USER_CLASS_ENUM)).max(20).optional(),
+  pronouns: z.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]).optional(),
 });
 
 router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
@@ -149,6 +165,11 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
     updates.avatarStoragePath = null;
     updates.avatarUrl = null;
   }
+  if (parsed.data.whatsapp !== undefined) {
+    updates.whatsapp = parsed.data.whatsapp === "" ? null : parsed.data.whatsapp;
+  }
+  if (parsed.data.classes !== undefined) updates.classes = parsed.data.classes;
+  if (parsed.data.pronouns !== undefined) updates.pronouns = parsed.data.pronouns;
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "Validation error", message: "No fields to update" });
@@ -172,6 +193,9 @@ router.patch("/me", requireAuth, async (req: AuthRequest, res) => {
     email: updated.email,
     createdAt: updated.createdAt,
     avatarUrl: avatarUrlFor(updated),
+    whatsapp: updated.whatsapp,
+    classes: updated.classes,
+    pronouns: updated.pronouns,
   });
 });
 

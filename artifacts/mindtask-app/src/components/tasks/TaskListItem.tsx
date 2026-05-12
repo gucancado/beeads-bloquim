@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
-import { formatDueDate } from "@/lib/utils";
+import { formatDueDate, addOneDayYmd } from "@/lib/utils";
+import { DatePickerPopover } from "@/components/ui/date-picker-popover";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -38,7 +39,7 @@ export interface TaskListItemData {
   priority: string;
   dueDate?: string | null;
   startAt?: string | null;
-  scheduleMode?: "ate" | "entre" | "em" | null;
+  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | null;
   overdue?: boolean;
   assignedTo?: string | null;
   assigneeName?: string | null;
@@ -71,6 +72,17 @@ interface Props {
 
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
+const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em" | "sem_prazo"; label: string }[] = [
+  { value: "ate", label: "fazer até" },
+  { value: "entre", label: "fazer entre" },
+  { value: "em", label: "fazer em" },
+  { value: "sem_prazo", label: "sem prazo" },
+];
+
+const SCHEDULE_MODE_LABELS: Record<string, string> = Object.fromEntries(
+  SCHEDULE_MODE_OPTIONS.map(o => [o.value, o.label]),
+);
+
 function getStatusLabel(s: string) {
   if (s === "completed") return "concluída";
   if (s === "blocked") return "cancelada";
@@ -101,38 +113,25 @@ export function TaskListItem({
   // Local override: lets the user switch to "entre"/"em" before persisting,
   // so the start input can be revealed and filled. Cleared after a
   // successful PATCH (or whenever the server's mode catches up).
-  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | null>(null);
+  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | null>(null);
   const effectiveMode = pendingMode ?? (localTask.scheduleMode ?? "ate");
   useEffect(() => {
     if (pendingMode && localTask.scheduleMode === pendingMode) setPendingMode(null);
   }, [localTask.scheduleMode, pendingMode]);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [modalityOpen, setModalityOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const assigneeRef = useRef<HTMLDivElement>(null);
-  const dueDateInputRef = useRef<HTMLInputElement>(null);
-  const [editingPrazo, setEditingPrazo] = useState(false);
-  const scheduleWrapperRef = useRef<HTMLDivElement>(null);
-
-  const handleScheduleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
-    const next = e.relatedTarget as Node | null;
-    if (next && scheduleWrapperRef.current?.contains(next)) return;
-    if (!localTask.dueDate && !localTask.startAt) {
-      setEditingPrazo(false);
-      setPendingMode(null);
-    }
-  };
-
-  useEffect(() => {
-    if (localTask.dueDate && editingPrazo) setEditingPrazo(false);
-  }, [localTask.dueDate, editingPrazo]);
+  const modalityRef = useRef<HTMLDivElement>(null);
 
   const closeAllDropdowns = useCallback(() => {
     setStatusOpen(false);
     setAssigneeOpen(false);
+    setModalityOpen(false);
   }, []);
 
-  const anyDropdownOpen = statusOpen || assigneeOpen;
+  const anyDropdownOpen = statusOpen || assigneeOpen || modalityOpen;
 
   useEffect(() => {
     if (!anyDropdownOpen) return;
@@ -288,67 +287,143 @@ export function TaskListItem({
     patchTask({ assignedTo: memberId }).finally(() => setSavingField(null));
   };
 
-  const handleDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    const val = e.target.value;
+  const handleDueDateSelect = (val: string) => {
     const startStr = localTask.startAt ? localTask.startAt.slice(0, 10) : "";
     if (effectiveMode === "entre" && val && startStr && val < startStr) {
       toast({ title: "fim deve ser após o início", variant: "destructive" });
       return;
     }
-    setSavingField("dueDate");
     const iso = val ? val + "T12:00:00.000Z" : null;
-    const body: { dueDate: string | null; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" } = { dueDate: iso };
+    // "entre" needs both bounds at once or the backend rejects with 400.
+    // If we have both now (one was held locally from a previous edit), flush
+    // them together with the mode in a single atomic PATCH.
+    if (effectiveMode === "entre" && iso && localTask.startAt) {
+      setLocalTask(prev => ({ ...prev, dueDate: iso }));
+      setSavingField("dueDate");
+      patchTask({
+        scheduleMode: "entre",
+        startAt: localTask.startAt,
+        dueDate: iso,
+      }).finally(() => setSavingField(null));
+      return;
+    }
+    // "entre" with only this date filled — hold locally, wait for startAt.
+    // Do NOT touch localTask.scheduleMode here: that would prematurely clear
+    // pendingMode (via the catch-up effect) and the next patch would land
+    // without `scheduleMode`, leaving the server in its old mode.
+    if (effectiveMode === "entre" && !localTask.startAt) {
+      setLocalTask(prev => ({ ...prev, dueDate: iso }));
+      return;
+    }
+    setLocalTask(prev => ({ ...prev, dueDate: iso }));
+    setSavingField("dueDate");
+    const body: { dueDate: string | null; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { dueDate: iso };
     if (effectiveMode === "em") body.startAt = iso;
     if (pendingMode) body.scheduleMode = pendingMode;
     patchTask(body).finally(() => setSavingField(null));
   };
 
-  const handleStartAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    const val = e.target.value;
+  const handleStartAtSelect = (val: string) => {
     const dueStr = localTask.dueDate ? localTask.dueDate.slice(0, 10) : "";
     if (val && dueStr && val > dueStr) {
       toast({ title: "início deve ser até o fim", variant: "destructive" });
       return;
     }
+    const iso = val ? val + "T12:00:00.000Z" : null;
+    // In "entre" mode: if dueDate is empty and the user picks a startAt,
+    // auto-default dueDate to startAt + 1 day so the range is always valid.
+    // If dueDate is already set, leave it alone.
+    if (effectiveMode === "entre" && val && iso && !localTask.dueDate) {
+      const autoDueIso = addOneDayYmd(val) + "T12:00:00.000Z";
+      setLocalTask(prev => ({ ...prev, startAt: iso, dueDate: autoDueIso }));
+      setSavingField("startAt");
+      patchTask({
+        scheduleMode: "entre",
+        startAt: iso,
+        dueDate: autoDueIso,
+      }).finally(() => setSavingField(null));
+      return;
+    }
+    // Both dates already present — atomic PATCH.
+    if (effectiveMode === "entre" && iso && localTask.dueDate) {
+      setLocalTask(prev => ({ ...prev, startAt: iso }));
+      setSavingField("startAt");
+      patchTask({
+        scheduleMode: "entre",
+        startAt: iso,
+        dueDate: localTask.dueDate,
+      }).finally(() => setSavingField(null));
+      return;
+    }
+    // Clearing startAt while in "entre" with empty dueDate — hold locally.
+    if (effectiveMode === "entre" && !localTask.dueDate) {
+      setLocalTask(prev => ({ ...prev, startAt: iso }));
+      return;
+    }
+    setLocalTask(prev => ({ ...prev, startAt: iso }));
     setSavingField("startAt");
-    const body: { startAt: string | null; scheduleMode?: "ate" | "entre" | "em" } = {
-      startAt: val ? val + "T12:00:00.000Z" : null,
+    const body: { startAt: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = {
+      startAt: iso,
     };
     if (pendingMode) body.scheduleMode = pendingMode;
     patchTask(body).finally(() => setSavingField(null));
   };
 
-  const handleScheduleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    e.stopPropagation();
-    const next = e.target.value as "ate" | "entre" | "em";
+  const handleModalitySelect = (next: "ate" | "entre" | "em" | "sem_prazo") => {
+    setModalityOpen(false);
+    if (next === effectiveMode) return;
     // For "em" with a dueDate already set, we can persist immediately
     // (mirroring startAt = dueDate). For "entre" requiring both bounds,
     // or "em" without a date yet, switch only the local UI mode and let
     // the user fill the missing field — the date handler will then
     // persist mode+dates atomically.
+    if (next === "sem_prazo") {
+      setPendingMode(null);
+      setLocalTask(prev => ({ ...prev, scheduleMode: "sem_prazo", startAt: null, dueDate: null }));
+      setSavingField("scheduleMode");
+      patchTask({ scheduleMode: "sem_prazo", startAt: null, dueDate: null }).finally(() => setSavingField(null));
+      return;
+    }
     if (next === "ate") {
       setPendingMode(null);
+      setLocalTask(prev => ({ ...prev, scheduleMode: "ate", startAt: null }));
       setSavingField("scheduleMode");
       patchTask({ scheduleMode: "ate", startAt: null }).finally(() => setSavingField(null));
       return;
     }
     if (next === "em" && localTask.dueDate) {
       setPendingMode(null);
+      setLocalTask(prev => ({ ...prev, scheduleMode: "em", startAt: prev.dueDate }));
       setSavingField("scheduleMode");
       patchTask({ scheduleMode: "em", startAt: localTask.dueDate }).finally(() => setSavingField(null));
       return;
     }
     if (next === "entre" && localTask.startAt && localTask.dueDate) {
       setPendingMode(null);
+      setLocalTask(prev => ({ ...prev, scheduleMode: "entre" }));
       setSavingField("scheduleMode");
       patchTask({ scheduleMode: "entre" }).finally(() => setSavingField(null));
       return;
     }
-    // Need more user input — keep mode pending in UI only.
+    // Need more user input — keep mode pending in UI only. Also nuke any
+    // stale dates that don't apply to the new mode.
     setPendingMode(next);
+    if (next === "em" || next === "entre") {
+      // Keep existing dueDate so user can chain into the new mode.
+    }
   };
+
+  const handleModalityClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (modalityOpen) {
+      setModalityOpen(false);
+      return;
+    }
+    closeAllDropdowns();
+    openDropdownAt(e);
+    setModalityOpen(true);
+  };
+
 
   const handleRowClick = () => {
     if (editingTitle || statusOpen || assigneeOpen) return;
@@ -524,101 +599,102 @@ export function TaskListItem({
           )}
         </div>
 
-        {/* Schedule — collapsed badge when there's no prazo, expanded controls otherwise */}
-        {!localTask.dueDate && !editingPrazo ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingPrazo(true);
-              setTimeout(() => {
-                const input = dueDateInputRef.current;
-                if (input) {
-                  input.focus();
-                  try { (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
-                }
-              }, 0);
-            }}
-            className="shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer"
-            title="Clique para definir prazo"
-          >
-            <CalendarIcon className="w-3 h-3 shrink-0" />
-            <span>sem prazo</span>
-          </button>
-        ) : (
-          <div
-            ref={scheduleWrapperRef}
-            onBlur={handleScheduleBlur}
-            className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"
-          >
-            {/* Schedule modality */}
-            <select
-              value={effectiveMode as string}
-              onChange={handleScheduleModeChange}
-              onClick={e => e.stopPropagation()}
+        {/* Schedule — modality trigger always visible; date inputs render only for modes that need them */}
+        <div ref={modalityRef} onClick={e => e.stopPropagation()} className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+          {/* Modality trigger — pill style for sem_prazo, bordered button for other modes */}
+          {effectiveMode === "sem_prazo" ? (
+            <button
+              type="button"
+              onClick={handleModalityClick}
               disabled={savingField === "scheduleMode"}
-              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+              title="Clique para alterar modalidade de prazo"
+            >
+              <CalendarIcon className="w-3 h-3 shrink-0" />
+              <span>sem prazo</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleModalityClick}
+              disabled={savingField === "scheduleMode"}
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground hover:text-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
               title="Modalidade do fazer"
             >
-              <option value="ate">fazer até</option>
-              <option value="entre">fazer entre</option>
-              <option value="em">fazer em</option>
-            </select>
+              {SCHEDULE_MODE_LABELS[effectiveMode] ?? effectiveMode}
+            </button>
+          )}
 
-            {/* Start date (visible only for "entre") */}
-            {effectiveMode === "entre" && (
-              <label
-                className="relative inline-flex items-center gap-1 cursor-pointer shrink-0"
+          {modalityOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {SCHEDULE_MODE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handleModalitySelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${effectiveMode === opt.value ? "font-semibold" : ""}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
+          )}
+
+          {/* Start date — only for "entre" */}
+          {effectiveMode === "entre" && (
+            <DatePickerPopover
+              value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
+              onSelect={handleStartAtSelect}
+              max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
+            >
+              <button
+                type="button"
                 onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0"
+                title="Data de início"
               >
-                <CalendarIcon className="w-3 h-3 shrink-0 pointer-events-none text-muted-foreground" />
-                <span className={`pointer-events-none select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
+                <CalendarIcon className="w-3 h-3 shrink-0 text-muted-foreground" />
+                <span className={`select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
                   {localTask.startAt ? formatDueDate(localTask.startAt) : "vazio"}
                 </span>
-                <input
-                  type="date"
-                  max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
-                  value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
-                  onChange={handleStartAtChange}
-                  onClick={e => e.stopPropagation()}
-                  title="Data de início"
-                />
-              </label>
-            )}
+              </button>
+            </DatePickerPopover>
+          )}
 
-            {/* Due date — inline editable */}
-            <label
-              className={`relative inline-flex items-center gap-1 cursor-pointer shrink-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
-              onClick={e => e.stopPropagation()}
+          {/* Due date — for ate / em / entre (hidden for sem_prazo) */}
+          {effectiveMode !== "sem_prazo" && (
+            <DatePickerPopover
+              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+              onSelect={handleDueDateSelect}
+              min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
             >
-              <CalendarIcon className={`w-3 h-3 shrink-0 pointer-events-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-              {localTask.dueDate ? (
-                <span
-                  className={`pointer-events-none select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                >
-                  {formatDueDate(localTask.dueDate)}
-                </span>
-              ) : (
-                <span
-                  className={`pointer-events-none select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                >
-                  vazio
-                </span>
-              )}
-              <input
-                ref={dueDateInputRef}
-                type="date"
-                min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer border-none outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
-                value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-                onChange={handleDueDateChange}
+              <button
+                type="button"
                 onClick={e => e.stopPropagation()}
+                className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
                 title="Alterar fazer"
-              />
-            </label>
-          </div>
-        )}
+              >
+                <CalendarIcon className={`w-3 h-3 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
+                {localTask.dueDate ? (
+                  <span
+                    className={`select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                  >
+                    {formatDueDate(localTask.dueDate)}
+                  </span>
+                ) : (
+                  <span
+                    className={`select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
+                  >
+                    vazio
+                  </span>
+                )}
+              </button>
+            </DatePickerPopover>
+          )}
+        </div>
 
         {/* Recurrence indicator */}
         {localTask.isRecurring && localTask.recurrenceConfig && (

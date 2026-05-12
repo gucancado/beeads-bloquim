@@ -1418,7 +1418,7 @@ components:
 
     ScheduleMode:
       type: string
-      enum: [ate, entre, em]
+      enum: [ate, entre, em, sem_prazo]
 
     CardVisualStatus:
       type: string
@@ -1451,6 +1451,23 @@ components:
           type: string
       required: [email, password]
 
+    UserPronouns:
+      type: string
+      enum: [name_only, ela_dela, ele_dele, elu_delu]
+
+    UserClass:
+      type: string
+      description: |
+        Identifier of a user role/class. The list is extensible — clients
+        should display unknown identifiers verbatim instead of erroring.
+      enum:
+        - gerente_contas
+        - gestor_trafego
+        - gestor_midias_sociais
+        - analista_dados
+        - designer
+        - tecnico
+
     UserResponse:
       type: object
       properties:
@@ -1467,7 +1484,16 @@ components:
         avatarUrl:
           type: string
           nullable: true
-      required: [id, name, email, createdAt]
+        whatsapp:
+          type: string
+          nullable: true
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserClass"
+        pronouns:
+          $ref: "#/components/schemas/UserPronouns"
+      required: [id, name, email, createdAt, classes, pronouns]
 
     AuthResponse:
       type: object

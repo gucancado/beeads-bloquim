@@ -29,7 +29,11 @@ export async function tryActivateTask(taskId: string): Promise<boolean> {
   // in cards.ts (advance only when an upstream dependency completes).
   // Edits to dueDate/startAt on an `ate` task must not silently move it to
   // in_progress.
-  if ((t.scheduleMode ?? "ate") === "ate") return false;
+  const mode = t.scheduleMode ?? "ate";
+  // "ate" and "sem_prazo" follow the legacy cascade-only path — no schedule
+  // window to fire activation from, so the cards.ts dependency cascade is
+  // the only thing that advances them.
+  if (mode === "ate" || mode === "sem_prazo") return false;
   if (!isWithinScheduleWindow(t.scheduleMode, t.startAt, t.dueDate)) return false;
 
   const [card] = await db

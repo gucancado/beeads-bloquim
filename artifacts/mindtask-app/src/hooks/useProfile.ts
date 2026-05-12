@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { UserClass, UserPronouns } from "@workspace/api-client-react";
 
 const customFetch = (url: string, options?: RequestInit) => {
   return fetch(url, {
@@ -33,10 +34,14 @@ export function useMyWorkspaces() {
 interface UpdateMePayload {
   name?: string;
   avatarUrl?: string | null;
+  whatsapp?: string | null;
+  classes?: UserClass[];
+  pronouns?: UserPronouns;
 }
 
 export function useUpdateMe() {
   const queryClient = useQueryClient();
+  const meKey = ["/api/auth/me"] as const;
   return useMutation({
     mutationFn: async (payload: UpdateMePayload | string) => {
       const body = typeof payload === "string" ? { name: payload } : payload;
@@ -45,10 +50,25 @@ export function useUpdateMe() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to update profile");
-      return res.json() as Promise<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
+      return res.json() as Promise<Record<string, unknown>>;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    // Apply the change to the cache up front so checkboxes/selects don't
+    // visibly flip back-and-forth while the request is in flight. Mirrors how
+    // task edits feel — the UI commits immediately, the network catches up.
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: meKey });
+      const previous = queryClient.getQueryData<Record<string, unknown>>(meKey);
+      const patch = typeof payload === "string" ? { name: payload } : payload;
+      if (previous) {
+        queryClient.setQueryData(meKey, { ...previous, ...patch });
+      }
+      return { previous };
+    },
+    onError: (_err, _payload, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(meKey, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: meKey });
     },
   });
 }

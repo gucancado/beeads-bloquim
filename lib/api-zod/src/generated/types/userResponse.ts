@@ -5,6 +5,8 @@
  * MindTask API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UserClass } from "./userClass";
+import type { UserPronouns } from "./userPronouns";
 
 export interface UserResponse {
   id: string;
@@ -12,4 +14,7 @@ export interface UserResponse {
   email: string;
   createdAt: Date;
   avatarUrl?: string | null;
+  whatsapp?: string | null;
+  classes: UserClass[];
+  pronouns: UserPronouns;
 }

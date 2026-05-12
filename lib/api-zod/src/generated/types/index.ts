@@ -61,6 +61,8 @@ export * from "./updateTaskStatusRequest";
 export * from "./updateTextElementRequest";
 export * from "./uploadUrlRequest";
 export * from "./uploadUrlResponse";
+export * from "./userClass";
+export * from "./userPronouns";
 export * from "./userResponse";
 export * from "./workspaceDetailResponse";
 export * from "./workspaceMemberResponse";

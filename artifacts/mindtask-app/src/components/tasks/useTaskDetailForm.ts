@@ -9,7 +9,7 @@ interface TaskResponseExtended extends TaskResponse {
   parentTaskId?: string | null;
   parentApprovalStatus?: string | null;
   startAt?: string | null;
-  scheduleMode?: "ate" | "entre" | "em" | null;
+  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | null;
 }
 
 interface CardLike {
@@ -25,7 +25,7 @@ interface TaskLike {
   assignedTo: string | null;
   dueDate: string | null;
   startAt?: string | null;
-  scheduleMode?: "ate" | "entre" | "em" | null;
+  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | null;
   priority: string;
   status: string;
   workspaceId: string | null;
@@ -34,7 +34,7 @@ interface TaskLike {
   recurrenceConfig?: RecurrenceConfig | null;
 }
 
-export type ScheduleMode = "ate" | "entre" | "em";
+export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo";
 
 export interface UseTaskDetailFormArgs {
   open: boolean;

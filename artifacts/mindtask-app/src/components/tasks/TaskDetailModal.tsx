@@ -6,6 +6,8 @@ import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Loader2, Flag, Calendar, User, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
+import { addOneDayYmd, formatDueDate } from "@/lib/utils";
+import { DatePickerPopover } from "@/components/ui/date-picker-popover";
 import { useToast } from "@/hooks/use-toast";
 import {
   customFetch,
@@ -72,7 +74,7 @@ interface UpdateTaskPayload {
   priority?: string;
   dueDate?: string | null;
   startAt?: string | null;
-  scheduleMode?: "ate" | "entre" | "em";
+  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo";
   isRecurring?: boolean;
   recurrenceConfig?: RecurrenceConfig | null;
 }
@@ -98,18 +100,21 @@ interface TaskDetailModalProps {
   onDuplicated?: (newTaskId: string, newCardId: string | null) => void;
 }
 
-const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em"; label: string }[] = [
+type ScheduleModeValue = "ate" | "entre" | "em" | "sem_prazo";
+
+const SCHEDULE_MODE_OPTIONS: { value: ScheduleModeValue; label: string }[] = [
   { value: "ate", label: "fazer até" },
   { value: "entre", label: "fazer entre" },
   { value: "em", label: "fazer em" },
+  { value: "sem_prazo", label: "sem prazo" },
 ];
 
 function ScheduleModeDropdown({
   value,
   onChange,
 }: {
-  value: "ate" | "entre" | "em";
-  onChange: (next: "ate" | "entre" | "em") => void;
+  value: ScheduleModeValue;
+  onChange: (next: ScheduleModeValue) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -402,7 +407,7 @@ export function TaskDetailModal({
     );
   };
 
-  const saveCardTaskDetails = (overrides: { priority?: string; assignedTo?: string; dueDate?: string; startAt?: string; scheduleMode?: "ate" | "entre" | "em" } = {}) => {
+  const saveCardTaskDetails = (overrides: { priority?: string; assignedTo?: string; dueDate?: string; startAt?: string; scheduleMode?: ScheduleModeValue } = {}) => {
     if (!cardId || !mapId || !card?.task) return;
     const p = (overrides.priority ?? priority) as TaskPriority;
     const a = overrides.assignedTo ?? assignedTo;
@@ -838,12 +843,20 @@ export function TaskDetailModal({
                               onChange={(next) => {
                                 setScheduleMode(next);
                                 markDirty();
+                                if (next === "sem_prazo") {
+                                  setStartAt("");
+                                  setDueDate("");
+                                  const body = { scheduleMode: next, startAt: null, dueDate: null };
+                                  if (isCardMode) saveCardTaskDetails({ scheduleMode: next, startAt: "", dueDate: "" });
+                                  else if (isEditing && resolvedTaskId) saveMutation.mutate({ body, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                  return;
+                                }
                                 const canPersist =
                                   next === "ate" ||
                                   (next === "em" && !!dueDate) ||
                                   (next === "entre" && !!startAt && !!dueDate);
                                 if (!canPersist) return;
-                                const body: { scheduleMode: "ate" | "entre" | "em"; startAt?: string | null } = { scheduleMode: next };
+                                const body: { scheduleMode: ScheduleModeValue; startAt?: string | null } = { scheduleMode: next };
                                 if (next === "ate") { setStartAt(""); body.startAt = null; }
                                 if (next === "em" && dueDate) { setStartAt(dueDate); body.startAt = dueDate + "T12:00:00.000Z"; }
                                 if (isCardMode) saveCardTaskDetails({ scheduleMode: next, startAt: next === "ate" ? "" : (next === "em" ? dueDate : startAt) });
@@ -887,21 +900,27 @@ export function TaskDetailModal({
                             )}
                           </div>
                         </div>
+                        {scheduleMode !== "sem_prazo" && (
                         <div className="flex items-center gap-1.5 w-[85%]">
                           {scheduleMode === "entre" && (
                             <>
-                              <Input
-                                type="date"
+                              <DatePickerPopover
                                 value={startAt}
                                 max={dueDate || undefined}
-                                onChange={e => {
-                                  const v = e.target.value;
+                                onSelect={(v) => {
                                   if (scheduleMode === "entre" && v && dueDate && v > dueDate) {
                                     toast({ title: "início deve ser até o fim", variant: "destructive" });
                                     return;
                                   }
                                   setStartAt(v);
                                   markDirty();
+                                  if (scheduleMode === "entre" && v && !dueDate) {
+                                    const autoDue = addOneDayYmd(v);
+                                    setDueDate(autoDue);
+                                    if (isCardMode) saveCardTaskDetails({ startAt: v, dueDate: autoDue, scheduleMode });
+                                    else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, startAt: v + "T12:00:00.000Z", dueDate: autoDue + "T12:00:00.000Z" }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                                    return;
+                                  }
                                   const canPersist =
                                     (scheduleMode as "ate" | "entre" | "em") === "ate" ||
                                     ((scheduleMode as "ate" | "entre" | "em") === "em" && !!dueDate) ||
@@ -910,18 +929,25 @@ export function TaskDetailModal({
                                   if (isCardMode) saveCardTaskDetails({ startAt: v, scheduleMode });
                                   else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, startAt: v ? v + "T12:00:00.000Z" : null, dueDate: dueDate || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                                 }}
-                                className="rounded-xl h-10 text-sm flex-1 min-w-0 pr-1 bg-background [&::-webkit-calendar-picker-indicator]:ml-0 [&::-webkit-calendar-picker-indicator]:pl-0 [&::-webkit-calendar-picker-indicator]:mr-0"
-                                title="início"
-                              />
+                              >
+                                <button
+                                  type="button"
+                                  className="rounded-xl h-10 text-sm flex-1 min-w-0 px-3 bg-background border border-input flex items-center gap-2 text-left hover:border-primary/50 transition-colors"
+                                  title="início"
+                                >
+                                  <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                                  <span className={startAt ? "" : "text-muted-foreground"}>
+                                    {startAt ? formatDueDate(startAt) : "vazio"}
+                                  </span>
+                                </button>
+                              </DatePickerPopover>
                               <span className="text-xs text-muted-foreground shrink-0 px-0.5 lowercase">e</span>
                             </>
                           )}
-                          <Input
-                            type="date"
+                          <DatePickerPopover
                             value={dueDate}
                             min={scheduleMode === "entre" ? (startAt || undefined) : undefined}
-                            onChange={e => {
-                              const v = e.target.value;
+                            onSelect={(v) => {
                               if (scheduleMode === "entre" && v && startAt && v < startAt) {
                                 toast({ title: "fim deve ser após o início", variant: "destructive" });
                                 return;
@@ -945,11 +971,21 @@ export function TaskDetailModal({
                                 else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, dueDate: v || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                               }
                             }}
-                            className={`rounded-xl h-10 text-sm flex-1 min-w-0 pr-1 [&::-webkit-calendar-picker-indicator]:ml-0 [&::-webkit-calendar-picker-indicator]:pl-0 [&::-webkit-calendar-picker-indicator]:mr-0 ${isOverdue ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : "bg-background"}`}
-                            title={scheduleMode === "entre" ? "fim" : undefined}
-                          />
-                          
+                          >
+                            <button
+                              type="button"
+                              className={`rounded-xl h-10 text-sm flex-1 min-w-0 px-3 border flex items-center gap-2 text-left hover:border-primary/50 transition-colors ${isOverdue ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : "bg-background border-input"}`}
+                              title={scheduleMode === "entre" ? "fim" : undefined}
+                            >
+                              <Calendar className={`w-4 h-4 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
+                              <span className={dueDate ? "" : "text-muted-foreground"}>
+                                {dueDate ? formatDueDate(dueDate) : "vazio"}
+                              </span>
+                            </button>
+                          </DatePickerPopover>
+
                         </div>
+                        )}
                       </div>
 
                       {/* Priority */}

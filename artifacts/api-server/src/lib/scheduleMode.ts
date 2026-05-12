@@ -1,7 +1,7 @@
 import { parseDateNoon } from "../services/taskVisualSyncService";
 import { getTodayLocal } from "./overdue";
 
-export type ScheduleMode = "ate" | "entre" | "em";
+export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo";
 
 export interface ScheduleInput {
   scheduleMode?: ScheduleMode | null;
@@ -29,10 +29,11 @@ export interface ScheduleResolveError {
  * Normalizes a (scheduleMode, startAt, dueDate) triple coming off the wire.
  * Returns the canonical Date values to persist, or an error message.
  *
- *   - "ate":   uses dueDate only; startAt is forced to null.
- *   - "entre": needs both startAt and dueDate, with startAt <= dueDate.
- *   - "em":    needs a single date (we accept it from either field) and
- *              persists startAt = dueDate.
+ *   - "ate":       uses dueDate only; startAt is forced to null.
+ *   - "entre":     needs both startAt and dueDate, with startAt <= dueDate.
+ *   - "em":        needs a single date (we accept it from either field) and
+ *                  persists startAt = dueDate.
+ *   - "sem_prazo": no deadline — startAt and dueDate are both forced to null.
  *
  * Missing fields fall back to the provided `current` values so partial PATCHes
  * preserve unrelated state.
@@ -45,6 +46,10 @@ export function resolveSchedule(
 
   const newStart = "startAt" in input ? parseDateNoon(input.startAt ?? null) : current.startAt;
   const newDue = "dueDate" in input ? parseDateNoon(input.dueDate ?? null) : current.dueDate;
+
+  if (mode === "sem_prazo") {
+    return { ok: true, value: { scheduleMode: "sem_prazo", startAt: null, dueDate: null } };
+  }
 
   if (mode === "ate") {
     return { ok: true, value: { scheduleMode: "ate", startAt: null, dueDate: newDue ?? null } };
@@ -87,7 +92,7 @@ export function isWithinScheduleWindow(
   dueDate: Date | string | null | undefined,
 ): boolean {
   const mode: ScheduleMode = (scheduleMode ?? "ate") as ScheduleMode;
-  if (mode === "ate") return true;
+  if (mode === "ate" || mode === "sem_prazo") return true;
 
   const today = getTodayLocal();
   if (mode === "em") {

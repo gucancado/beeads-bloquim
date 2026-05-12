@@ -69,9 +69,10 @@ export const scheduleModeEnum = pgEnum("schedule_mode", [
   "ate",
   "entre",
   "em",
+  "sem_prazo",
 ]);
 
-export type ScheduleMode = "ate" | "entre" | "em";
+export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo";
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -15,6 +15,7 @@ import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 interface ParentTask {
   id: string;
   title: string;
+  description: string | null;
   status: string;
   priority: string;
   scheduleMode: string | null;
@@ -148,6 +149,9 @@ function ParentTaskCard({ parent }: { parent: ParentTask }) {
     return true;
   })();
 
+  const descriptionHtml = parent.description?.trim();
+  const hasDescription = !!descriptionHtml && descriptionHtml !== "<p></p>";
+
   return (
     <div className="rounded-xl border border-border bg-transparent p-4 space-y-3">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -174,6 +178,18 @@ function ParentTaskCard({ parent }: { parent: ParentTask }) {
           </span>
         </div>
       </div>
+
+      {hasDescription && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold text-muted-foreground tracking-wider lowercase">
+            descrição
+          </p>
+          <div
+            className="comment-rendered-content text-xs text-foreground"
+            dangerouslySetInnerHTML={{ __html: descriptionHtml! }}
+          />
+        </div>
+      )}
     </div>
   );
 }

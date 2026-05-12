@@ -578,7 +578,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     taskAssigneeAvatarUrl: string | null;
     taskDueDate: string | null;
     taskStartAt: string | null;
-    taskScheduleMode: "ate" | "entre" | "em" | null;
+    taskScheduleMode: "ate" | "entre" | "em" | "sem_prazo" | null;
   }>) => {
     pendingUpdatesRef.current.set(cardId, Date.now());
     setNodes(prev => prev.map(n => {

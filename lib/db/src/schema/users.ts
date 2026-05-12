@@ -1,6 +1,24 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+
+export const userPronounsEnum = pgEnum("user_pronouns", [
+  "name_only",
+  "ela_dela",
+  "ele_dele",
+  "elu_delu",
+]);
+
+export const USER_CLASS_VALUES = [
+  "gerente_contas",
+  "gestor_trafego",
+  "gestor_midias_sociais",
+  "analista_dados",
+  "designer",
+  "tecnico",
+] as const;
+
+export type UserClass = (typeof USER_CLASS_VALUES)[number];
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -20,6 +38,10 @@ export const users = pgTable("users", {
    * without per-row CASE expressions.
    */
   avatarUrl: text("avatar_url"),
+  whatsapp: text("whatsapp"),
+  // Free-form text array so the catalog can be extended without a migration.
+  classes: text("classes").array().notNull().default([]).$type<UserClass[]>(),
+  pronouns: userPronounsEnum("pronouns").notNull().default("name_only"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

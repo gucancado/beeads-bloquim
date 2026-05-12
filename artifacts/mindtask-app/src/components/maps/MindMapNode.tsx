@@ -1,7 +1,8 @@
 import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
-import { getStatusColorHex, formatDueDate } from '@/lib/utils';
+import { getStatusColorHex, formatDueDate, addOneDayYmd } from '@/lib/utils';
+import { DatePickerPopover } from '@/components/ui/date-picker-popover';
 import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized } from '@/lib/taskStatusConstants';
 import { Maximize2, Calendar, User, Plus, Paperclip, ListChecks, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
@@ -101,7 +102,7 @@ interface MindMapNodeProps {
     taskId?: string | null;
     taskDueDate?: string | null;
     taskStartAt?: string | null;
-    taskScheduleMode?: "ate" | "entre" | "em" | null;
+    taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | null;
     taskAssigneeName?: string | null;
     taskAssigneeId?: string | null;
     taskAssigneeAvatarUrl?: string | null;
@@ -124,7 +125,7 @@ interface MindMapNodeProps {
       taskAssigneeAvatarUrl: string | null;
       taskDueDate: string | null;
       taskStartAt: string | null;
-      taskScheduleMode: "ate" | "entre" | "em" | null;
+      taskScheduleMode: "ate" | "entre" | "em" | "sem_prazo" | null;
     }>) => void;
     onEditingChange?: (cardId: string, isEditing: boolean) => void;
     onAutoFocusDone?: (cardId: string) => void;
@@ -351,15 +352,66 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   };
 
-  const serverScheduleMode = (data.taskScheduleMode ?? "ate") as "ate" | "entre" | "em";
+  const serverScheduleMode = (data.taskScheduleMode ?? "ate") as "ate" | "entre" | "em" | "sem_prazo";
   // Local override: lets the user switch to "entre"/"em" before the dates
   // are filled. Cleared once the server's mode catches up.
-  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | null>(null);
+  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | null>(null);
   useEffect(() => {
     if (pendingMode && serverScheduleMode === pendingMode) setPendingMode(null);
   }, [serverScheduleMode, pendingMode]);
-  const currentScheduleMode: "ate" | "entre" | "em" = pendingMode ?? serverScheduleMode;
+  const currentScheduleMode: "ate" | "entre" | "em" | "sem_prazo" = pendingMode ?? serverScheduleMode;
 
+  const handleDueDateSelect = (val: string) => {
+    if (currentScheduleMode === "entre" && val && data.taskStartAt) {
+      const startStr = data.taskStartAt.slice(0, 10);
+      if (val < startStr) {
+        toast({ title: "fim deve ser após o início", variant: "destructive" });
+        return;
+      }
+    }
+    if (!val) {
+      if (data.taskDueDate) {
+        const patch = currentScheduleMode === "em"
+          ? { taskDueDate: null, taskStartAt: null }
+          : { taskDueDate: null };
+        data.onInlineUpdate?.(id, patch);
+        if (data.taskId) {
+          updateTaskDetailsMut.mutate(
+            {
+              workspaceId,
+              mapId,
+              cardId: id,
+              data: currentScheduleMode === "em" ? { dueDate: null, startAt: null } : { dueDate: null },
+            },
+            { onSuccess: invalidateAll },
+          );
+        }
+      }
+      return;
+    }
+    const isoDate = val + "T12:00:00.000Z";
+    if (!pendingMode && data.taskDueDate && data.taskDueDate.slice(0, 10) === val) return;
+    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskDueDate: isoDate };
+    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { dueDate: isoDate };
+    if (currentScheduleMode === "em") {
+      patch.taskStartAt = isoDate;
+      apiData.startAt = isoDate;
+    }
+    if (pendingMode) {
+      patch.taskScheduleMode = pendingMode;
+      apiData.scheduleMode = pendingMode;
+    }
+    data.onInlineUpdate?.(id, patch);
+    if (data.taskId) {
+      updateTaskDetailsMut.mutate(
+        { workspaceId, mapId, cardId: id, data: apiData },
+        { onSuccess: invalidateAll },
+      );
+    }
+  };
+
+  // Legacy blur handler retained for callers still rendering the inline
+  // editable input fallback (the popover-driven flow does not use it).
   const handleDueDateBlur = () => {
     setEditingDueDate(false);
     if (currentScheduleMode === "entre" && dueDateValue && data.taskStartAt) {
@@ -392,8 +444,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
     const isoDate = dueDateValue + "T12:00:00.000Z";
     if (!pendingMode && data.taskDueDate && data.taskDueDate.slice(0, 10) === dueDateValue) return;
-    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" } = { taskDueDate: isoDate };
-    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" } = { dueDate: isoDate };
+    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskDueDate: isoDate };
+    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { dueDate: isoDate };
     if (currentScheduleMode === "em") {
       patch.taskStartAt = isoDate;
       apiData.startAt = isoDate;
@@ -411,11 +463,22 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   };
 
-  const handleScheduleModeChange = (next: "ate" | "entre" | "em") => {
+  const handleScheduleModeChange = (next: "ate" | "entre" | "em" | "sem_prazo") => {
     if (next === currentScheduleMode) return;
     // Persist immediately when the mode is fully specifiable from existing
     // data; otherwise switch only the local UI mode and let the date input
     // handler persist mode + dates atomically.
+    if (next === "sem_prazo") {
+      setPendingMode(null);
+      data.onInlineUpdate?.(id, { taskScheduleMode: "sem_prazo", taskStartAt: null, taskDueDate: null });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: "sem_prazo", startAt: null, dueDate: null } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
     if (next === "ate") {
       setPendingMode(null);
       data.onInlineUpdate?.(id, { taskScheduleMode: "ate", taskStartAt: null });
@@ -452,6 +515,60 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     setPendingMode(next);
   };
 
+  const handleStartAtSelect = (val: string) => {
+    if (val && data.taskDueDate) {
+      const dueStr = data.taskDueDate.slice(0, 10);
+      if (val > dueStr) {
+        toast({ title: "início deve ser até o fim", variant: "destructive" });
+        return;
+      }
+    }
+    if (!val) {
+      if (data.taskStartAt) {
+        data.onInlineUpdate?.(id, { taskStartAt: null });
+        if (data.taskId) {
+          updateTaskDetailsMut.mutate(
+            { workspaceId, mapId, cardId: id, data: { startAt: null } },
+            { onSuccess: invalidateAll },
+          );
+        }
+      }
+      return;
+    }
+    const iso = val + "T12:00:00.000Z";
+    if (!pendingMode && (data.taskStartAt ?? null) === iso) return;
+    // "entre" auto-fill: empty dueDate → default to startAt + 1 day.
+    if (currentScheduleMode === "entre" && !data.taskDueDate) {
+      const autoDueIso = addOneDayYmd(val) + "T12:00:00.000Z";
+      data.onInlineUpdate?.(id, {
+        taskStartAt: iso,
+        taskDueDate: autoDueIso,
+        taskScheduleMode: "entre",
+      });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: "entre", startAt: iso, dueDate: autoDueIso } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
+    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskStartAt: iso };
+    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { startAt: iso };
+    if (pendingMode) {
+      patch.taskScheduleMode = pendingMode;
+      apiData.scheduleMode = pendingMode;
+    }
+    data.onInlineUpdate?.(id, patch);
+    if (data.taskId) {
+      updateTaskDetailsMut.mutate(
+        { workspaceId, mapId, cardId: id, data: apiData },
+        { onSuccess: invalidateAll },
+      );
+    }
+  };
+
+  // Legacy blur handler kept for backwards compat — not used by popover flow.
   const handleStartAtBlur = () => {
     setEditingStartAt(false);
     if (startAtValue && data.taskDueDate) {
@@ -476,8 +593,26 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
     const iso = startAtValue + "T12:00:00.000Z";
     if (!pendingMode && (data.taskStartAt ?? null) === iso) return;
-    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" } = { taskStartAt: iso };
-    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" } = { startAt: iso };
+    // In "entre" mode: if dueDate is empty, auto-default it to startAt + 1
+    // day so the range is always valid (and so the backend, which rejects
+    // partial "entre", doesn't 400). Existing dueDate is preserved.
+    if (currentScheduleMode === "entre" && !data.taskDueDate) {
+      const autoDueIso = addOneDayYmd(startAtValue) + "T12:00:00.000Z";
+      data.onInlineUpdate?.(id, {
+        taskStartAt: iso,
+        taskDueDate: autoDueIso,
+        taskScheduleMode: "entre",
+      });
+      if (data.taskId) {
+        updateTaskDetailsMut.mutate(
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: "entre", startAt: iso, dueDate: autoDueIso } },
+          { onSuccess: invalidateAll },
+        );
+      }
+      return;
+    }
+    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskStartAt: iso };
+    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { startAt: iso };
     if (pendingMode) {
       patch.taskScheduleMode = pendingMode;
       apiData.scheduleMode = pendingMode;
@@ -814,7 +949,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 <div className="flex items-center gap-1">
                   <select
                     value={currentScheduleMode}
-                    onChange={(e) => { e.stopPropagation(); handleScheduleModeChange(e.target.value as "ate" | "entre" | "em"); }}
+                    onChange={(e) => { e.stopPropagation(); handleScheduleModeChange(e.target.value as "ate" | "entre" | "em" | "sem_prazo"); }}
                     onClick={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => e.stopPropagation()}
                     className="nodrag text-[10px] bg-card border border-border rounded-lg px-1.5 py-0.5 outline-none cursor-pointer"
@@ -823,85 +958,67 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                     <option value="ate">fazer até</option>
                     <option value="entre">fazer entre</option>
                     <option value="em">fazer em</option>
+                    <option value="sem_prazo">sem prazo</option>
                   </select>
                   {currentScheduleMode === "entre" && (
-                    editingStartAt ? (
-                      <input
-                        type="date"
-                        autoFocus
-                        max={data.taskDueDate ? data.taskDueDate.slice(0, 10) : undefined}
-                        ref={(el) => {
-                          if (el) {
-                            try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
-                          }
-                        }}
-                        className="nodrag text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer"
-                        value={startAtValue}
-                        onChange={e => setStartAtValue(e.target.value)}
-                        onBlur={handleStartAtBlur}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setStartAtValue(data.taskStartAt ? data.taskStartAt.split('T')[0] : ''); setEditingStartAt(false); } }}
-                        onClick={e => e.stopPropagation()}
-                        title="Início"
-                      />
-                    ) : hasStartAt ? (
-                      <div
-                        className="flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer nodrag"
-                        title="Clique para editar início"
-                        onClick={(e) => { e.stopPropagation(); setEditingStartAt(true); }}
-                        onDoubleClick={(e) => e.stopPropagation()}
-                      >
-                        <Calendar className="w-3 h-3 flex-shrink-0" />
-                        <span>{startAtStr}</span>
-                      </div>
-                    ) : (
-                      <button
-                        className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer"
-                        title="Adicionar início"
-                        onClick={(e) => { e.stopPropagation(); setEditingStartAt(true); }}
-                      >
-                        <Calendar className="w-3 h-3" />
-                      </button>
-                    )
+                    <DatePickerPopover
+                      value={data.taskStartAt ? data.taskStartAt.slice(0, 10) : ""}
+                      onSelect={handleStartAtSelect}
+                      max={data.taskDueDate ? data.taskDueDate.slice(0, 10) : undefined}
+                    >
+                      {hasStartAt ? (
+                        <button
+                          type="button"
+                          className="nodrag flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer bg-transparent border-none"
+                          title="Clique para editar início"
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                        >
+                          <Calendar className="w-3 h-3 flex-shrink-0" />
+                          <span>{startAtStr}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer bg-transparent border-none"
+                          title="Adicionar início"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Calendar className="w-3 h-3" />
+                        </button>
+                      )}
+                    </DatePickerPopover>
                   )}
                 </div>
 
                 {/* Due-date row — below startAt for "entre", inline otherwise */}
-                {editingDueDate ? (
-                  <input
-                    type="date"
-                    autoFocus
-                    min={currentScheduleMode === "entre" && data.taskStartAt ? data.taskStartAt.slice(0, 10) : undefined}
-                    ref={(el) => {
-                      if (el) {
-                        try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* noop */ }
-                      }
-                    }}
-                    className="nodrag text-[11px] bg-card border border-border rounded-lg px-2 py-1 outline-none cursor-pointer"
-                    value={dueDateValue}
-                    onChange={e => setDueDateValue(e.target.value)}
-                    onBlur={handleDueDateBlur}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setDueDateValue(data.taskDueDate ? data.taskDueDate.split('T')[0] : ''); setEditingDueDate(false); } }}
-                    onClick={e => e.stopPropagation()}
-                  />
-                ) : hasDueDate ? (
-                  <div
-                    className={`flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} cursor-pointer nodrag`}
-                    title="Clique para editar fazer"
-                    onClick={(e) => { e.stopPropagation(); setEditingDueDate(true); }}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  >
-                    <Calendar className="w-3 h-3 flex-shrink-0" />
-                    <span>{dueDateStr}</span>
-                  </div>
-                ) : (
-                  <button
-                    className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer"
-                    title="Adicionar fazer"
-                    onClick={(e) => { e.stopPropagation(); setEditingDueDate(true); }}
-                  >
-                    <Calendar className="w-3 h-3" />
-                  </button>
-                )}
+                <DatePickerPopover
+                  value={data.taskDueDate ? data.taskDueDate.slice(0, 10) : ""}
+                  onSelect={handleDueDateSelect}
+                  min={currentScheduleMode === "entre" && data.taskStartAt ? data.taskStartAt.slice(0, 10) : undefined}
+                >
+                  {hasDueDate ? (
+                    <button
+                      type="button"
+                      className={`nodrag flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} cursor-pointer bg-transparent border-none`}
+                      title="Clique para editar fazer"
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    >
+                      <Calendar className="w-3 h-3 flex-shrink-0" />
+                      <span>{dueDateStr}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer bg-transparent border-none"
+                      title="Adicionar fazer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Calendar className="w-3 h-3" />
+                    </button>
+                  )}
+                </DatePickerPopover>
               </div>
             )}
           </div>

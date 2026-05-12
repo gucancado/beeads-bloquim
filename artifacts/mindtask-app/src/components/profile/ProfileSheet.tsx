@@ -7,7 +7,21 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Loader2, Save, Building2, Pencil, EyeOff, Camera, Plug } from "lucide-react";
 import { Link } from "wouter";
 import { useMyWorkspaces, useUpdateMe } from "@/hooks/useProfile";
-import { useGetMe } from "@workspace/api-client-react";
+import {
+  useGetMe,
+  type UserClass,
+  type UserPronouns,
+  type UserResponse,
+} from "@workspace/api-client-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PhoneInput } from "./PhoneInput";
 import { useAvatarUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +39,22 @@ function translateRole(role: string) {
     default: return role;
   }
 }
+
+const USER_CLASS_OPTIONS: { value: UserClass; label: string }[] = [
+  { value: "analista_dados", label: "Analista de dados" },
+  { value: "designer", label: "Designer" },
+  { value: "gerente_contas", label: "Gerente de contas" },
+  { value: "gestor_midias_sociais", label: "Gestor de mídias sociais" },
+  { value: "gestor_trafego", label: "Gestor de tráfego" },
+  { value: "tecnico", label: "Técnico" },
+];
+
+const PRONOUN_OPTIONS: { value: UserPronouns; label: string }[] = [
+  { value: "ela_dela", label: "ela/dela" },
+  { value: "ele_dele", label: "ele/dele" },
+  { value: "elu_delu", label: "elu/delu" },
+  { value: "name_only", label: "usar apenas meu nome" },
+];
 
 function roleColor(role: string) {
   switch (role) {
@@ -45,6 +75,10 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
 
   const [name, setName] = useState("");
   const [editingName, setEditingName] = useState(false);
+
+  // Cast until `useGetMe` regenerates with the extended UserResponse — the
+  // backend already returns the new fields, so this just gives us typed access.
+  const me = user as UserResponse | undefined;
 
   useEffect(() => {
     if (user?.name) setName(user.name);
@@ -67,6 +101,35 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSaveName();
     if (e.key === "Escape") { setName(user?.name ?? ""); setEditingName(false); }
+  };
+
+  // Autosave is fire-and-forget — the mutation does an optimistic cache
+  // update so the UI reflects the change instantly. Errors roll back and
+  // surface a toast; success is silent (matches the task-edit UX).
+  const handleSaveWhatsapp = (next: string | null) => {
+    updateMe.mutate(
+      { whatsapp: next },
+      { onError: () => toast({ title: "Erro ao atualizar WhatsApp.", variant: "destructive" }) },
+    );
+  };
+
+  const handleToggleClass = (value: UserClass, checked: boolean) => {
+    const current = me?.classes ?? [];
+    const next = checked
+      ? Array.from(new Set([...current, value]))
+      : current.filter((c) => c !== value);
+    updateMe.mutate(
+      { classes: next },
+      { onError: () => toast({ title: "Erro ao atualizar classes.", variant: "destructive" }) },
+    );
+  };
+
+  const handleChangePronouns = (value: UserPronouns) => {
+    if (value === me?.pronouns) return;
+    updateMe.mutate(
+      { pronouns: value },
+      { onError: () => toast({ title: "Erro ao atualizar pronomes.", variant: "destructive" }) },
+    );
   };
 
   const handleAvatarClick = () => {
@@ -201,6 +264,63 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               E-mail
             </label>
             <p className="text-base text-muted-foreground">{user?.email}</p>
+          </div>
+
+          {/* WhatsApp */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-2 block lowercase">
+              WhatsApp
+            </label>
+            <PhoneInput
+              value={me?.whatsapp ?? null}
+              onCommit={handleSaveWhatsapp}
+            />
+          </div>
+
+          {/* Pronouns */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-2 block lowercase">
+              Pronomes
+            </label>
+            <Select
+              value={me?.pronouns ?? "name_only"}
+              onValueChange={(v) => handleChangePronouns(v as UserPronouns)}
+            >
+              <SelectTrigger className="rounded-xl bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRONOUN_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="lowercase">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Classes */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-2 block lowercase">
+              Classes
+            </label>
+            <div className="space-y-2">
+              {USER_CLASS_OPTIONS.map((opt) => {
+                const checked = me?.classes?.includes(opt.value) ?? false;
+                return (
+                  <label
+                    key={opt.value}
+                    className="flex items-center gap-3 p-2.5 rounded-xl border bg-background hover:bg-accent/30 transition-colors cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => handleToggleClass(opt.value, v === true)}
+                    />
+                    <span className="text-sm flex-1 lowercase">{opt.label}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
 
           {/* Integrations */}

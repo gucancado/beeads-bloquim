@@ -12,4 +12,5 @@ export const ScheduleMode = {
   ate: "ate",
   entre: "entre",
   em: "em",
+  sem_prazo: "sem_prazo",
 } as const;
