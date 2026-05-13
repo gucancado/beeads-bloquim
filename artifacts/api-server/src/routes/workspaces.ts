@@ -184,6 +184,7 @@ router.get("/:workspaceId", requireAuth, requireWorkspaceRole(["admin", "editor"
         email: users.email,
         avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
+        classes: users.classes,
       },
     })
     .from(workspaceMembers)
