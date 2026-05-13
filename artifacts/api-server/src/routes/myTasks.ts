@@ -2,7 +2,7 @@ import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
-import { eq, and, or, asc, sql, inArray, isNull, count, not } from "drizzle-orm";
+import { eq, and, or, asc, sql, inArray, isNull, count, not, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
@@ -51,9 +51,32 @@ router.get("/members", requireAuth, async (req: AuthRequest, res) => {
 
 router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
-  const { assignedTo } = req.query as { assignedTo?: string };
+  const { assignedTo, dayStart, dayEnd } = req.query as {
+    assignedTo?: string;
+    dayStart?: string;
+    dayEnd?: string;
+  };
 
   const assignees = assignedTo !== undefined ? assignedTo.split(",").filter(Boolean) : ["me"];
+
+  // dayStart/dayEnd vêm do cliente em ISO para que a janela "hoje" siga o
+  // fuso do navegador, não o do servidor (Hetzner roda em UTC).
+  // Fallback: meia-noite local do servidor.
+  const parseBoundary = (raw: string | undefined, fallback: () => Date): Date => {
+    if (!raw) return fallback();
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? fallback() : parsed;
+  };
+  const startOfToday = parseBoundary(dayStart, () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const startOfTomorrow = parseBoundary(dayEnd, () => {
+    const d = new Date(startOfToday);
+    d.setDate(d.getDate() + 1);
+    return d;
+  });
 
   const buildAssigneeFilter = () => {
     if (assignees.length === 0) return undefined;
@@ -80,19 +103,37 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
     ? or(inArray(tasks.workspaceId, memberWorkspaceIds), and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId)))
     : and(isNull(tasks.workspaceId), eq(tasks.assignedTo, userId));
 
-  const rows = await db
-    .select({ status: tasks.status, cnt: count() })
-    .from(tasks)
-    .where(
-      and(
-        ownershipFilter,
-        buildAssigneeFilter(),
-      )
-    )
-    .groupBy(tasks.status);
+  const baseWhere = and(ownershipFilter, buildAssigneeFilter());
 
-  const result = { pending: 0, in_progress: 0, completed: 0, blocked: 0, draft: 0 } as Record<string, number>;
-  for (const row of rows) {
+  // Tarefas que NÃO contam pra atrasada/devida-hoje: completed, blocked, draft.
+  // Isso bate com o que o usuário vê como "carga ativa".
+  const activeOnly = not(inArray(tasks.status, ["completed", "blocked", "draft"]));
+
+  const [statusRows, [extra]] = await Promise.all([
+    db
+      .select({ status: tasks.status, cnt: count() })
+      .from(tasks)
+      .where(baseWhere)
+      .groupBy(tasks.status),
+    db
+      .select({
+        dueToday: sql<number>`count(*) filter (where ${tasks.dueDate} >= ${startOfToday} and ${tasks.dueDate} < ${startOfTomorrow})::int`,
+        overdue: sql<number>`count(*) filter (where ${tasks.overdue} = true)::int`,
+      })
+      .from(tasks)
+      .where(and(baseWhere, activeOnly)),
+  ]);
+
+  const result = {
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    blocked: 0,
+    draft: 0,
+    dueToday: extra?.dueToday ?? 0,
+    overdue: extra?.overdue ?? 0,
+  } as Record<string, number>;
+  for (const row of statusRows) {
     if (row.status && row.status in result) {
       result[row.status] = Number(row.cnt);
     }

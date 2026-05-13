@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { DashboardGreeting } from "@/components/DashboardGreeting";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
 import { Loader2, Plus } from "lucide-react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -85,6 +86,13 @@ export default function MyTasksPage() {
     queryFn: () => {
       const p = new URLSearchParams();
       p.set("assignedTo", selectedAssignees.join(","));
+      // Janela "hoje" no fuso do navegador — o server roda em UTC.
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      p.set("dayStart", dayStart.toISOString());
+      p.set("dayEnd", dayEnd.toISOString());
       return customFetch(`/api/my-tasks/counts?${p.toString()}`);
     },
   });
@@ -179,6 +187,16 @@ export default function MyTasksPage() {
                 <Plus className="w-5 h-5" />
               </Button>
             </div>
+
+            {me && (me as { createdAt?: string }).createdAt && (
+              <DashboardGreeting
+                name={me.name}
+                createdAt={(me as { createdAt: string }).createdAt}
+                tasksDueToday={statusCounts?.dueToday ?? 0}
+                overdueTasks={statusCounts?.overdue ?? 0}
+                className="text-base font-light lowercase text-foreground/80 text-center"
+              />
+            )}
 
             <div className="flex flex-wrap items-center justify-center gap-2">
               <AssigneeFilterPills
