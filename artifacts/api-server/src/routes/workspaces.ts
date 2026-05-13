@@ -269,6 +269,7 @@ router.get("/:workspaceId/members", requireAuth, requireWorkspaceRole(["admin", 
         email: users.email,
         avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
+        classes: users.classes,
       },
     })
     .from(workspaceMembers)
