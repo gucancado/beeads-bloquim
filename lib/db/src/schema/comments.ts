@@ -11,6 +11,7 @@ export const taskComments = pgTable("task_comments", {
     .references(() => users.id, { onDelete: "set null" }),
   content: text("content").notNull(),
   hidden: boolean("hidden").notNull().default(false),
+  source: text("source"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

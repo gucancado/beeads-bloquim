@@ -3,7 +3,6 @@ import {
   tasks,
   cards,
   cardConnections,
-  taskActivities,
   users,
 } from "@workspace/db/schema";
 import { eq, and, asc, inArray, ne } from "drizzle-orm";
@@ -16,6 +15,7 @@ import {
   getApprovalChainInfo,
   computeTerminalCardId,
 } from "./approvalChainService";
+import { recordTaskActivity } from "./taskActivitiesService";
 
 export interface ApprovalDecisionResult {
   /** The updated approval task row, ready to be returned by the route. */
@@ -40,6 +40,7 @@ export async function approveApprovalTask(
   taskId: string,
   actorId: string,
   comment: string | null,
+  source: string | null = null,
 ): Promise<ApprovalDecisionResult | null> {
   const [approvalTask] = await db
     .select()
@@ -75,7 +76,7 @@ export async function approveApprovalTask(
     .where(eq(users.id, actorId))
     .limit(1);
 
-  await db.insert(taskActivities).values({
+  await recordTaskActivity({
     taskId,
     actorId,
     type: "task_approved",
@@ -83,10 +84,11 @@ export async function approveApprovalTask(
       actorName: actorUserApprove?.name ?? null,
       comment,
     },
+    source,
   });
 
   if (approvalTask.parentTaskId) {
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId: approvalTask.parentTaskId,
       actorId,
       type: "approval_comment",
@@ -96,6 +98,7 @@ export async function approveApprovalTask(
         comment,
         approvalTaskTitle: approvalTask.title,
       },
+      source,
     });
 
     // Check if all sibling approval tasks are now approved.
@@ -289,6 +292,7 @@ export async function rejectApprovalTask(
   taskId: string,
   actorId: string,
   comment: string | null,
+  source: string | null = null,
 ): Promise<ApprovalDecisionResult | null> {
   const [approvalTask] = await db
     .select()
@@ -324,7 +328,7 @@ export async function rejectApprovalTask(
     .where(eq(users.id, actorId))
     .limit(1);
 
-  await db.insert(taskActivities).values({
+  await recordTaskActivity({
     taskId,
     actorId,
     type: "task_rejected",
@@ -332,6 +336,7 @@ export async function rejectApprovalTask(
       actorName: actorUserReject?.name ?? null,
       comment,
     },
+    source,
   });
 
   if (approvalTask.parentTaskId) {
@@ -400,7 +405,7 @@ export async function rejectApprovalTask(
       }
     }
 
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId: approvalTask.parentTaskId,
       actorId,
       type: "approval_comment",
@@ -410,6 +415,7 @@ export async function rejectApprovalTask(
         comment,
         approvalTaskTitle: approvalTask.title,
       },
+      source,
     });
   }
 

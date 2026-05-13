@@ -22,6 +22,7 @@ import {
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
 } from "../services/taskAttachmentsService";
+import { recordTaskActivity } from "../services/taskActivitiesService";
 
 const router: IRouter = Router();
 
@@ -309,11 +310,12 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
 
-  await db.insert(taskActivities).values({
+  await recordTaskActivity({
     taskId: newTask.id,
     actorId: userId,
     type: "task_created",
     metadata: { actorName: actorUser?.name ?? null },
+    source: req.user?.source ?? null,
   });
 
   return res.status(201).json(newTask);
@@ -420,7 +422,7 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
 
   if (previousStatus !== newStatus) {
     const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId,
       actorId: userId,
       type: "status_changed",
@@ -429,6 +431,7 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
         oldStatus: previousStatus,
         newStatus,
       },
+      source: req.user?.source ?? null,
     });
   }
 
@@ -662,6 +665,7 @@ router.get("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
       authorAvatar: users.avatarUrl,
       content: taskComments.content,
       hidden: taskComments.hidden,
+      source: taskComments.source,
       createdAt: taskComments.createdAt,
       updatedAt: taskComments.updatedAt,
     })
@@ -686,7 +690,7 @@ router.post("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
   if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
   if (task.assignedTo !== userId) return res.status(403).json({ message: "Sem permissão" });
 
-  const [comment] = await db.insert(taskComments).values({ taskId, authorId: userId, content }).returning();
+  const [comment] = await db.insert(taskComments).values({ taskId, authorId: userId, content, source: req.user?.source ?? null }).returning();
   const [author] = await db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, userId)).limit(1);
 
   return res.status(201).json({ ...comment, authorName: author?.name ?? null, authorAvatar: author?.avatarUrl ?? null });

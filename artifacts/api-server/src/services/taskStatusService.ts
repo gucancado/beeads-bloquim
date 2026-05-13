@@ -2,7 +2,6 @@ import { db } from "@workspace/db";
 import {
   tasks,
   cards,
-  taskActivities,
   users,
   type RecurrenceConfig,
 } from "@workspace/db/schema";
@@ -12,6 +11,7 @@ import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { toVisualStatus, syncCardVisual } from "./taskVisualSyncService";
 import { getApprovalTaskStatus } from "./approvalCrudService";
+import { recordTaskActivity } from "./taskActivitiesService";
 
 /** Generic { status, body } envelope so route handlers stay one-liners. */
 export interface ServiceResponse<T = unknown> {
@@ -65,6 +65,7 @@ export async function patchTaskStatus(
   taskId: string,
   actorId: string,
   input: PatchStatusInput,
+  source: string | null = null,
 ): Promise<ServiceResponse> {
   const { status, isRecurring: bodyIsRecurring, recurrenceConfig: bodyRecurrenceConfig } = input;
 
@@ -102,7 +103,7 @@ export async function patchTaskStatus(
 
   if (previousStatus !== status) {
     const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1);
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId,
       actorId,
       type: "status_changed",
@@ -111,6 +112,7 @@ export async function patchTaskStatus(
         oldStatus: previousStatus,
         newStatus: status,
       },
+      source,
     });
   }
 
@@ -151,7 +153,7 @@ export async function patchTaskStatus(
         .set({ statusVisual: childVisual, updatedAt: new Date() })
         .where(eq(cards.taskId, child.id));
       if (child.status !== approvalTaskNewStatus) {
-        await db.insert(taskActivities).values({
+        await recordTaskActivity({
           taskId: child.id,
           actorId,
           type: "status_changed",
@@ -160,6 +162,7 @@ export async function patchTaskStatus(
             oldStatus: child.status,
             newStatus: approvalTaskNewStatus,
           },
+          source,
         });
       }
     }

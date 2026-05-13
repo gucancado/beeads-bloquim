@@ -35,6 +35,7 @@ router.get(
         authorAvatar: users.avatarUrl,
         content: taskComments.content,
         hidden: taskComments.hidden,
+        source: taskComments.source,
         createdAt: taskComments.createdAt,
         updatedAt: taskComments.updatedAt,
       })
@@ -70,7 +71,7 @@ router.post(
 
     const [comment] = await db
       .insert(taskComments)
-      .values({ taskId: card.taskId, authorId: userId, content: parsed.data.content })
+      .values({ taskId: card.taskId, authorId: userId, content: parsed.data.content, source: req.user?.source ?? null })
       .returning();
 
     const [author] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
@@ -161,6 +162,7 @@ taskRouter.get(
         authorAvatar: users.avatarUrl,
         content: taskComments.content,
         hidden: taskComments.hidden,
+        source: taskComments.source,
         createdAt: taskComments.createdAt,
         updatedAt: taskComments.updatedAt,
       })
@@ -195,7 +197,7 @@ taskRouter.post(
 
     const [comment] = await db
       .insert(taskComments)
-      .values({ taskId, authorId: userId, content: parsed.data.content })
+      .values({ taskId, authorId: userId, content: parsed.data.content, source: req.user?.source ?? null })
       .returning();
 
     const [author] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);

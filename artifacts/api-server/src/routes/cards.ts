@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { cards, tasks, cardConnections, taskActivities, users } from "@workspace/db/schema";
+import { cards, tasks, cardConnections, users } from "@workspace/db/schema";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, requireCardInMap, requireMapInWorkspace, getMemberRole } from "../middlewares/permissions";
@@ -9,6 +9,7 @@ import { computeOverdue } from "../lib/overdue";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { resolveSchedule, isWithinScheduleWindow, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
+import { recordTaskActivity } from "../services/taskActivitiesService";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -96,11 +97,12 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), require
     .returning();
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
-  await db.insert(taskActivities).values({
+  await recordTaskActivity({
     taskId: task.id,
     actorId: userId,
     type: "task_created",
     metadata: { actorName: actorUser?.name ?? null },
+    source: req.user?.source ?? null,
   });
 
   res.status(201).json(updated);
@@ -236,11 +238,12 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     .where(eq(cards.id, cardId));
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
-  await db.insert(taskActivities).values({
+  await recordTaskActivity({
     taskId: task.id,
     actorId: userId,
     type: "task_created",
     metadata: { actorName: actorUser?.name ?? null },
+    source: req.user?.source ?? null,
   });
 
   res.status(201).json(task);
@@ -325,7 +328,7 @@ router.patch("/:cardId/task/status", requireAuth, requireCardInMap, async (req: 
 
   if (task.status !== status) {
     const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId: card.taskId,
       actorId: userId,
       type: "status_changed",
@@ -334,6 +337,7 @@ router.patch("/:cardId/task/status", requireAuth, requireCardInMap, async (req: 
         oldStatus: task.status,
         newStatus: status,
       },
+      source: req.user?.source ?? null,
     });
 
     // Sync approval tasks and their cards if this task has any
@@ -371,7 +375,7 @@ router.patch("/:cardId/task/status", requireAuth, requireCardInMap, async (req: 
         .set({ statusVisual: childVisual, updatedAt: new Date() })
         .where(eq(cards.taskId, child.id));
       if (child.status !== approvalNewStatus) {
-        await db.insert(taskActivities).values({
+        await recordTaskActivity({
           taskId: child.id,
           actorId: userId,
           type: "status_changed",
@@ -380,6 +384,7 @@ router.patch("/:cardId/task/status", requireAuth, requireCardInMap, async (req: 
             oldStatus: child.status,
             newStatus: approvalNewStatus,
           },
+          source: req.user?.source ?? null,
         });
       }
     }
@@ -575,7 +580,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
       const [oldUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, currentTask.assignedTo)).limit(1);
       oldAssigneeName = oldUser?.name ?? null;
     }
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId: card.taskId,
       actorId: userId,
       type: "assignee_changed",
@@ -586,11 +591,12 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
         oldAssigneeName,
         newAssigneeName,
       },
+      source: req.user?.source ?? null,
     });
   }
 
   if (parsed.data.priority !== undefined && currentTask && parsed.data.priority !== currentTask.priority) {
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId: card.taskId,
       actorId: userId,
       type: "priority_changed",
@@ -599,6 +605,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
         oldPriority: currentTask.priority ?? null,
         newPriority: parsed.data.priority ?? null,
       },
+      source: req.user?.source ?? null,
     });
   }
 
@@ -606,7 +613,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
     const oldDateStr = currentTask.dueDate ? currentTask.dueDate.toISOString().slice(0, 10) : null;
     const newDateStr = parsed.data.dueDate ? parsed.data.dueDate.slice(0, 10) : null;
     if (oldDateStr !== newDateStr) {
-      await db.insert(taskActivities).values({
+      await recordTaskActivity({
         taskId: card.taskId,
         actorId: userId,
         type: "due_date_changed",
@@ -615,6 +622,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
           oldDueDate: oldDateStr,
           newDueDate: newDateStr,
         },
+        source: req.user?.source ?? null,
       });
     }
   }

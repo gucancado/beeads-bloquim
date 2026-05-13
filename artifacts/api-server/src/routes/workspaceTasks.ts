@@ -39,6 +39,7 @@ import {
   approveApprovalTask,
   rejectApprovalTask,
 } from "../services/approvalActionService";
+import { recordTaskActivity } from "../services/taskActivitiesService";
 import {
   MAX_APPROVERS,
   getApprovalTaskStatus,
@@ -249,11 +250,12 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       : Promise.resolve([]),
   ]);
 
-  await db.insert(taskActivities).values({
+  await recordTaskActivity({
     taskId: task.id,
     actorId,
     type: "task_created",
     metadata: { actorName: actorUser[0]?.name ?? null },
+    source: req.user?.source ?? null,
   });
 
   res.status(201).json({
@@ -460,7 +462,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
         : Promise.resolve([]),
     ]);
 
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId,
       actorId,
       type: "assignee_changed",
@@ -471,11 +473,12 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
         oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
         newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
       },
+      source: req.user?.source ?? null,
     });
   }
 
   if (priorityChanging) {
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId,
       actorId,
       type: "priority_changed",
@@ -484,11 +487,12 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
         oldPriority: existing.priority ?? null,
         newPriority: parsed.data.priority ?? null,
       },
+      source: req.user?.source ?? null,
     });
   }
 
   if (dueDateChanging) {
-    await db.insert(taskActivities).values({
+    await recordTaskActivity({
       taskId,
       actorId,
       type: "due_date_changed",
@@ -497,6 +501,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
         oldDueDate: safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null,
         newDueDate: parsed.data.dueDate ?? null,
       },
+      source: req.user?.source ?? null,
     });
   }
 
@@ -519,7 +524,7 @@ router.patch("/:taskId/status", requireAuth, requireWorkspaceRole(["admin", "edi
     return;
   }
 
-  const result = await patchTaskStatus(workspaceId, taskId, actorId, parsed.data);
+  const result = await patchTaskStatus(workspaceId, taskId, actorId, parsed.data, req.user?.source ?? null);
   res.status(result.status).json(result.body);
 });
 
@@ -869,6 +874,7 @@ router.post("/:taskId/approve", requireAuth, requireWorkspaceRole(["admin", "edi
     taskId,
     req.user!.userId,
     parsed.data.comment ?? null,
+    req.user?.source ?? null,
   );
   if (!result) {
     res.status(404).json({ error: "Approval task not found" });
@@ -892,6 +898,7 @@ router.post("/:taskId/reject", requireAuth, requireWorkspaceRole(["admin", "edit
     taskId,
     req.user!.userId,
     parsed.data.comment ?? null,
+    req.user?.source ?? null,
   );
   if (!result) {
     res.status(404).json({ error: "Approval task not found" });

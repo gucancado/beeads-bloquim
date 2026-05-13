@@ -193,6 +193,7 @@ function CommentCard({
             <span className="text-xs font-semibold text-foreground truncate">{comment.authorName}</span>
             <span className="text-[10px] text-muted-foreground ml-1.5">
               {format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              {comment.source === "mcp" ? " via mcp" : ""}
             </span>
           </div>
         </div>
@@ -237,6 +238,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function formatActivityText(activity: TaskActivityItem): string {
+  const base = buildActivityBase(activity);
+  if (!base) return base;
+  const source = activity.metadata?.source;
+  return source === "mcp" ? `${base} via mcp` : base;
+}
+
+function buildActivityBase(activity: TaskActivityItem): string {
   const date = new Date(activity.createdAt);
   const dateStr = format(date, "dd/MM/yyyy HH:mm");
   const m = activity.metadata ?? {};

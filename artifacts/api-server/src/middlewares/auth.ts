@@ -9,6 +9,7 @@ if (!JWT_SECRET) {
 export interface AuthPayload {
   userId: string;
   email: string;
+  source?: string;
 }
 
 export interface AuthRequest extends Request {

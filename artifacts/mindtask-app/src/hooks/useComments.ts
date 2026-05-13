@@ -8,6 +8,7 @@ export interface CommentItem {
   authorAvatar?: string | null;
   content: string;
   hidden: boolean;
+  source?: string | null;
   createdAt: string;
   updatedAt: string;
 }
