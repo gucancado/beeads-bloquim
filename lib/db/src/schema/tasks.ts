@@ -102,6 +102,19 @@ export const tasks = pgTable("tasks", {
   parentApprovalStatus: parentApprovalStatusEnum("parent_approval_status"),
   isRecurring: boolean("is_recurring").notNull().default(false),
   recurrenceConfig: jsonb("recurrence_config").$type<RecurrenceConfig>(),
+  /**
+   * User who created the task. Nullable for two reasons:
+   * - rows that pre-date this column (backfill leaves NULL where the
+   *   `task_created` activity is missing);
+   * - the FK uses `set null` so deleting a user preserves the task.
+   *
+   * Used to enforce "only the creator can delete" — see DELETE routes in
+   * myTasks.ts / workspaceTasks.ts. NULL rows refuse delete via API (must go
+   * through UI as workspace admin).
+   */
+  createdBy: uuid("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
@@ -173,6 +186,14 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   "task_approved",
   "task_rejected",
   "task_duplicated",
+  // Emitted when ≥1 checklist item is added via POST /:taskId/subtasks (workspace
+  // or standalone). Always batched: one row per request, metadata.itemCount
+  // carries how many items the call added. See add_checklist_items in the MCP.
+  "checklist_items_added",
+  // Emitted when a standalone task is moved into a workspace via
+  // POST /my-tasks/:taskId/move-to-workspace. metadata.toWorkspaceId is set;
+  // fromWorkspaceId is implicitly null (only standalone → workspace is supported).
+  "task_moved",
 ]);
 
 export const taskActivities = pgTable("task_activities", {

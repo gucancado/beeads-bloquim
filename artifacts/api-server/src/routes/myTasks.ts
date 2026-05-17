@@ -23,6 +23,12 @@ import {
   getTaskAttachmentForDownload,
 } from "../services/taskAttachmentsService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
+import {
+  createSubtasksPersonal,
+  updateSubtaskPersonal,
+  deleteSubtaskPersonal,
+} from "../services/taskSubtasksService";
+import { moveStandaloneTaskToWorkspace } from "../services/taskMoveService";
 
 const router: IRouter = Router();
 
@@ -306,6 +312,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     overdue: overdueValue,
     isRecurring: isRecurring ?? false,
     recurrenceConfig: recurrenceConfig ?? null,
+    createdBy: userId,
   }).returning();
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
@@ -587,6 +594,49 @@ router.patch("/:taskId/association", requireAuth, async (req: AuthRequest, res) 
   return res.json(updated);
 });
 
+// ---------------------------------------------------------------------------
+// POST /my-tasks/:taskId/move-to-workspace
+//
+// Dedicated, one-way (standalone → workspace) move that emits a task_moved
+// activity and allows reassignment to any member of the destination. The
+// generic PATCH /:taskId/association also lets you flip workspaceId, but its
+// semantics are tied to mind-map cards (it manages cards/maps as a side
+// effect) and doesn't audit the move — this endpoint is the canonical
+// move-task surface for agents and external integrations.
+// ---------------------------------------------------------------------------
+
+const moveToWorkspaceSchema = z.object({
+  targetWorkspaceId: z.string().uuid(),
+  assignee: z
+    .union([
+      z.object({ userId: z.string().uuid() }),
+      z.object({ email: z.string().email() }),
+      z.null(),
+    ])
+    .optional(),
+});
+
+router.post("/:taskId/move-to-workspace", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const parsed = moveToWorkspaceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "Validation error", message: parsed.error.message });
+  }
+
+  const result = await moveStandaloneTaskToWorkspace({
+    taskId,
+    callerId: userId,
+    callerSource: req.user?.source ?? null,
+    targetWorkspaceId: parsed.data.targetWorkspaceId,
+    assignee: parsed.data.assignee,
+  });
+  return res.status(result.status).json(result.body);
+});
+
 router.delete("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const { taskId } = req.params;
@@ -597,7 +647,16 @@ router.delete("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   if (existing.workspaceId !== null) {
     return res.status(403).json({ message: "Use a rota do workspace" });
   }
-  if (existing.assignedTo !== userId) {
+
+  // Permission rules (standalone tasks):
+  //  - Prefer createdBy when present. For tasks created after the createdBy
+  //    column was introduced, this is always the assignee (POST /my-tasks sets
+  //    createdBy = userId).
+  //  - Fall back to assignedTo for pre-migration rows where createdBy was
+  //    backfilled to assignedTo, but only as a defence in depth — both fields
+  //    point to the same user for standalone tasks.
+  const creator = existing.createdBy ?? existing.assignedTo;
+  if (creator !== userId) {
     return res.status(403).json({ message: "Sem permissão" });
   }
 
@@ -757,6 +816,65 @@ router.put("/:taskId/subtasks", requireAuth, async (req: AuthRequest, res) => {
 
   const result = await db.select().from(subtasks).where(eq(subtasks.taskId, taskId)).orderBy(asc(subtasks.order), asc(subtasks.createdAt));
   return res.json(result);
+});
+
+// ---------------------------------------------------------------------------
+// Per-item checklist mutations on standalone tasks.
+//
+// The taskSubtasksService runs the same ownership guard
+// (workspaceId IS NULL AND assignedTo = caller) so we don't need to repeat
+// the check in the route layer. The service mirrors the workspace endpoints
+// at /api/workspaces/:wId/tasks/:tId/subtasks/* — see add_checklist_items,
+// update_checklist_item, delete_checklist_item in the MCP.
+// ---------------------------------------------------------------------------
+
+const checklistItemSchemaPersonal = z.object({
+  text: z.string().min(1),
+  completed: z.boolean().optional().default(false),
+  order: z.number().int().optional(),
+});
+
+const createSubtasksSchemaPersonal = z.object({
+  items: z.array(checklistItemSchemaPersonal).min(1).max(50),
+});
+
+const updateSubtaskSchemaPersonal = checklistItemSchemaPersonal.partial();
+
+router.post("/:taskId/subtasks", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId } = req.params;
+
+  const parsed = createSubtasksSchemaPersonal.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation error", message: parsed.error.message });
+  }
+
+  const result = await createSubtasksPersonal(taskId, userId, parsed.data.items, {
+    userId,
+    source: req.user?.source ?? null,
+  });
+  return res.status(result.status).json(result.body);
+});
+
+router.patch("/:taskId/subtasks/:subtaskId", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId, subtaskId } = req.params;
+
+  const parsed = updateSubtaskSchemaPersonal.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Validation error", message: parsed.error.message });
+  }
+
+  const result = await updateSubtaskPersonal(taskId, userId, subtaskId, parsed.data);
+  return res.status(result.status).json(result.body);
+});
+
+router.delete("/:taskId/subtasks/:subtaskId", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const { taskId, subtaskId } = req.params;
+
+  const result = await deleteSubtaskPersonal(taskId, userId, subtaskId);
+  return res.status(result.status).json(result.body);
 });
 
 /**

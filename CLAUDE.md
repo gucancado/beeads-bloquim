@@ -204,7 +204,7 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | user_map_access | Registro de mapas visitados recentemente |
 | cards | Cards no mapa (posição, título, statusVisual) |
 | card_connections | Conexões (edges) entre cards |
-| tasks | Tarefas vinculadas a cards (status, prioridade, prazo, recorrência, aprovações) |
+| tasks | Tarefas vinculadas a cards (status, prioridade, prazo, recorrência, aprovações, created_by) |
 | task_approvals | Aprovadores de uma tarefa (ordem, status, modo sequencial/paralelo) |
 | task_activities | Log de atividades (mudanças de status, atribuições, etc.) |
 | task_subtasks | Subtarefas de uma tarefa |
@@ -217,7 +217,7 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | user_google_calendar_accounts | Contas Google Calendar vinculadas |
 | user_calendar_preferences | Preferências de calendário |
 
-**Enums relevantes**: task_status (pending, in_progress, completed, overdue, blocked, draft), task_priority (low, medium, high, critical), card_visual_status, workspace_role (admin, editor, executor), approval_status, approval_mode (sequential, parallel), schedule_mode (ate, entre, em), attachment_kind (standard, deliverable)
+**Enums relevantes**: task_status (pending, in_progress, completed, overdue, blocked, draft), task_priority (low, medium, high, critical), card_visual_status, workspace_role (admin, editor, executor), approval_status, approval_mode (sequential, parallel), schedule_mode (ate, entre, em, sem_prazo), attachment_kind (standard, deliverable), task_activity_type (task_created, assignee_changed, status_changed, priority_changed, due_date_changed, approval_comment, task_approved, task_rejected, task_duplicated, checklist_items_added, task_moved)
 
 ## Rotas de API
 
@@ -264,7 +264,18 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | /api/workspaces/:wId/tasks | Listar tarefas do workspace |
+| POST | /api/workspaces/:wId/tasks | Criar tarefa (grava `created_by = caller`) |
+| GET/PATCH | /api/workspaces/:wId/tasks/:tId | Detalhes / editar tarefa |
+| DELETE | /api/workspaces/:wId/tasks/:tId | Excluir tarefa (apenas criador OU admin do workspace; rejeita se `created_by` é NULL) |
+| PATCH | /api/workspaces/:wId/tasks/:tId/status | Mudar status |
+| POST | /api/workspaces/:wId/tasks/:tId/duplicate | Duplicar tarefa |
 | GET | /api/workspaces/:wId/tasks/counts | Contadores por status |
+| GET | /api/workspaces/:wId/tasks/:tId/activities | Activity log |
+| GET | /api/workspaces/:wId/tasks/:tId/subtasks | Listar checklist |
+| POST | /api/workspaces/:wId/tasks/:tId/subtasks | Adicionar 1..50 itens (body `{ items: [...] }`, activity batch `checklist_items_added`) |
+| PUT | /api/workspaces/:wId/tasks/:tId/subtasks | Replace bulk |
+| PATCH | /api/workspaces/:wId/tasks/:tId/subtasks/:sId | Editar item |
+| DELETE | /api/workspaces/:wId/tasks/:tId/subtasks/:sId | Remover item |
 | GET | /api/workspaces/:wId/tasks/:tId/approvals | Aprovadores |
 | POST | /api/workspaces/:wId/tasks/:tId/approvals | Adicionar aprovador |
 | DELETE | /api/workspaces/:wId/tasks/:tId/approvals/:aId | Remover aprovador |
@@ -283,12 +294,16 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | GET | /api/my-tasks/:tId | Detalhes da tarefa |
 | PATCH | /api/my-tasks/:tId | Atualizar tarefa |
 | PATCH | /api/my-tasks/:tId/status | Atualizar status |
-| DELETE | /api/my-tasks/:tId | Excluir tarefa |
-| PATCH | /api/my-tasks/:tId/association | Associar/desassociar a card |
+| DELETE | /api/my-tasks/:tId | Excluir tarefa (apenas criador — fallback assignee se created_by NULL) |
+| PATCH | /api/my-tasks/:tId/association | Associar/desassociar a card/workspace (sem activity log) |
+| POST | /api/my-tasks/:tId/move-to-workspace | Mover standalone → workspace (one-way, com activity `task_moved`) |
 | GET | /api/my-tasks/:tId/activities | Atividades da tarefa |
 | GET | /api/my-tasks/:tId/meta | Metadados da tarefa |
 | GET/POST | /api/my-tasks/:tId/comments | Comentários |
-| GET/PUT | /api/my-tasks/:tId/subtasks | Listar/atualizar subtarefas |
+| GET/PUT | /api/my-tasks/:tId/subtasks | Listar / replace bulk de subtarefas |
+| POST | /api/my-tasks/:tId/subtasks | Adicionar 1..50 itens de checklist (body `{ items: [...] }`) |
+| PATCH | /api/my-tasks/:tId/subtasks/:sId | Editar item de checklist |
+| DELETE | /api/my-tasks/:tId/subtasks/:sId | Remover item de checklist |
 | GET/POST | /api/my-tasks/:tId/attachments | Listar/criar anexos |
 | DELETE | /api/my-tasks/:tId/attachments/:aId | Excluir anexo |
 | GET | /api/my-tasks/:tId/attachments/:aId/download | Download de anexo |
@@ -373,6 +388,20 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 
 ### Sincronização Visual
 Ao atualizar `task.status`, o `taskVisualSyncService` atualiza automaticamente `card.statusVisual`. Cores: pending=azul, in_progress=âmbar, completed=esmeralda, overdue=vermelho, blocked=cinza, draft=slate.
+
+### Autoria e exclusão de tarefas (`tasks.created_by`)
+Toda tarefa criada após a migration `0027_add_task_created_by` carrega o `created_by` do usuário que disparou o POST. Os DELETE de tarefa usam essa coluna como regra de autorização:
+
+- **Standalone (`DELETE /api/my-tasks/:tId`)**: só o criador apaga. Fallback em `assigned_to` quando `created_by` é NULL (rows pré-migration — em standalone os dois apontam pra mesma pessoa).
+- **Workspace (`DELETE /api/workspaces/:wId/tasks/:tId`)**: o criador apaga, ou um admin do workspace (bypass para limpeza de tarefas de ex-membros). Rows com `created_by = NULL` (workspace antigas sem activity `task_created`) são rejeitadas via API — apague pela UI como admin.
+
+A migration faz backfill: standalone → copia de `assigned_to`; workspace → busca o `actor_id` da primeira activity `task_created` da tarefa. Tasks sem essa activity ficam NULL.
+
+### Activity log de checklist e move
+Duas operações novas emitem activities dedicadas:
+
+- `checklist_items_added` — uma entrada por chamada de `POST /:tId/subtasks`, com `metadata.itemCount` (string) e `metadata.sampleText` (texto do primeiro item, truncado em 80 chars). Independe de quantos itens foram inseridos: o log fica enxuto mesmo quando o agent dispara batches grandes.
+- `task_moved` — uma entrada por chamada de `POST /my-tasks/:tId/move-to-workspace`, com `metadata.toWorkspaceId`, `metadata.fromAssigneeId` e `metadata.toAssigneeId`. `fromWorkspaceId` é implícito null (só standalone → workspace é suportado).
 
 ## Regras para Trabalho Multi-Agente
 

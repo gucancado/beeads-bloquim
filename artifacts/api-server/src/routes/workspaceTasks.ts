@@ -51,7 +51,7 @@ import {
 import {
   listSubtasks,
   replaceSubtasks,
-  createSubtask,
+  createSubtasks,
   updateSubtask,
   deleteSubtask,
 } from "../services/taskSubtasksService";
@@ -240,6 +240,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       overdue: overdueValue,
       isRecurring: isRecurring ?? false,
       recurrenceConfig: recurrenceConfig ?? null,
+      createdBy: actorId,
     })
     .returning();
 
@@ -704,8 +705,46 @@ router.get("/:approvalTaskId/consolidated-activities", requireAuth, requireWorks
   res.json(merged);
 });
 
-router.delete("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (req: AuthRequest, res) => {
+router.delete("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
+  const userId = req.user!.userId;
+  const memberRole = (req as { memberRole?: string }).memberRole;
+
+  const [task] = await db
+    .select({ id: tasks.id, createdBy: tasks.createdBy })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId)))
+    .limit(1);
+  if (!task) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  // Permission rules (workspace tasks):
+  //  - The task's creator can always delete it.
+  //  - Workspace admins bypass — needed to clean up tasks of ex-members.
+  //  - Tasks pre-dating the createdBy column (created_by IS NULL) cannot be
+  //    deleted via this route: there is no recorded author to authorize the
+  //    operation against. Admins can still delete via the UI / direct DB.
+  const isCreator = task.createdBy !== null && task.createdBy === userId;
+  const isAdmin = memberRole === "admin";
+
+  if (!isCreator && !isAdmin) {
+    if (task.createdBy === null) {
+      res.status(403).json({
+        error: "Forbidden",
+        message:
+          "Tarefa sem autoria registrada — apague via UI como admin do workspace.",
+      });
+      return;
+    }
+    res.status(403).json({
+      error: "Forbidden",
+      message: "Apenas o criador da tarefa ou um admin do workspace pode apagá-la.",
+    });
+    return;
+  }
+
   await db.delete(tasks).where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspaceId)));
   res.json({ success: true });
 });
@@ -721,13 +760,23 @@ const bulkSubtasksSchema = z.object({
   subtasks: z.array(subtaskItemSchema),
 });
 
-const createSubtaskSchema = z.object({
+// Body for POST /:taskId/subtasks.
+//
+// Always batch-shaped: the canonical body is `{ items: [...] }`. Single-item
+// callers must still wrap their entry in an array. Cap of 50 mirrors the
+// limit we apply on other bulk operations; the MCP's add_checklist_items
+// tool surfaces it as its primary contract.
+const checklistItemSchema = z.object({
   text: z.string().min(1),
   completed: z.boolean().optional().default(false),
   order: z.number().int().optional(),
 });
 
-const updateSubtaskSchema = createSubtaskSchema.partial();
+const createSubtasksSchema = z.object({
+  items: z.array(checklistItemSchema).min(1).max(50),
+});
+
+const updateSubtaskSchema = checklistItemSchema.partial();
 
 router.get("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
@@ -751,13 +800,16 @@ router.put("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "edi
 router.post("/:taskId/subtasks", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId, taskId } = req.params;
 
-  const parsed = createSubtaskSchema.safeParse(req.body);
+  const parsed = createSubtasksSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
     return;
   }
 
-  const result = await createSubtask(workspaceId, taskId, parsed.data);
+  const result = await createSubtasks(workspaceId, taskId, parsed.data.items, {
+    userId: req.user!.userId,
+    source: req.user?.source ?? null,
+  });
   res.status(result.status).json(result.body);
 });
 
