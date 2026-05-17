@@ -746,7 +746,7 @@ export function TaskDetailModal({
                   isDuplicating={isDuplicating}
                   onDuplicate={handleDuplicate}
                   onDelete={() => setShowDelete(true)}
-                  taskId={resolvedTaskId ?? null}
+                  taskId={taskIdResolved ?? null}
                   taskStatus={status}
                   templatePortalContainer={dialogContentEl}
                   onTemplateApplied={() => {
