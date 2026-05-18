@@ -27,11 +27,13 @@ export function TaskApplyTemplateButton({
   status,
   onApplied,
   portalContainer,
+  skipConfirm = false,
 }: {
   taskId: string | null;
   status: string;
   onApplied: () => void;
   portalContainer?: HTMLElement | null;
+  skipConfirm?: boolean;
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -137,7 +139,8 @@ export function TaskApplyTemplateButton({
                 key={t.id}
                 onClick={() => {
                   setOpen(false);
-                  setConfirming(t);
+                  if (skipConfirm) applyMut.mutate(t.id);
+                  else setConfirming(t);
                 }}
                 className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors truncate"
                 title={displayName(t)}

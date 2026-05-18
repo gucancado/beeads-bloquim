@@ -17,6 +17,7 @@ export function TaskHeaderActions({
   taskStatus,
   onTemplateApplied,
   templatePortalContainer,
+  templateSkipConfirm,
 }: {
   parentApprovalStatus: string | null;
   isEditing: boolean;
@@ -31,6 +32,7 @@ export function TaskHeaderActions({
   taskStatus?: string;
   onTemplateApplied?: () => void;
   templatePortalContainer?: HTMLElement | null;
+  templateSkipConfirm?: boolean;
 }) {
   return (
     <>
@@ -73,6 +75,7 @@ export function TaskHeaderActions({
             status={taskStatus}
             onApplied={() => onTemplateApplied?.()}
             portalContainer={templatePortalContainer}
+            skipConfirm={templateSkipConfirm}
           />
         )}
         {isEditing && !isStandalone && !!effectiveWorkspaceId && (

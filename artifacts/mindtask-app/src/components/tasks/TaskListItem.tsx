@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { TASK_STATUS_ORDER, getStatusActiveClass } from "@/lib/taskStatusConstants";
+import { TASK_STATUS_ORDER, getStatusActiveClass, getStatusOrderEntry } from "@/lib/taskStatusConstants";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { getColorByIndex } from "@workspace/db/colorPalette";
 import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
@@ -83,10 +83,8 @@ const SCHEDULE_MODE_LABELS: Record<string, string> = Object.fromEntries(
   SCHEDULE_MODE_OPTIONS.map(o => [o.value, o.label]),
 );
 
-function getStatusLabel(s: string) {
-  if (s === "completed") return "concluída";
-  if (s === "blocked") return "cancelada";
-  return STATUS_OPTIONS.find(o => o.value === s)?.label ?? s.replace("_", " ");
+function getStatusEntry(s: string) {
+  return getStatusOrderEntry(s);
 }
 
 
@@ -508,28 +506,38 @@ export function TaskListItem({
 
         {/* Status badge — inline editable, fixed to right */}
         <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
-          <Badge
-            variant="outline"
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
-            onClick={handleStatusClick}
-            title="Clique para alterar status"
-          >
-            {getStatusLabel(localTask.status)}
-          </Badge>
+          {(() => {
+            const entry = getStatusEntry(localTask.status);
+            const StatusIcon = entry?.icon;
+            return (
+              <Badge
+                variant="outline"
+                className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+                onClick={handleStatusClick}
+                title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
+                aria-label={entry?.label ?? localTask.status}
+              >
+                {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
+              </Badge>
+            );
+          })()}
           {statusOpen && createPortal(
             <>
               <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {STATUS_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                  >
-                    <span className={`inline-block w-2 h-2 rounded-full ${opt.color.split(" ")[0]}`} />
-                    {opt.label}
-                  </button>
-                ))}
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[180px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+                {STATUS_OPTIONS.map(opt => {
+                  const OptIcon = opt.icon;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
+                    >
+                      <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace("bg-", "text-")}`} />
+                      {opt.menuLabel}
+                    </button>
+                  );
+                })}
               </div>
             </>,
             document.body

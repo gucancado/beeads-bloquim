@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex, formatDueDate, addOneDayYmd } from '@/lib/utils';
 import { DatePickerPopover } from '@/components/ui/date-picker-popover';
-import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized } from '@/lib/taskStatusConstants';
-import { Maximize2, Calendar, User, Plus, Paperclip, ListChecks, MessageSquare } from 'lucide-react';
+import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized, getStatusOrderEntry } from '@/lib/taskStatusConstants';
+import { Maximize2, Calendar, Plus, Paperclip, ListChecks, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorkspaceMembers } from '@workspace/api-client-react';
@@ -641,9 +641,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
     const mutedIconColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
     const mutedTextColor = isCompleted ? 'group-hover/node:text-emerald-600' : 'group-hover/node:text-slate-500';
-    const statusText = isCompleted
-      ? (completedDateStr ? `concluído em ${completedDateStr}` : 'concluído')
-      : getStatusLabelCentralized('blocked');
+    const mutedEntry = getStatusOrderEntry(data.statusVisual);
+    const MutedStatusIcon = mutedEntry?.icon;
+    const statusText = isCompleted ? completedDateStr : null;
     return (
       <div
         className={`group/node relative min-w-[180px] max-w-[240px] rounded-2xl transition-all duration-300 hover:shadow-md ${nodeColors.hoverBorder} ${nodeColors.bgLight} ${selected ? `border-[3px] scale-[1.02] ${nodeColors.borderSelected}` : `border-2 ${nodeColors.borderNormal}`}`}
@@ -715,9 +715,17 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             {data.taskAttachmentCount != null && data.taskAttachmentCount > 0 && (
               <Paperclip className="w-3 h-3 flex-shrink-0 text-gray-400" aria-label="Possui anexos" />
             )}
-            <span className={`text-[10px] text-gray-400 transition-colors duration-300 ${mutedTextColor}`}>
-              {statusText}
-            </span>
+            {MutedStatusIcon && (
+              <MutedStatusIcon
+                className={`w-3 h-3 flex-shrink-0 text-gray-400 transition-colors duration-300 ${mutedIconColor}`}
+                aria-label={mutedEntry?.label ?? ''}
+              />
+            )}
+            {statusText && (
+              <span className={`text-[10px] text-gray-400 transition-colors duration-300 ${mutedTextColor}`}>
+                {statusText}
+              </span>
+            )}
             {((data.taskSubtaskCount != null && data.taskSubtaskCount > 0) ||
               (data.taskCommentCount != null && data.taskCommentCount > 0)) && (
               <div className="ml-auto inline-flex items-center gap-2 flex-shrink-0">
@@ -1027,25 +1035,35 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         {/* Status badge */}
         <div className="mt-3 pt-3 border-t flex items-center gap-2 nodrag">
           <div className="flex flex-col gap-1 min-w-0">
-            <div
-              className={`flex items-center gap-2 ${hasTask ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1 transition-colors' : 'cursor-default'}`}
-              title={hasTask ? 'Clique para alterar status' : undefined}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                if (!hasTask) return;
-                e.stopPropagation();
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
-                const left = Math.max(4, Math.min(rect.left, window.innerWidth - 180));
-                setStatusDropdownPos({ top, left });
-                setEditingStatus(v => !v);
-              }}
-            >
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-              <span className="text-[10px] font-semibold tracking-wider text-muted-foreground lowercase">
-                {statusLabel(data.statusVisual)}
-              </span>
-            </div>
+            {(() => {
+              const entry = getStatusOrderEntry(data.statusVisual);
+              const StatusIcon = entry?.icon;
+              const ariaLabel = entry?.label ?? statusLabel(data.statusVisual);
+              return (
+                <div
+                  className={`flex items-center justify-center w-6 h-6 rounded-full ${hasTask ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+                  style={{ backgroundColor: color, color: '#fff' }}
+                  title={hasTask ? `status: ${ariaLabel}. Clique para alterar.` : `status: ${ariaLabel}`}
+                  aria-label={ariaLabel}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    if (!hasTask) return;
+                    e.stopPropagation();
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
+                    const left = Math.max(4, Math.min(rect.left, window.innerWidth - 180));
+                    setStatusDropdownPos({ top, left });
+                    setEditingStatus(v => !v);
+                  }}
+                >
+                  {StatusIcon ? (
+                    <StatusIcon className="w-3.5 h-3.5" />
+                  ) : (
+                    <span className="text-[9px] font-semibold tracking-wider lowercase">{ariaLabel}</span>
+                  )}
+                </div>
+              );
+            })()}
             {data.taskParentApprovalStatus && (
               <div className={`flex items-center gap-1.5 px-1 ${
                 data.taskParentApprovalStatus === 'approved' ? 'text-emerald-600 dark:text-emerald-400' :
@@ -1090,17 +1108,20 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           {editingStatus && createPortal(
             <>
               <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setEditingStatus(false); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: statusDropdownPos.top, left: statusDropdownPos.left }}>
-                {STATUS_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleStatusChange(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${data.statusVisual === opt.value ? 'opacity-60' : ''}`}
-                  >
-                    <span className={`inline-block w-2 h-2 rounded-full ${opt.dot}`} />
-                    {opt.label}
-                  </button>
-                ))}
+              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[180px]" style={{ top: statusDropdownPos.top, left: statusDropdownPos.left }}>
+                {STATUS_OPTIONS.map(opt => {
+                  const OptIcon = opt.icon;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={(e) => { e.stopPropagation(); handleStatusChange(opt.value); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${data.statusVisual === opt.value ? 'opacity-60' : ''}`}
+                    >
+                      <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace('bg-', 'text-')}`} />
+                      {opt.menuLabel}
+                    </button>
+                  );
+                })}
               </div>
             </>,
             document.body

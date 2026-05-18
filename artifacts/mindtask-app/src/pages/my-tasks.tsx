@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { groupTasksByDeadline } from "@/lib/groupTasksByDeadline";
 import { AgendaPanel } from "@/components/tasks/AgendaPanel";
 import { useRoute, useLocation } from "wouter";
+import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 
 interface OpenCard {
   workspaceId: string;
@@ -27,13 +28,7 @@ interface StandaloneTask {
   title: string;
 }
 
-const STATUS_OPTIONS = [
-  { value: "draft",       label: "rascunho",       labelPlural: "rascunhos",      activeClass: "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-950/60"   },
-  { value: "pending",     label: "pendente",       labelPlural: "pendentes",      activeClass: "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/60"             },
-  { value: "in_progress", label: "em andamento",  labelPlural: "em andamento",   activeClass: "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-950/60"     },
-  { value: "completed",   label: "concluída",      labelPlural: "concluídas",     activeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950/60" },
-  { value: "blocked",     label: "cancelada",      labelPlural: "canceladas",     activeClass: "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-800/60"      },
-];
+const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 export default function MyTasksPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
@@ -212,17 +207,22 @@ export default function MyTasksPage() {
               {STATUS_OPTIONS.map(opt => {
                 const isActive = selectedStatuses.includes(opt.value);
                 const cnt = statusCounts?.[opt.value] ?? 0;
+                const OptIcon = opt.icon;
+                const ariaLabel = cnt > 1 ? opt.labelPlural : opt.label;
                 return (
                   <button
                     key={opt.value}
                     onClick={() => toggleStatus(opt.value)}
-                    className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
+                    title={`${cnt} ${ariaLabel}`}
+                    aria-label={`${cnt} ${ariaLabel}`}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
                       isActive
                         ? opt.activeClass
                         : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
                     }`}
                   >
-                    {cnt} {cnt > 1 ? opt.labelPlural : opt.label}
+                    <OptIcon className="w-3.5 h-3.5" />
+                    <span>{cnt}</span>
                   </button>
                 );
               })}

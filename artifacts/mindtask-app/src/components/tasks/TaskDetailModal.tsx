@@ -749,6 +749,7 @@ export function TaskDetailModal({
                   taskId={taskIdResolved ?? null}
                   taskStatus={status}
                   templatePortalContainer={dialogContentEl}
+                  templateSkipConfirm={!!auto.autoCreatedTaskId && !auto.autoCreateDirty}
                   onTemplateApplied={() => {
                     resetTitleDescriptionInit();
                     invalidateTask();
@@ -1106,7 +1107,7 @@ export function TaskDetailModal({
                         : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
                     }`}
                   >
-                    {opt.label}
+                    {opt.menuLabel}
                   </button>
                 ))}
               </div>

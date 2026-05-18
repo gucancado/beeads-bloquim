@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Search, X, Loader2, Calendar, SlidersHorizontal, Check, ChevronDown } from "lucide-react";
+import { Search, X, Loader2, Calendar, SlidersHorizontal, Check, ChevronDown, AlertTriangle } from "lucide-react";
 import { customFetch } from "@workspace/api-client-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { translatePriority, getPriorityColor } from "@/components/tasks/priorityUtils";
 import { useMyWorkspaces } from "@/hooks/useProfile";
+import { TASK_STATUS_ORDER, getStatusOrderEntry } from "@/lib/taskStatusConstants";
 
 type SearchResult = {
   id: string;
@@ -23,33 +24,11 @@ type SearchResult = {
   mapName: string | null;
 };
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "draft", label: "rascunho" },
-  { value: "pending", label: "pendente" },
-  { value: "in_progress", label: "em andamento" },
-  { value: "completed", label: "concluída" },
-  { value: "blocked", label: "cancelada" },
-];
+const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 const DEFAULT_STATUSES = ["in_progress", "draft", "pending"];
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: "rascunho",
-  pending: "pendente",
-  in_progress: "em andamento",
-  completed: "concluída",
-  blocked: "cancelada",
-  overdue: "atrasada",
-};
-
-const STATUS_CLASS: Record<string, string> = {
-  draft: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
-  pending: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  in_progress: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-  completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  blocked: "bg-slate-100 text-slate-700 dark:bg-slate-800/40 dark:text-slate-300",
-  overdue: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
-};
+const OVERDUE_CLASS = "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
 
 function formatDueDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -289,18 +268,21 @@ export function GlobalTaskSearch() {
                 <div className="flex flex-wrap gap-1.5">
                   {STATUS_OPTIONS.map((opt) => {
                     const active = statuses.includes(opt.value);
+                    const OptIcon = opt.icon;
                     return (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => toggleStatus(opt.value)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border lowercase transition-all ${
+                        title={opt.label}
+                        aria-label={opt.label}
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full border transition-all ${
                           active
-                            ? `${STATUS_CLASS[opt.value]} border-transparent`
+                            ? opt.activeClass
                             : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
                         }`}
                       >
-                        {opt.label}
+                        <OptIcon className="w-3.5 h-3.5" />
                       </button>
                     );
                   })}
@@ -401,13 +383,37 @@ export function GlobalTaskSearch() {
                             <span className="text-sm font-medium text-foreground line-clamp-1 flex-1">
                               {t.title}
                             </span>
-                            <span
-                              className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium lowercase ${
-                                STATUS_CLASS[t.status] ?? "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {STATUS_LABEL[t.status] ?? t.status}
-                            </span>
+                            {(() => {
+                              const entry = getStatusOrderEntry(t.status);
+                              if (entry) {
+                                const StatusIcon = entry.icon;
+                                return (
+                                  <span
+                                    className={`shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full border ${entry.activeClass}`}
+                                    title={entry.label}
+                                    aria-label={entry.label}
+                                  >
+                                    <StatusIcon className="w-3.5 h-3.5" />
+                                  </span>
+                                );
+                              }
+                              if (t.status === "overdue") {
+                                return (
+                                  <span
+                                    className={`shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full ${OVERDUE_CLASS}`}
+                                    title="atrasada"
+                                    aria-label="atrasada"
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium lowercase bg-muted text-muted-foreground">
+                                  {t.status}
+                                </span>
+                              );
+                            })()}
                           </div>
 
                           {snippet && (
