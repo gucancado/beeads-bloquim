@@ -7,7 +7,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { computeOverdue } from "../lib/overdue";
-import { calculateNextDueDate } from "../lib/recurrence";
+import { calculateNextDueDateInFuture } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { toVisualStatus, syncCardVisual } from "./taskVisualSyncService";
 import { getApprovalTaskStatus } from "./approvalCrudService";
@@ -182,7 +182,7 @@ export async function patchTaskStatus(
   // Use updated.isRecurring/recurrenceConfig so that recurrence state sent atomically with status is respected
   if (status === "completed" && previousStatus !== "completed" && updated.isRecurring && updated.recurrenceConfig && !existing.mapId) {
     const completedAt = updated.completedAt ?? new Date();
-    const nextDueDate = calculateNextDueDate(existing.dueDate, updated.recurrenceConfig as RecurrenceConfig, completedAt);
+    const nextDueDate = calculateNextDueDateInFuture(existing.dueDate, updated.recurrenceConfig as RecurrenceConfig, completedAt);
     await duplicateRecurringTask(updated, nextDueDate, actorId, workspaceId);
   }
 

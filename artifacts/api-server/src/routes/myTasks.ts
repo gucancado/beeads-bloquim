@@ -11,7 +11,7 @@ const log = logger.child({ module: "myTasks" });
 import { computeOverdue } from "../lib/overdue";
 import { resolveSchedule, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
-import { calculateNextDueDate } from "../lib/recurrence";
+import { calculateNextDueDateInFuture } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
 import { getStorage } from "../lib/storage";
@@ -449,7 +449,7 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
   // Handle recurrence: when a recurring standalone task transitions INTO completed, duplicate it with the next due date
   if (newStatus === "completed" && previousStatus !== "completed" && effectiveIsRecurring && effectiveRecurrenceConfig && !existing.mapId) {
     const completedAt = updated.completedAt ?? new Date();
-    const nextDueDate = calculateNextDueDate(existing.dueDate, effectiveRecurrenceConfig as RecurrenceConfig, completedAt);
+    const nextDueDate = calculateNextDueDateInFuture(existing.dueDate, effectiveRecurrenceConfig as RecurrenceConfig, completedAt);
     await duplicateRecurringTask(updated, nextDueDate, userId, existing.workspaceId ?? undefined);
   }
 

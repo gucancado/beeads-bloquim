@@ -1,4 +1,5 @@
 import type { RecurrenceConfig } from "@workspace/db/schema";
+import { getTodayLocal } from "./overdue";
 
 /**
  * Add months to a date, clamping day-of-month to prevent rollover.
@@ -122,6 +123,45 @@ export function calculateNextDueDate(
     default:
       return null;
   }
+}
+
+/**
+ * Fast-forward `calculateNextDueDate` until the result is today or future.
+ *
+ * Used by the recurring-task duplication path so we never create a duplicated
+ * occurrence that is already overdue at birth — if the original task was
+ * completed weeks late, we skip past the missed occurrences and land on the
+ * next real one.
+ *
+ * Returns `null` when:
+ *   - the underlying `calculateNextDueDate` returns null (invalid type);
+ *   - iterations stagnate (e.g. `periodic` ignores `currentDueDate`, so a
+ *     past `completedAt + intervalDays` would loop forever) — caller treats
+ *     this as "give up the schedule, fall back to sem_prazo";
+ *   - the cap of 1000 iterations is reached.
+ */
+export function calculateNextDueDateInFuture(
+  currentDueDate: Date | null,
+  recurrenceConfig: RecurrenceConfig,
+  completedAt: Date,
+): Date | null {
+  const today = getTodayLocal();
+  const MAX_ITERATIONS = 1000;
+
+  let result = calculateNextDueDate(currentDueDate, recurrenceConfig, completedAt);
+  if (!result) return null;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const probe = new Date(result);
+    probe.setUTCHours(0, 0, 0, 0);
+    if (probe.getTime() >= today.getTime()) return result;
+
+    const next = calculateNextDueDate(result, recurrenceConfig, completedAt);
+    if (!next) return null;
+    if (next.getTime() <= result.getTime()) return null;
+    result = next;
+  }
+  return null;
 }
 
 /**
