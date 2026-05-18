@@ -215,7 +215,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
 
   const { title, description, priority, isRecurring, recurrenceConfig } = parsed.data;
 
-  const sched = resolveSchedule(parsed.data, { scheduleMode: "ate", startAt: null, dueDate: null });
+  const sched = resolveSchedule(parsed.data, { scheduleMode: "sem_prazo", startAt: null, dueDate: null });
   if (!sched.ok) {
     res.status(400).json({ error: "Validation error", message: sched.error });
     return;

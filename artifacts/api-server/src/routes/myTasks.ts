@@ -292,7 +292,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   const { title, description, priority, isRecurring, recurrenceConfig } = parsed.data;
-  const sched = resolveSchedule(parsed.data, { scheduleMode: "ate", startAt: null, dueDate: null });
+  const sched = resolveSchedule(parsed.data, { scheduleMode: "sem_prazo", startAt: null, dueDate: null });
   if (!sched.ok) {
     return res.status(400).json({ message: sched.error });
   }

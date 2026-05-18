@@ -87,7 +87,7 @@ export const tasks = pgTable("tasks", {
   }),
   dueDate: timestamp("due_date"),
   startAt: timestamp("start_at"),
-  scheduleMode: scheduleModeEnum("schedule_mode").notNull().default("ate"),
+  scheduleMode: scheduleModeEnum("schedule_mode").notNull().default("sem_prazo"),
   priority: taskPriorityEnum("priority").notNull().default("medium"),
   status: taskStatusEnum("status").notNull().default("pending"),
   previousStatus: taskStatusEnum("previous_status"),

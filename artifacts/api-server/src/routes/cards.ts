@@ -87,7 +87,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), require
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId, scheduleMode: "sem_prazo" })
     .returning();
 
   const [updated] = await db
@@ -205,7 +205,7 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     return;
   }
 
-  const sched = resolveSchedule(parsed.data, { scheduleMode: "ate", startAt: null, dueDate: null });
+  const sched = resolveSchedule(parsed.data, { scheduleMode: "sem_prazo", startAt: null, dueDate: null });
   if (!sched.ok) {
     res.status(400).json({ error: "Validation error", message: sched.error });
     return;

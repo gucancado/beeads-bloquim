@@ -63,7 +63,7 @@ export function useTaskDetailForm({
   const [priority, setPriority] = useState<string>("medium");
   const [dueDate, setDueDate] = useState("");
   const [startAt, setStartAt] = useState("");
-  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("ate");
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("sem_prazo");
   const [status, setStatus] = useState<string>("pending");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
@@ -87,7 +87,7 @@ export function useTaskDetailForm({
         setAssignedTo("unassigned");
         setDueDate("");
         setStartAt("");
-        setScheduleMode("ate");
+        setScheduleMode("sem_prazo");
       }
     }
   }, [card, isCardMode]);
@@ -123,7 +123,7 @@ export function useTaskDetailForm({
         setPriority("medium");
         setDueDate("");
         setStartAt("");
-        setScheduleMode("ate");
+        setScheduleMode("sem_prazo");
         setStatus("pending");
         setIsRecurring(false);
         setRecurrenceConfig(null);

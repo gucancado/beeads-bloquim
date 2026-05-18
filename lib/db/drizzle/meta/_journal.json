@@ -169,6 +169,13 @@
       "when": 1779660001000,
       "tag": "0028_add_activity_types_checklist_and_move",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1779660002000,
+      "tag": "0029_change_schedule_mode_default_to_sem_prazo",
+      "breakpoints": true
     }
   ]
 }
