@@ -78,6 +78,7 @@ router.get("/search", requireAuth, async (req: AuthRequest, res) => {
       assignedTo: tasks.assignedTo,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
+      assigneeClasses: users.classes,
       workspaceName: workspaces.name,
       workspaceColorIndex: workspaces.colorIndex,
       mapName: maps.name,

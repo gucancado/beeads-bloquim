@@ -107,6 +107,13 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
   const statuses: ValidStatus[] = (status ? status.split(",").filter(Boolean) : []).filter(
     (s): s is ValidStatus => VALID_STATUSES.includes(s as ValidStatus)
   );
+  // Pin "urgente" no topo APENAS quando o filtro ativo é um subconjunto de
+  // {draft, pending, in_progress} (trabalho ativo). Em filtros de
+  // completed/blocked/overdue, ou sem filtro, urgente não pina — o usuário
+  // está em modo de revisão/histórico, não de execução.
+  const ACTIVE_STATUSES = new Set(["draft", "pending", "in_progress"]);
+  const pinUrgente =
+    statuses.length > 0 && statuses.every(s => ACTIVE_STATUSES.has(s));
   const assignees = assignedTo ? assignedTo.split(",").filter(Boolean) : [];
 
   const buildAssigneeFilter = () => {
@@ -135,6 +142,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       status: tasks.status,
       overdue: tasks.overdue,
       completedAt: tasks.completedAt,
+      cancelledAt: tasks.cancelledAt,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       isApprovalTask: tasks.isApprovalTask,
@@ -149,6 +157,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
+      assigneeClasses: users.classes,
       attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachments WHERE task_id = ${tasks.id} AND deleted_at IS NULL)`,
       subtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
       subtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
@@ -169,6 +178,11 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       )
     )
     .orderBy(
+      // "urgente" pin (condicional — ver pinUrgente acima): aplicado só quando
+      // o filtro de status é subset de {draft, pending, in_progress}.
+      ...(pinUrgente
+        ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
+        : []),
       sql`${tasks.dueDate} ASC NULLS LAST`,
       sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
       asc(tasks.createdAt)
@@ -197,7 +211,7 @@ const createTaskSchema = z.object({
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   startAt: z.string().nullable().optional(),
-  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -339,6 +353,7 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
           actorId: taskActivities.actorId,
           actorName: users.name,
           actorAvatarUrl: users.avatarUrl,
+          actorClasses: users.classes,
           metadata: taskActivities.metadata,
           createdAt: taskActivities.createdAt,
         })
@@ -545,6 +560,7 @@ router.get("/:taskId/activities", requireAuth, requireWorkspaceRole(["admin", "e
       actorId: taskActivities.actorId,
       actorName: users.name,
       actorAvatarUrl: users.avatarUrl,
+      actorClasses: users.classes,
       type: taskActivities.type,
       metadata: taskActivities.metadata,
       createdAt: taskActivities.createdAt,
@@ -629,6 +645,7 @@ router.get("/:approvalTaskId/consolidated-activities", requireAuth, requireWorks
       actorId: taskActivities.actorId,
       actorName: users.name,
       actorAvatarUrl: users.avatarUrl,
+      actorClasses: users.classes,
       type: taskActivities.type,
       metadata: taskActivities.metadata,
       createdAt: taskActivities.createdAt,

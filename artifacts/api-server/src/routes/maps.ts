@@ -108,6 +108,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskAssigneeId: tasks.assignedTo,
       taskOverdue: tasks.overdue,
       taskAssigneeAvatarUrl: users.avatarUrl,
+      taskAssigneeClasses: users.classes,
       taskCompletedAt: tasks.completedAt,
       taskIsApprovalTask: tasks.isApprovalTask,
       taskParentTaskId: tasks.parentTaskId,
@@ -127,7 +128,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     .leftJoin(parentTasks, eq(parentTasks.id, tasks.parentTaskId))
     .where(eq(cards.mapId, mapId));
 
-  const cardList = rawCards.map(({ taskDueDate, taskStartAt, taskScheduleMode, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, parentTaskTitle, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, taskSubtaskCount, taskSubtaskCompletedCount, taskCommentCount, ...c }) => ({
+  const cardList = rawCards.map(({ taskDueDate, taskStartAt, taskScheduleMode, taskAssigneeName, taskAssigneeId, taskOverdue, taskAssigneeAvatarUrl, taskAssigneeClasses, taskCompletedAt, taskIsApprovalTask, taskParentTaskId, parentTaskTitle, taskApprovalMode, taskApprovalDecision, taskApprovalOrder, taskParentApprovalStatus, taskAttachmentCount, taskSubtaskCount, taskSubtaskCompletedCount, taskCommentCount, ...c }) => ({
     ...c,
     taskDueDate: taskDueDate ?? null,
     taskStartAt: taskStartAt ?? null,
@@ -136,6 +137,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     taskAssigneeId: taskAssigneeId ?? null,
     taskOverdue: taskOverdue ?? false,
     taskAssigneeAvatarUrl: taskAssigneeAvatarUrl ?? null,
+    taskAssigneeClasses: taskAssigneeClasses ?? [],
     taskCompletedAt: taskCompletedAt ? taskCompletedAt.toISOString() : null,
     taskIsApprovalTask: taskIsApprovalTask ?? false,
     taskParentTaskId: taskParentTaskId ?? null,
