@@ -14,6 +14,7 @@ import recentMapsRouter from "./recentMaps";
 import mapsSearchRouter from "./mapsSearch";
 import storageRouter from "./storage";
 import sidebarRouter from "./sidebar";
+import preferencesRouter from "./preferences";
 import textElementsRouter from "./textElements";
 import shapesRouter from "./shapes";
 import taskTemplatesRouter from "./taskTemplates";
@@ -39,6 +40,7 @@ router.use("/task-templates", taskTemplatesRouter);
 router.use("/maps/recent", recentMapsRouter);
 router.use("/maps/search", mapsSearchRouter);
 router.use("/sidebar", sidebarRouter);
+router.use("/preferences", preferencesRouter);
 router.use("/integrations/google-calendar", googleCalendarRouter);
 router.use(storageRouter);
 
