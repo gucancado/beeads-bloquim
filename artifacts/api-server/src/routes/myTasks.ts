@@ -161,6 +161,14 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const filterOverdue = statuses.includes("overdue");
   const otherStatuses = statuses.filter(s => s !== "overdue");
 
+  // Pin "urgente" no topo APENAS quando o filtro ativo é um subconjunto de
+  // {draft, pending, in_progress} (trabalho ativo). Em outros filtros
+  // (completed/blocked/overdue) ou sem filtro, urgente não pina — o usuário
+  // está em modo de revisão/histórico, não de execução.
+  const ACTIVE_STATUSES = new Set(["draft", "pending", "in_progress"]);
+  const pinUrgente =
+    statuses.length > 0 && statuses.every(s => ACTIVE_STATUSES.has(s));
+
   const assignees = assignedTo !== undefined ? assignedTo.split(",").filter(Boolean) : ["me"];
 
   const buildStatusFilter = () => {
@@ -214,6 +222,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       priority: tasks.priority,
       status: tasks.status,
       completedAt: tasks.completedAt,
+      cancelledAt: tasks.cancelledAt,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       overdue: tasks.overdue,
@@ -229,6 +238,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       workspaceColorIndex: workspaces.colorIndex,
       assigneeName: users.name,
       assigneeAvatarUrl: users.avatarUrl,
+      assigneeClasses: users.classes,
       attachmentCount: sql<number>`(SELECT COUNT(*) FROM attachments WHERE task_id = ${tasks.id} AND deleted_at IS NULL)`,
       subtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
       subtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
@@ -250,6 +260,11 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       )
     )
     .orderBy(
+      // "urgente" pin (condicional — ver pinUrgente acima): aplicado só quando
+      // o filtro de status é subset de {draft, pending, in_progress}.
+      ...(pinUrgente
+        ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
+        : []),
       sql`${tasks.dueDate} ASC NULLS LAST`,
       sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
       asc(tasks.createdAt)
@@ -278,7 +293,7 @@ const createStandaloneTaskSchema = z.object({
   description: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   startAt: z.string().nullable().optional(),
-  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -333,7 +348,7 @@ const updateStandaloneTaskSchema = z.object({
   description: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   startAt: z.string().nullable().optional(),
-  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   isRecurring: z.boolean().optional(),
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
@@ -419,8 +434,9 @@ router.patch("/:taskId/status", requireAuth, async (req: AuthRequest, res) => {
     status: newStatus,
     updatedAt: new Date(),
     overdue: computeOverdue(existing.dueDate, newStatus),
+    completedAt: newStatus === "completed" ? new Date() : null,
+    cancelledAt: newStatus === "blocked" ? new Date() : null,
   };
-  if (newStatus === "completed") updateData.completedAt = new Date();
   // If client sends recurrence state alongside status, apply it atomically (prevents race condition)
   if (bodyIsRecurring !== undefined) updateData.isRecurring = bodyIsRecurring;
   if (bodyRecurrenceConfig !== undefined) updateData.recurrenceConfig = bodyRecurrenceConfig ?? null;
@@ -477,6 +493,7 @@ router.get("/:taskId/activities", requireAuth, async (req: AuthRequest, res) => 
       actorId: taskActivities.actorId,
       actorName: users.name,
       actorAvatarUrl: users.avatarUrl,
+      actorClasses: users.classes,
       type: taskActivities.type,
       metadata: taskActivities.metadata,
       createdAt: taskActivities.createdAt,
@@ -722,6 +739,7 @@ router.get("/:taskId/comments", requireAuth, async (req: AuthRequest, res) => {
       authorId: taskComments.authorId,
       authorName: sql<string>`coalesce(${users.name}, 'Usuário removido')`,
       authorAvatar: users.avatarUrl,
+      authorClasses: users.classes,
       content: taskComments.content,
       hidden: taskComments.hidden,
       source: taskComments.source,

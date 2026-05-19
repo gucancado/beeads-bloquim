@@ -217,7 +217,14 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | user_google_calendar_accounts | Contas Google Calendar vinculadas |
 | user_calendar_preferences | Preferências de calendário |
 
-**Enums relevantes**: task_status (pending, in_progress, completed, overdue, blocked, draft), task_priority (low, medium, high, critical), card_visual_status, workspace_role (admin, editor, executor), approval_status, approval_mode (sequential, parallel), schedule_mode (ate, entre, em, sem_prazo), attachment_kind (standard, deliverable), task_activity_type (task_created, assignee_changed, status_changed, priority_changed, due_date_changed, approval_comment, task_approved, task_rejected, task_duplicated, checklist_items_added, task_moved)
+**Enums relevantes**: task_status (pending, in_progress, completed, overdue, blocked, draft), task_priority (low, medium, high, critical), card_visual_status, workspace_role (admin, editor, executor), approval_status, approval_mode (sequential, parallel), schedule_mode (ate, entre, em, sem_prazo, urgente), attachment_kind (standard, deliverable), task_activity_type (task_created, assignee_changed, status_changed, priority_changed, due_date_changed, approval_comment, task_approved, task_rejected, task_duplicated, checklist_items_added, task_moved)
+
+### Modalidades de prazo (`schedule_mode`)
+- `ate` — só `dueDate` (fazer até).
+- `entre` — janela `[startAt, dueDate]` (fazer entre).
+- `em` — dia pontual (`startAt === dueDate`).
+- `sem_prazo` — tarefa sem datas; default em INSERTs.
+- `urgente` — sem datas, mas **pinada no topo da lista** quando o filtro de status é um subconjunto de `{draft, pending, in_progress}` (trabalho ativo) em `GET /api/workspaces/:wId/tasks` e `GET /api/my-tasks`. Em filtros de `completed`/`blocked`/`overdue`, ou sem filtro de status, o pin não se aplica — o usuário está em modo revisão, não execução. Quando ativo, o sort fica: `urgente` primeiro → `dueDate ASC NULLS LAST` → `priority` → `createdAt`. Use pra tarefas que precisam atenção imediata independente de prazo.
 
 ## Rotas de API
 

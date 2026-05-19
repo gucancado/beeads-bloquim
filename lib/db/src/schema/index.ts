@@ -8,3 +8,4 @@ export * from "./textElements";
 export * from "./attachments";
 export * from "./shapes";
 export * from "./integrations";
+export * from "./preferences";

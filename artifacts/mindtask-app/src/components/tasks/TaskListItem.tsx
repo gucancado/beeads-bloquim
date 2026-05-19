@@ -1,3 +1,6 @@
+// Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
+// always-leading "title" cell) are rendered in the order defined by the
+// user's saved column preferences — passed in via `columnOrder`.
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
@@ -14,6 +17,7 @@ import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { getColorByIndex } from "@workspace/db/colorPalette";
 import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useToast } from "@/hooks/use-toast";
+import { TaskColumnKey, TASK_COLUMN_WIDTH_CLASS } from "@/lib/taskColumnConstants";
 
 function getInitials(name: string) {
   return name
@@ -39,8 +43,10 @@ export interface TaskListItemData {
   priority: string;
   dueDate?: string | null;
   startAt?: string | null;
-  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | null;
+  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" | null;
   overdue?: boolean;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
   assignedTo?: string | null;
   assigneeName?: string | null;
   assigneeAvatarUrl?: string | null;
@@ -68,11 +74,22 @@ interface Props {
   onOpenDetail?: (task: TaskListItemData) => void;
   showWorkspaceName?: boolean;
   showMapName?: boolean;
+  columnOrder: readonly TaskColumnKey[];
+  dateColumnMode?: "default" | "completed" | "cancelled";
+  /**
+   * Quando `true`, a coluna `schedule` renderiza só a data final (dueDate),
+   * sem badge de modalidade e sem startAt. Usado pelo filtro de status
+   * "em andamento" pra deixar a tabela mais limpa.
+   */
+  compactSchedule?: boolean;
 }
 
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
-const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em" | "sem_prazo"; label: string }[] = [
+// "urgente" comes first because the backend sort pins it to the top of every
+// list — keeping the dropdown order matched makes the UI legible.
+const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em" | "sem_prazo" | "urgente"; label: string }[] = [
+  { value: "urgente", label: "urgente" },
   { value: "ate", label: "fazer até" },
   { value: "entre", label: "fazer entre" },
   { value: "em", label: "fazer em" },
@@ -82,6 +99,18 @@ const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em" | "sem_prazo"; labe
 const SCHEDULE_MODE_LABELS: Record<string, string> = Object.fromEntries(
   SCHEDULE_MODE_OPTIONS.map(o => [o.value, o.label]),
 );
+
+const STATUS_ROW_BG: Record<string, string> = {
+  draft: "bg-purple-100 dark:bg-purple-950/50",
+  pending: "bg-blue-100 dark:bg-blue-950/50",
+  in_progress: "bg-amber-100 dark:bg-amber-950/50",
+  completed: "bg-emerald-100 dark:bg-emerald-950/50",
+  blocked: "bg-slate-200 dark:bg-slate-800/60",
+};
+
+function getStatusRowBg(status: string): string {
+  return STATUS_ROW_BG[status] ?? "";
+}
 
 function getStatusEntry(s: string) {
   return getStatusOrderEntry(s);
@@ -96,6 +125,9 @@ export function TaskListItem({
   onOpenDetail,
   showWorkspaceName = false,
   showMapName = false,
+  columnOrder,
+  dateColumnMode = "default",
+  compactSchedule = false,
 }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -108,10 +140,7 @@ export function TaskListItem({
   const [statusOpen, setStatusOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
-  // Local override: lets the user switch to "entre"/"em" before persisting,
-  // so the start input can be revealed and filled. Cleared after a
-  // successful PATCH (or whenever the server's mode catches up).
-  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | null>(null);
+  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | "urgente" | null>(null);
   const effectiveMode = pendingMode ?? (localTask.scheduleMode ?? "ate");
   useEffect(() => {
     if (pendingMode && localTask.scheduleMode === pendingMode) setPendingMode(null);
@@ -119,9 +148,6 @@ export function TaskListItem({
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const [modalityOpen, setModalityOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const statusRef = useRef<HTMLDivElement>(null);
-  const assigneeRef = useRef<HTMLDivElement>(null);
-  const modalityRef = useRef<HTMLDivElement>(null);
 
   const closeAllDropdowns = useCallback(() => {
     setStatusOpen(false);
@@ -201,11 +227,16 @@ export function TaskListItem({
         body: JSON.stringify({ status: newStatus }),
       });
       setLocalTask(prev => ({ ...prev, ...updated }));
+      // Mudar status pode alterar a ordenação da lista (o sort do backend
+      // considera urgente/dueDate/priority mas a tarefa também pode sair do
+      // filtro ativo, ou outro overdue cruzar pra cima). Invalida a lista
+      // junto com os counts pra refazer o fetch.
+      invalidate();
       invalidateCounts();
     } catch (err) {
       console.error("Inline status update failed:", err);
     }
-  }, [task.workspaceId, task.id, isStandaloneTask, invalidateCounts]);
+  }, [task.workspaceId, task.id, isStandaloneTask, invalidate, invalidateCounts]);
 
   const updateCardTitle = useCallback(async (newTitle: string) => {
     try {
@@ -292,9 +323,6 @@ export function TaskListItem({
       return;
     }
     const iso = val ? val + "T12:00:00.000Z" : null;
-    // "entre" needs both bounds at once or the backend rejects with 400.
-    // If we have both now (one was held locally from a previous edit), flush
-    // them together with the mode in a single atomic PATCH.
     if (effectiveMode === "entre" && iso && localTask.startAt) {
       setLocalTask(prev => ({ ...prev, dueDate: iso }));
       setSavingField("dueDate");
@@ -305,17 +333,13 @@ export function TaskListItem({
       }).finally(() => setSavingField(null));
       return;
     }
-    // "entre" with only this date filled — hold locally, wait for startAt.
-    // Do NOT touch localTask.scheduleMode here: that would prematurely clear
-    // pendingMode (via the catch-up effect) and the next patch would land
-    // without `scheduleMode`, leaving the server in its old mode.
     if (effectiveMode === "entre" && !localTask.startAt) {
       setLocalTask(prev => ({ ...prev, dueDate: iso }));
       return;
     }
     setLocalTask(prev => ({ ...prev, dueDate: iso }));
     setSavingField("dueDate");
-    const body: { dueDate: string | null; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { dueDate: iso };
+    const body: { dueDate: string | null; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { dueDate: iso };
     if (effectiveMode === "em") body.startAt = iso;
     if (pendingMode) body.scheduleMode = pendingMode;
     patchTask(body).finally(() => setSavingField(null));
@@ -328,9 +352,6 @@ export function TaskListItem({
       return;
     }
     const iso = val ? val + "T12:00:00.000Z" : null;
-    // In "entre" mode: if dueDate is empty and the user picks a startAt,
-    // auto-default dueDate to startAt + 1 day so the range is always valid.
-    // If dueDate is already set, leave it alone.
     if (effectiveMode === "entre" && val && iso && !localTask.dueDate) {
       const autoDueIso = addOneDayYmd(val) + "T12:00:00.000Z";
       setLocalTask(prev => ({ ...prev, startAt: iso, dueDate: autoDueIso }));
@@ -342,7 +363,6 @@ export function TaskListItem({
       }).finally(() => setSavingField(null));
       return;
     }
-    // Both dates already present — atomic PATCH.
     if (effectiveMode === "entre" && iso && localTask.dueDate) {
       setLocalTask(prev => ({ ...prev, startAt: iso }));
       setSavingField("startAt");
@@ -353,33 +373,27 @@ export function TaskListItem({
       }).finally(() => setSavingField(null));
       return;
     }
-    // Clearing startAt while in "entre" with empty dueDate — hold locally.
     if (effectiveMode === "entre" && !localTask.dueDate) {
       setLocalTask(prev => ({ ...prev, startAt: iso }));
       return;
     }
     setLocalTask(prev => ({ ...prev, startAt: iso }));
     setSavingField("startAt");
-    const body: { startAt: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = {
+    const body: { startAt: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = {
       startAt: iso,
     };
     if (pendingMode) body.scheduleMode = pendingMode;
     patchTask(body).finally(() => setSavingField(null));
   };
 
-  const handleModalitySelect = (next: "ate" | "entre" | "em" | "sem_prazo") => {
+  const handleModalitySelect = (next: "ate" | "entre" | "em" | "sem_prazo" | "urgente") => {
     setModalityOpen(false);
     if (next === effectiveMode) return;
-    // For "em" with a dueDate already set, we can persist immediately
-    // (mirroring startAt = dueDate). For "entre" requiring both bounds,
-    // or "em" without a date yet, switch only the local UI mode and let
-    // the user fill the missing field — the date handler will then
-    // persist mode+dates atomically.
-    if (next === "sem_prazo") {
+    if (next === "sem_prazo" || next === "urgente") {
       setPendingMode(null);
-      setLocalTask(prev => ({ ...prev, scheduleMode: "sem_prazo", startAt: null, dueDate: null }));
+      setLocalTask(prev => ({ ...prev, scheduleMode: next, startAt: null, dueDate: null }));
       setSavingField("scheduleMode");
-      patchTask({ scheduleMode: "sem_prazo", startAt: null, dueDate: null }).finally(() => setSavingField(null));
+      patchTask({ scheduleMode: next, startAt: null, dueDate: null }).finally(() => setSavingField(null));
       return;
     }
     if (next === "ate") {
@@ -403,12 +417,7 @@ export function TaskListItem({
       patchTask({ scheduleMode: "entre" }).finally(() => setSavingField(null));
       return;
     }
-    // Need more user input — keep mode pending in UI only. Also nuke any
-    // stale dates that don't apply to the new mode.
     setPendingMode(next);
-    if (next === "em" || next === "entre") {
-      // Keep existing dueDate so user can chain into the new mode.
-    }
   };
 
   const handleModalityClick = (e: React.MouseEvent) => {
@@ -430,187 +439,195 @@ export function TaskListItem({
 
   const workspaceColorHex = getColorByIndex(localTask.workspaceColorIndex ?? null);
 
-  return (
-    <div
-      className="px-4 py-3 transition-colors flex flex-col gap-1.5 group cursor-pointer relative hover:bg-muted/50 dark:hover:bg-[#404040]"
-      onClick={handleRowClick}
-    >
-      {/* Line 0: workspace and plan name above title */}
-      {((showWorkspaceName && localTask.workspaceName) || (showMapName && localTask.mapName)) && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
-          {showWorkspaceName && localTask.workspaceName && (
-            <Link
-              href={`/workspaces/${localTask.workspaceId}`}
-              onClick={e => e.stopPropagation()}
-              className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
-            >
-              {workspaceColorHex ? (
-                <span
-                  style={{ backgroundColor: workspaceColorHex, width: 8, height: 8, minWidth: 8 }}
-                  className="rounded-sm shrink-0 inline-block"
-                />
-              ) : (
-                <Building2 className="w-3 h-3 shrink-0" />
-              )}
-              <span className="truncate max-w-[140px]">{localTask.workspaceName}</span>
-            </Link>
-          )}
+  // ─── Cell renderers ───────────────────────────────────────────────────────
 
-          {showMapName && localTask.mapName && (
-            <Link
-              href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
-              onClick={e => e.stopPropagation()}
-              className="flex items-center gap-1 hover:underline decoration-dotted shrink-0"
-            >
-              <MapIcon className="w-3 h-3 shrink-0" />
-              <span className="truncate max-w-[180px]">{localTask.mapName}</span>
-            </Link>
-          )}
-        </div>
+  const renderTitleCell = () => (
+    <div className="flex items-center gap-2 min-w-0">
+      {isApprovalTask ? (
+        <>
+          <ApprovalBadge />
+          <h3
+            className="text-base font-semibold text-foreground truncate"
+            title={displayTitle}
+          >
+            {displayTitle}
+          </h3>
+        </>
+      ) : editingTitle ? (
+        <input
+          ref={titleInputRef}
+          value={titleValue}
+          onChange={e => setTitleValue(e.target.value)}
+          onBlur={handleTitleSave}
+          onKeyDown={handleTitleKeyDown}
+          onClick={e => e.stopPropagation()}
+          className="text-base font-semibold text-foreground w-full bg-transparent border-b border-primary outline-none"
+        />
+      ) : (
+        <h3
+          className="text-base font-semibold text-foreground truncate cursor-text hover:underline decoration-dotted"
+          onClick={handleTitleClick}
+          title="Clique para editar o título"
+        >
+          {displayTitle}
+        </h3>
       )}
+    </div>
+  );
 
-      {/* Line 1: title (left), status badge (right) */}
-      <div className="flex items-center gap-2 min-w-0">
-        {/* Title — inline editable for regular tasks, read-only with badge for approval tasks */}
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          {isApprovalTask ? (
-            <>
-              <ApprovalBadge />
-              <h3
-                className="text-base font-semibold text-foreground truncate"
-                title={displayTitle}
-              >
-                {displayTitle}
-              </h3>
-            </>
-          ) : editingTitle ? (
-            <input
-              ref={titleInputRef}
-              value={titleValue}
-              onChange={e => setTitleValue(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={handleTitleKeyDown}
-              onClick={e => e.stopPropagation()}
-              className="text-base font-semibold text-foreground w-full bg-transparent border-b border-primary outline-none"
-            />
-          ) : (
-            <h3
-              className="text-base font-semibold text-foreground truncate cursor-text hover:underline decoration-dotted"
-              onClick={handleTitleClick}
-              title="Clique para editar o título"
-            >
-              {displayTitle}
-            </h3>
-          )}
-        </div>
-
-        {/* Status badge — inline editable, fixed to right */}
-        <div ref={statusRef} onClick={e => e.stopPropagation()} className="shrink-0 ml-auto">
-          {(() => {
-            const entry = getStatusEntry(localTask.status);
-            const StatusIcon = entry?.icon;
-            return (
-              <Badge
-                variant="outline"
-                className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
-                onClick={handleStatusClick}
-                title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
-                aria-label={entry?.label ?? localTask.status}
-              >
-                {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
-              </Badge>
-            );
-          })()}
-          {statusOpen && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[180px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {STATUS_OPTIONS.map(opt => {
-                  const OptIcon = opt.icon;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                    >
-                      <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace("bg-", "text-")}`} />
-                      {opt.menuLabel}
-                    </button>
-                  );
-                })}
-              </div>
-            </>,
-            document.body
-          )}
-        </div>
-      </div>
-
-      {/* Line 2: avatar + date + recurrence + priority + approval badge */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        {/* Assignee avatar — inline editable */}
-        <div onClick={e => e.stopPropagation()} ref={assigneeRef} className="shrink-0">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
-                  onClick={handleAssigneeClick}
-                  title={members.length > 0 ? "Clique para alterar responsável" : undefined}
-                >
-                  {localTask.assigneeName ? (
-                    <Avatar key={`${localTask.assignedTo ?? "none"}|${localTask.assigneeAvatarUrl ?? ""}`} className="w-[26px] h-[26px] shrink-0">
-                      {localTask.assigneeAvatarUrl ? (
-                        <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
-                      ) : null}
-                      <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
-                        {getInitials(localTask.assigneeName)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <User className="w-[21px] h-[21px] shrink-0 text-muted-foreground" />
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                {localTask.assigneeName ?? "Sem responsável"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          {assigneeOpen && members.length > 0 && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-                >
-                  <User className="w-3 h-3" /> Sem responsável
-                </button>
-                {members.map(m => (
+  const renderStatusCell = () => {
+    const entry = getStatusEntry(localTask.status);
+    const StatusIcon = entry?.icon;
+    return (
+      <div onClick={e => e.stopPropagation()} className="inline-flex">
+        <Badge
+          variant="outline"
+          className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+          onClick={handleStatusClick}
+          title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
+          aria-label={entry?.label ?? localTask.status}
+        >
+          {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
+        </Badge>
+        {statusOpen && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+            <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[180px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+              {STATUS_OPTIONS.map(opt => {
+                const OptIcon = opt.icon;
+                return (
                   <button
-                    key={m.userId}
-                    onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+                    key={opt.value}
+                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
                   >
-                    {m.avatarUrl ? (
-                      <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                    ) : (
-                      <User className="w-3 h-3" />
-                    )}
-                    {m.name}
+                    <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace("bg-", "text-")}`} />
+                    {opt.menuLabel}
                   </button>
-                ))}
-              </div>
-            </>,
-            document.body
-          )}
-        </div>
+                );
+              })}
+            </div>
+          </>,
+          document.body
+        )}
+      </div>
+    );
+  };
 
-        {/* Schedule — modality trigger always visible; date inputs render only for modes that need them */}
-        <div ref={modalityRef} onClick={e => e.stopPropagation()} className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-          {/* Modality trigger — pill style for sem_prazo, bordered button for other modes */}
-          {effectiveMode === "sem_prazo" ? (
+  const renderAssigneeCell = () => (
+    <div onClick={e => e.stopPropagation()} className="inline-flex">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
+              onClick={handleAssigneeClick}
+            >
+              {localTask.assigneeName ? (
+                <Avatar key={`${localTask.assignedTo ?? "none"}|${localTask.assigneeAvatarUrl ?? ""}`} className="w-[26px] h-[26px] shrink-0">
+                  {localTask.assigneeAvatarUrl ? (
+                    <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
+                  ) : null}
+                  <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
+                    {getInitials(localTask.assigneeName)}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <User className="w-[21px] h-[21px] shrink-0 text-muted-foreground" />
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            {localTask.assigneeName ?? "sem responsável"}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {assigneeOpen && members.length > 0 && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+          <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
+            >
+              <User className="w-3 h-3" /> Sem responsável
+            </button>
+            {members.map(m => (
+              <button
+                key={m.userId}
+                onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
+              >
+                {m.avatarUrl ? (
+                  <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                ) : (
+                  <User className="w-3 h-3" />
+                )}
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body
+      )}
+    </div>
+  );
+
+  const renderPriorityCell = () => (
+    <div onClick={e => e.stopPropagation()} className="inline-flex">
+      <PriorityBadge
+        value={localTask.priority}
+        onChange={handlePrioritySelect}
+        disabled={savingField === "priority"}
+      />
+    </div>
+  );
+
+  const renderScheduleCell = () => {
+    // When the page is filtering by a terminal status, this column is repurposed
+    // to display the relevant completion/cancellation timestamp instead of the
+    // inline schedule editor.
+    if (dateColumnMode === "completed") {
+      const iso = localTask.completedAt ?? null;
+      return (
+        <span className="text-xs text-muted-foreground">
+          {iso ? formatDueDate(iso) : "—"}
+        </span>
+      );
+    }
+    if (dateColumnMode === "cancelled") {
+      const iso = localTask.cancelledAt ?? null;
+      return (
+        <span className="text-xs text-muted-foreground">
+          {iso ? formatDueDate(iso) : "—"}
+        </span>
+      );
+    }
+    const recurrenceIcon = localTask.isRecurring && localTask.recurrenceConfig ? (
+      <span
+        className="inline-flex items-center text-muted-foreground shrink-0"
+        title={`repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[localTask.recurrenceConfig.type] ?? "periodicamente"}`}
+      >
+        <Repeat className="w-3.5 h-3.5" />
+      </span>
+    ) : null;
+
+    // Modo compacto (filtro "em andamento"): só a data final, sem badge de
+    // modalidade nem startAt. Urgente e sem_prazo ainda exibem o estado.
+    if (compactSchedule) {
+      return (
+        <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+          {effectiveMode === "urgente" ? (
+            <button
+              type="button"
+              onClick={handleModalityClick}
+              disabled={savingField === "scheduleMode"}
+              className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+              title="Clique para alterar modalidade de prazo"
+            >
+              urgente
+            </button>
+          ) : effectiveMode === "sem_prazo" ? (
             <button
               type="button"
               onClick={handleModalityClick}
@@ -619,20 +636,28 @@ export function TaskListItem({
               title="Clique para alterar modalidade de prazo"
             >
               <CalendarIcon className="w-3 h-3 shrink-0" />
-              <span>sem prazo</span>
+              sem prazo
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleModalityClick}
-              disabled={savingField === "scheduleMode"}
-              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground hover:text-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-              title="Modalidade do fazer"
+            <DatePickerPopover
+              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+              onSelect={handleDueDateSelect}
+              min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
             >
-              {SCHEDULE_MODE_LABELS[effectiveMode] ?? effectiveMode}
-            </button>
+              <button
+                type="button"
+                onClick={e => e.stopPropagation()}
+                className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
+                title="Alterar fazer"
+              >
+                <CalendarIcon className={`w-3 h-3 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
+                <span className={`select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}>
+                  {localTask.dueDate ? formatDueDate(localTask.dueDate) : "vazio"}
+                </span>
+              </button>
+            </DatePickerPopover>
           )}
-
+          {recurrenceIcon}
           {modalityOpen && createPortal(
             <>
               <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
@@ -650,109 +675,221 @@ export function TaskListItem({
             </>,
             document.body
           )}
-
-          {/* Start date — only for "entre" */}
-          {effectiveMode === "entre" && (
-            <DatePickerPopover
-              value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
-              onSelect={handleStartAtSelect}
-              max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
-            >
-              <button
-                type="button"
-                onClick={e => e.stopPropagation()}
-                className="inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0"
-                title="Data de início"
-              >
-                <CalendarIcon className="w-3 h-3 shrink-0 text-muted-foreground" />
-                <span className={`select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
-                  {localTask.startAt ? formatDueDate(localTask.startAt) : "vazio"}
-                </span>
-              </button>
-            </DatePickerPopover>
-          )}
-
-          {/* Due date — for ate / em / entre (hidden for sem_prazo) */}
-          {effectiveMode !== "sem_prazo" && (
-            <DatePickerPopover
-              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-              onSelect={handleDueDateSelect}
-              min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
-            >
-              <button
-                type="button"
-                onClick={e => e.stopPropagation()}
-                className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
-                title="Alterar fazer"
-              >
-                <CalendarIcon className={`w-3 h-3 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-                {localTask.dueDate ? (
-                  <span
-                    className={`select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                  >
-                    {formatDueDate(localTask.dueDate)}
-                  </span>
-                ) : (
-                  <span
-                    className={`select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
-                  >
-                    vazio
-                  </span>
-                )}
-              </button>
-            </DatePickerPopover>
-          )}
         </div>
+      );
+    }
 
-        {/* Recurrence indicator */}
-        {localTask.isRecurring && localTask.recurrenceConfig && (
-          <span
-            className="inline-flex items-center shrink-0 text-muted-foreground"
-            title={`repete ${{ daily: "diariamente", weekly: "semanalmente", monthly: "mensalmente", yearly: "anualmente", periodic: "periodicamente", custom: "personalizado" }[localTask.recurrenceConfig.type] ?? "periodicamente"}`}
-          >
-            <Repeat className="w-3 h-3" />
-          </span>
-        )}
+    return (
+    <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+      {effectiveMode === "sem_prazo" ? (
+        <button
+          type="button"
+          onClick={handleModalityClick}
+          disabled={savingField === "scheduleMode"}
+          className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+          title="Clique para alterar modalidade de prazo"
+        >
+          <CalendarIcon className="w-3 h-3 shrink-0" />
+          <span>sem prazo</span>
+        </button>
+      ) : effectiveMode === "urgente" ? (
+        <button
+          type="button"
+          onClick={handleModalityClick}
+          disabled={savingField === "scheduleMode"}
+          className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+          title="Clique para alterar modalidade de prazo"
+        >
+          <span>urgente</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleModalityClick}
+          disabled={savingField === "scheduleMode"}
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground hover:text-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+          title="Modalidade do fazer"
+        >
+          {SCHEDULE_MODE_LABELS[effectiveMode] ?? effectiveMode}
+        </button>
+      )}
 
-        {/* Priority badge — inline editable */}
-        <div onClick={e => e.stopPropagation()} className="shrink-0">
-          <PriorityBadge
-            value={localTask.priority}
-            onChange={handlePrioritySelect}
-            disabled={savingField === "priority"}
-          />
-        </div>
-
-        {/* Attachment icon */}
-        {localTask.attachmentCount != null && localTask.attachmentCount > 0 && (
-          <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" aria-label="Possui anexos" />
-        )}
-
-        {/* Subtask + comment indicators immediately right of the attachment icon */}
-        {((localTask.subtaskCount != null && localTask.subtaskCount > 0) ||
-          (localTask.commentCount != null && localTask.commentCount > 0)) && (
-          <div className="inline-flex items-center gap-2 shrink-0">
-            {localTask.subtaskCount != null && localTask.subtaskCount > 0 && (
-              <span
-                className="inline-flex items-center gap-1 shrink-0 text-muted-foreground"
-                title={`${localTask.subtaskCompletedCount ?? 0} de ${localTask.subtaskCount} subtarefas concluídas`}
+      {modalityOpen && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
+          <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
+            {SCHEDULE_MODE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={(e) => { e.stopPropagation(); handleModalitySelect(opt.value); }}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${effectiveMode === opt.value ? "font-semibold" : ""}`}
               >
-                <ListChecks className="w-3 h-3" />
-                <span className="text-[11px] leading-none">{localTask.subtaskCompletedCount ?? 0} de {localTask.subtaskCount}</span>
-              </span>
-            )}
-            {localTask.commentCount != null && localTask.commentCount > 0 && (
-              <span
-                className="inline-flex items-center gap-1 shrink-0 text-muted-foreground"
-                title={`${localTask.commentCount} ${localTask.commentCount === 1 ? "comentário" : "comentários"}`}
-              >
-                <MessageSquare className="w-3 h-3" />
-                <span className="text-[11px] leading-none">{localTask.commentCount}</span>
-              </span>
-            )}
+                {opt.label}
+              </button>
+            ))}
           </div>
+        </>,
+        document.body
+      )}
+
+      {effectiveMode === "entre" && (
+        <DatePickerPopover
+          value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
+          onSelect={handleStartAtSelect}
+          max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
+        >
+          <button
+            type="button"
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0"
+            title="Data de início"
+          >
+            <CalendarIcon className="w-3 h-3 shrink-0 text-muted-foreground" />
+            <span className={`select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
+              {localTask.startAt ? formatDueDate(localTask.startAt) : "vazio"}
+            </span>
+          </button>
+        </DatePickerPopover>
+      )}
+
+      {effectiveMode !== "sem_prazo" && effectiveMode !== "urgente" && (
+        <DatePickerPopover
+          value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
+          onSelect={handleDueDateSelect}
+          min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
+        >
+          <button
+            type="button"
+            onClick={e => e.stopPropagation()}
+            className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
+            title="Alterar fazer"
+          >
+            <CalendarIcon className={`w-3 h-3 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
+            {localTask.dueDate ? (
+              <span
+                className={`select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
+              >
+                {formatDueDate(localTask.dueDate)}
+              </span>
+            ) : (
+              <span
+                className={`select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
+              >
+                vazio
+              </span>
+            )}
+          </button>
+        </DatePickerPopover>
+      )}
+      {recurrenceIcon}
+    </div>
+    );
+  };
+
+  const renderChecklistCell = () => {
+    const total = Number(localTask.subtaskCount ?? 0);
+    if (total <= 0) return null;
+    const done = Number(localTask.subtaskCompletedCount ?? 0);
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        title={`${done} de ${total} subtarefas concluídas`}
+      >
+        <ListChecks className="w-3.5 h-3.5" />
+        <span className="text-[11px] leading-none">{done} de {total}</span>
+      </span>
+    );
+  };
+
+  const renderCommentsCell = () => {
+    const count = Number(localTask.commentCount ?? 0);
+    if (count <= 0) return null;
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        title={`${count} ${count === 1 ? "comentário" : "comentários"}`}
+      >
+        <MessageSquare className="w-3.5 h-3.5" />
+        <span className="text-[11px] leading-none">{count}</span>
+      </span>
+    );
+  };
+
+  const renderAttachmentsCell = () => {
+    const count = Number(localTask.attachmentCount ?? 0);
+    if (count <= 0) return null;
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        title={`${count} ${count === 1 ? "anexo" : "anexos"}`}
+      >
+        <Paperclip className="w-3.5 h-3.5" />
+        <span className="text-[11px] leading-none">{count}</span>
+      </span>
+    );
+  };
+
+  const renderWorkspaceMapCell = () => {
+    const wsVisible = showWorkspaceName && localTask.workspaceName;
+    const mapVisible = showMapName && localTask.mapName;
+    if (!wsVisible && !mapVisible) return null;
+    return (
+      <div className="flex flex-col gap-0.5 min-w-0 text-xs text-muted-foreground">
+        {wsVisible && (
+          <Link
+            href={`/workspaces/${localTask.workspaceId}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 hover:underline decoration-dotted min-w-0"
+          >
+            {workspaceColorHex ? (
+              <span
+                style={{ backgroundColor: workspaceColorHex, width: 8, height: 8, minWidth: 8 }}
+                className="rounded-sm shrink-0 inline-block"
+              />
+            ) : (
+              <Building2 className="w-3 h-3 shrink-0" />
+            )}
+            <span className="truncate">{localTask.workspaceName}</span>
+          </Link>
+        )}
+        {mapVisible && (
+          <Link
+            href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 hover:underline decoration-dotted min-w-0"
+          >
+            <MapIcon className="w-3 h-3 shrink-0" />
+            <span className="truncate">{localTask.mapName}</span>
+          </Link>
         )}
       </div>
-    </div>
+    );
+  };
+
+  const renderCell = (key: TaskColumnKey) => {
+    switch (key) {
+      case "title": return renderTitleCell();
+      case "status": return renderStatusCell();
+      case "assignee": return renderAssigneeCell();
+      case "priority": return renderPriorityCell();
+      case "schedule": return renderScheduleCell();
+      case "checklist": return renderChecklistCell();
+      case "comments": return renderCommentsCell();
+      case "attachments": return renderAttachmentsCell();
+      case "workspace_map": return renderWorkspaceMapCell();
+    }
+  };
+
+  return (
+    <tr
+      className={`transition-all group cursor-pointer hover:brightness-95 dark:hover:brightness-110 ${getStatusRowBg(localTask.status)}`}
+      onClick={handleRowClick}
+    >
+      {columnOrder.map(key => (
+        <td key={key} className={`${key === "title" ? "px-4" : "px-3"} py-3 align-middle ${TASK_COLUMN_WIDTH_CLASS[key]}`}>
+          {renderCell(key)}
+        </td>
+      ))}
+    </tr>
   );
 }

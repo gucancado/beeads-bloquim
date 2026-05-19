@@ -1,7 +1,7 @@
 import { parseDateNoon } from "../services/taskVisualSyncService";
 import { getTodayLocal } from "./overdue";
 
-export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo";
+export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo" | "urgente";
 
 export interface ScheduleInput {
   scheduleMode?: ScheduleMode | null;
@@ -34,6 +34,8 @@ export interface ScheduleResolveError {
  *   - "em":        needs a single date (we accept it from either field) and
  *                  persists startAt = dueDate.
  *   - "sem_prazo": no deadline — startAt and dueDate are both forced to null.
+ *   - "urgente":   no deadline either, but tasks land at the TOP of every
+ *                  list sort (see workspaceTasks/myTasks orderBy clauses).
  *
  * Missing fields fall back to the provided `current` values so partial PATCHes
  * preserve unrelated state.
@@ -49,6 +51,10 @@ export function resolveSchedule(
 
   if (mode === "sem_prazo") {
     return { ok: true, value: { scheduleMode: "sem_prazo", startAt: null, dueDate: null } };
+  }
+
+  if (mode === "urgente") {
+    return { ok: true, value: { scheduleMode: "urgente", startAt: null, dueDate: null } };
   }
 
   if (mode === "ate") {
@@ -80,6 +86,7 @@ export function resolveSchedule(
  *   - `ate` (legacy): always eligible — overdue tasks are still allowed
  *     to advance through the dependency cascade. The dueDate only drives
  *     overdue marking, not the cascade itself.
+ *   - `sem_prazo` / `urgente`: no window — always eligible, like `ate`.
  *   - `entre`: requires both `startAt` and `dueDate`. Today must satisfy
  *     `startAt <= today <= dueDate`. Missing bounds → not eligible (we
  *     refuse to silently activate work whose window is undefined).
@@ -92,7 +99,7 @@ export function isWithinScheduleWindow(
   dueDate: Date | string | null | undefined,
 ): boolean {
   const mode: ScheduleMode = (scheduleMode ?? "ate") as ScheduleMode;
-  if (mode === "ate" || mode === "sem_prazo") return true;
+  if (mode === "ate" || mode === "sem_prazo" || mode === "urgente") return true;
 
   const today = getTodayLocal();
   if (mode === "em") {

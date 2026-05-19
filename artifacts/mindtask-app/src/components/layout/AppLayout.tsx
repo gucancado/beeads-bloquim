@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { LogOut, CheckSquare, NotebookPen, Folders, Loader2, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
@@ -46,6 +46,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     try { return localStorage.getItem("sidebar_collapsed") === "true"; } catch { return false; }
   });
   const [profileOpen, setProfileOpen] = useState(false);
+  const sidebarViewportRef = useRef<HTMLDivElement | null>(null);
 
   const { data: user, isLoading: isUserLoading } = useGetMe({
     query: { retry: false }
@@ -69,6 +70,54 @@ export function AppLayout({ children }: { children: ReactNode }) {
       setLocation("/login");
     }
   }, [isUserLoading, user, setLocation]);
+
+  useEffect(() => {
+    if (!user) return;
+    const viewport = sidebarViewportRef.current;
+    if (!viewport) return;
+
+    const STORAGE_KEY = "sidebar_scroll_top";
+    const saved = Number(sessionStorage.getItem(STORAGE_KEY) ?? 0);
+
+    let restored = false;
+    const tryRestore = () => {
+      if (restored) return;
+      const maxScroll = viewport.scrollHeight - viewport.clientHeight;
+      if (maxScroll <= 0) return;
+      viewport.scrollTop = Math.min(saved, maxScroll);
+      if (viewport.scrollTop === Math.min(saved, maxScroll)) {
+        restored = true;
+      }
+    };
+
+    tryRestore();
+
+    let observer: ResizeObserver | null = null;
+    if (!restored && saved > 0) {
+      observer = new ResizeObserver(() => {
+        tryRestore();
+        if (restored) observer?.disconnect();
+      });
+      observer.observe(viewport);
+      if (viewport.firstElementChild) observer.observe(viewport.firstElementChild);
+    }
+
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        sessionStorage.setItem(STORAGE_KEY, String(viewport.scrollTop));
+      });
+    };
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      viewport.removeEventListener("scroll", onScroll);
+      observer?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [user]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -119,7 +168,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         {/* Nav */}
-        <ScrollArea className="flex-1 py-4 px-2">
+        <ScrollArea className="flex-1 py-4 px-2" viewportRef={sidebarViewportRef}>
           <nav className="space-y-6">
             <div className={`space-y-1 ${collapsed ? 'mt-2' : ''}`}>
               <Link href="/my-tasks">

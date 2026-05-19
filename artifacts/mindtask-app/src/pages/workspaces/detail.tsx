@@ -17,12 +17,14 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
-import { TaskListItem, TaskListItemMember } from "@/components/tasks/TaskListItem";
+import { TaskListItemMember, TaskListItemData } from "@/components/tasks/TaskListItem";
+import { TaskTable } from "@/components/tasks/TaskTable";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
-import { groupTasksByDeadline } from "@/lib/groupTasksByDeadline";
+import { groupTasksByDeadline, selectWindow, ateSextaLabel, type TimeWindow } from "@/lib/groupTasksByDeadline";
+import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 
 function getInitials(name: string) {
@@ -191,8 +193,19 @@ export default function WorkspaceDetailPage() {
   const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, "admin" | "editor" | "executor">>({});
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["in_progress"]);
+  const [selectedStatus, setSelectedStatus] = useState<string>("in_progress");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
+  // Default "todas" no workspace — usuário pediu (decisão diferente da tela
+  // de /my-tasks, que defaulta pra "hoje").
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("todas");
+
+  // Fallback caso o usuário esteja em "ate_sexta" quando o dia vira pra
+  // sexta-feira (botão fica oculto).
+  useEffect(() => {
+    if (timeWindow === "ate_sexta" && ateSextaLabel() === null) {
+      setTimeWindow("todas");
+    }
+  }, [timeWindow]);
   const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -211,12 +224,12 @@ export default function WorkspaceDetailPage() {
     .map(a => (a === "me" ? currentUserId : a))
     .filter(Boolean);
 
-  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatuses, resolvedAssignees];
+  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatus, resolvedAssignees];
   const { data: workspaceTasks, isLoading: isTasksLoading } = useQuery<any[]>({
     queryKey: tasksQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
-      if (selectedStatuses.length > 0) p.set("status", selectedStatuses.join(","));
+      p.set("status", selectedStatus);
       if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
       const qs = p.toString() ? `?${p.toString()}` : "";
       return customFetch(`/api/workspaces/${workspaceId}/tasks${qs}`);
@@ -453,10 +466,8 @@ export default function WorkspaceDetailPage() {
 
   const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
-  const toggleStatus = (value: string) => {
-    setSelectedStatuses(prev =>
-      prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
-    );
+  const selectStatus = (value: string) => {
+    setSelectedStatus(value);
   };
 
   useEffect(() => {
@@ -629,7 +640,7 @@ export default function WorkspaceDetailPage() {
               </DialogContent>
             </Dialog>
 
-              <div className="pt-2 pb-16 max-w-6xl mx-auto">
+              <div className="pt-2 pb-16 max-w-screen-2xl mx-auto">
                 <TabsContent value="maps" className="mt-0 outline-none">
                   {isAdmin && (
                     <div className="flex items-center justify-between mb-6">
@@ -708,43 +719,56 @@ export default function WorkspaceDetailPage() {
                         <Plus className="w-4 h-4 mr-1.5" /> criar
                       </Button>
                     </div>
-                    {(workspaceMembers && workspaceMembers.length > 0) && (
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <AssigneeFilterPills
-                          members={(workspaceMembers ?? [])
-                            .filter(m => m.userId !== currentUserId)
-                            .map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
-                          selected={selectedAssignees}
-                          onToggle={toggleAssignee}
-                          showMe
-                          meLabel="Eu"
-                          meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
-                        />
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {STATUS_OPTIONS.map(opt => {
+                            const isActive = selectedStatus === opt.value;
+                            const cnt = statusCounts?.[opt.value] ?? 0;
+                            const OptIcon = opt.icon;
+                            const ariaLabel = cnt === 1 ? opt.label : opt.labelPlural;
+                            // "Concluídas" e "canceladas" são estados terminais
+                            // — contador escondido pra reduzir ruído.
+                            const showCount = opt.value !== "completed" && opt.value !== "blocked";
+                            return (
+                              <button
+                                key={opt.value}
+                                onClick={() => selectStatus(opt.value)}
+                                title={showCount ? `${cnt} ${ariaLabel}` : opt.labelPlural}
+                                aria-label={showCount ? `${cnt} ${ariaLabel}` : opt.labelPlural}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
+                                  isActive
+                                    ? opt.activeClass
+                                    : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
+                                }`}
+                              >
+                                <OptIcon className="w-3.5 h-3.5" />
+                                {showCount && <span>{cnt}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {selectedStatus !== "completed" && selectedStatus !== "blocked" && (
+                          <TimeWindowFilterPills
+                            value={timeWindow}
+                            onChange={setTimeWindow}
+                          />
+                        )}
                       </div>
-                    )}
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      {STATUS_OPTIONS.map(opt => {
-                        const isActive = selectedStatuses.includes(opt.value);
-                        const cnt = statusCounts?.[opt.value] ?? 0;
-                        const OptIcon = opt.icon;
-                        const ariaLabel = cnt > 1 ? opt.labelPlural : opt.label;
-                        return (
-                          <button
-                            key={opt.value}
-                            onClick={() => toggleStatus(opt.value)}
-                            title={`${cnt} ${ariaLabel}`}
-                            aria-label={`${cnt} ${ariaLabel}`}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
-                              isActive
-                                ? opt.activeClass
-                                : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
-                            }`}
-                          >
-                            <OptIcon className="w-3.5 h-3.5" />
-                            <span>{cnt}</span>
-                          </button>
-                        );
-                      })}
+                      {(workspaceMembers && workspaceMembers.length > 0) && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <AssigneeFilterPills
+                            members={(workspaceMembers ?? [])
+                              .filter(m => m.userId !== currentUserId)
+                              .map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
+                            selected={selectedAssignees}
+                            onToggle={toggleAssignee}
+                            showMe
+                            meLabel="Eu"
+                            meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -752,61 +776,55 @@ export default function WorkspaceDetailPage() {
                     <div className="flex items-center justify-center py-20">
                       <Loader2 className="w-10 h-10 animate-spin text-primary" />
                     </div>
-                  ) : workspaceTasks?.length === 0 ? (
-                    <div className="text-center py-24">
-                      <p className="text-muted-foreground lowercase">nada.</p>
-                      <Button variant="outline" className="mt-6 rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer lowercase" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
-                        <Plus className="w-4 h-4 mr-1.5" /> criar
-                      </Button>
-                    </div>
                   ) : (() => {
-                    const now = new Date();
-                    const isFriday = now.getDay() === 5;
-                    const { today: todayTasks, untilFriday: untilFridayTasks, upcoming: upcomingTasks, noDueDate: noDueDateTasks } = groupTasksByDeadline(workspaceTasks ?? [], now);
-
                     const detailMembers: TaskListItemMember[] = (workspaceMembers ?? []).map(m => ({
                       userId: m.userId,
                       name: m.user.name,
                     }));
 
-                    type WorkspaceTaskItem = NonNullable<typeof workspaceTasks>[number];
-                    const renderSection = (label: string, sectionTasks: WorkspaceTaskItem[]) => (
-                      <div>
-                        <p className="text-xs font-light text-muted-foreground mb-2 text-center lowercase">{label}</p>
-                        <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
-                          <div className="divide-y divide-border/50">
-                            {sectionTasks.map(task => (
-                              <TaskListItem
-                                key={task.id}
-                                task={task}
-                                members={detailMembers}
-                                invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
-                                countsQueryKeys={[countsQueryKey]}
-                                onOpenDetail={openTaskItem}
-                                showMapName
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
+                    // Em status terminais (completed/blocked) ordenamos pelo
+                    // timestamp de conclusão/cancelamento; em qualquer outro
+                    // estado o backend já devolve na ordem certa e o filtro
+                    // de janela escolhe um subset desse array.
+                    let flatTasks: TaskListItemData[];
+                    let dateColumnMode: "default" | "completed" | "cancelled" = "default";
+                    if (selectedStatus === "completed" || selectedStatus === "blocked") {
+                      const dateKey = selectedStatus === "completed" ? "completedAt" : "cancelledAt";
+                      flatTasks = [...(workspaceTasks ?? [])].sort((a, b) => {
+                        const ta = a[dateKey] ? new Date(a[dateKey]).getTime() : 0;
+                        const tb = b[dateKey] ? new Date(b[dateKey]).getTime() : 0;
+                        return tb - ta;
+                      });
+                      dateColumnMode = selectedStatus === "completed" ? "completed" : "cancelled";
+                    } else if (timeWindow === "todas") {
+                      flatTasks = workspaceTasks ?? [];
+                    } else {
+                      const grouped = groupTasksByDeadline(workspaceTasks ?? []);
+                      flatTasks = selectWindow(grouped, timeWindow);
+                    }
 
-                    const showNadaAteSexta = !isFriday && todayTasks.length === 0 && untilFridayTasks.length === 0;
-                    const showNadaHoje = !showNadaAteSexta && todayTasks.length === 0;
+                    if (flatTasks.length === 0) {
+                      return (
+                        <div className="text-center py-24">
+                          <p className="text-muted-foreground lowercase">nada</p>
+                          <Button variant="outline" className="mt-6 rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer lowercase" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
+                            <Plus className="w-4 h-4 mr-1.5" /> criar
+                          </Button>
+                        </div>
+                      );
+                    }
 
                     return (
-                      <div className="flex flex-col gap-6">
-                        {showNadaAteSexta && (
-                          <p className="text-xs font-light text-muted-foreground text-center lowercase">nada até sexta</p>
-                        )}
-                        {showNadaHoje && (
-                          <p className="text-xs font-light text-muted-foreground text-center lowercase">nada pra hoje</p>
-                        )}
-                        {todayTasks.length > 0 && renderSection("hoje", todayTasks)}
-                        {untilFridayTasks.length > 0 && renderSection("até sexta", untilFridayTasks)}
-                        {upcomingTasks.length > 0 && renderSection("próximas", upcomingTasks)}
-                        {noDueDateTasks.length > 0 && renderSection("sem prazo", noDueDateTasks)}
-                      </div>
+                      <TaskTable
+                        sections={[{ label: "", tasks: flatTasks }]}
+                        members={detailMembers}
+                        invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
+                        countsQueryKeys={[countsQueryKey]}
+                        onOpenDetail={openTaskItem}
+                        showMapName
+                        dateColumnMode={dateColumnMode}
+                        compactSchedule={selectedStatus === "in_progress"}
+                      />
                     );
                   })()}
                 </TabsContent>

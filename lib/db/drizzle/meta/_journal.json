@@ -176,6 +176,27 @@
       "when": 1779660002000,
       "tag": "0029_change_schedule_mode_default_to_sem_prazo",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1779660003000,
+      "tag": "0030_add_urgente_schedule_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1779660004000,
+      "tag": "0031_add_user_task_column_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1779660005000,
+      "tag": "0032_add_task_cancelled_at",
+      "breakpoints": true
     }
   ]
 }

@@ -434,7 +434,12 @@ export const GetMapResponse = zod.object({
       updatedAt: zod.date(),
       taskDueDate: zod.date().nullish(),
       taskStartAt: zod.date().nullish(),
-      taskScheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).nullish(),
+      taskScheduleMode: zod
+        .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+        .nullish()
+        .describe(
+          "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+        ),
       taskAssigneeName: zod.string().nullish(),
       taskAssigneeId: zod.string().uuid().nullish(),
       taskOverdue: zod.boolean().optional(),
@@ -603,7 +608,12 @@ export const GetCardResponse = zod.object({
         .nullish(),
       dueDate: zod.date().nullish(),
       startAt: zod.date().nullish(),
-      scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+      scheduleMode: zod
+        .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+        .optional()
+        .describe(
+          "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+        ),
       priority: zod.enum(["low", "medium", "high", "critical"]),
       status: zod.enum([
         "pending",
@@ -659,7 +669,12 @@ export const UpdateCardResponse = zod.object({
   updatedAt: zod.date(),
   taskDueDate: zod.date().nullish(),
   taskStartAt: zod.date().nullish(),
-  taskScheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).nullish(),
+  taskScheduleMode: zod
+    .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+    .nullish()
+    .describe(
+      "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+    ),
   taskAssigneeName: zod.string().nullish(),
   taskAssigneeId: zod.string().uuid().nullish(),
   taskOverdue: zod.boolean().optional(),
@@ -723,7 +738,12 @@ export const CreateTaskBody = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: zod
+    .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+    .optional()
+    .describe(
+      "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+    ),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -795,7 +815,12 @@ export const UpdateTaskStatusResponse = zod.object({
     .nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: zod
+    .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+    .optional()
+    .describe(
+      "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+    ),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",
@@ -825,7 +850,12 @@ export const UpdateTaskDetailsBody = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: zod
+    .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+    .optional()
+    .describe(
+      "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+    ),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
 });
 
@@ -863,7 +893,12 @@ export const UpdateTaskDetailsResponse = zod.object({
     .nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: zod
+    .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+    .optional()
+    .describe(
+      "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+    ),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",
@@ -904,7 +939,12 @@ export const GetMyTasksResponseItem = zod.object({
   assignedTo: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
-  scheduleMode: zod.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: zod
+    .enum(["ate", "entre", "em", "sem_prazo", "urgente"])
+    .optional()
+    .describe(
+      "Modalidade de prazo de uma tarefa.\n- `ate`: só dueDate (fazer até).\n- `entre`: janela [startAt, dueDate] (fazer entre).\n- `em`: dia pontual (startAt === dueDate).\n- `sem_prazo`: sem datas.\n- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).\n",
+    ),
   priority: zod.enum(["low", "medium", "high", "critical"]),
   status: zod.enum([
     "pending",

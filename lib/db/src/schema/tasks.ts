@@ -70,9 +70,10 @@ export const scheduleModeEnum = pgEnum("schedule_mode", [
   "entre",
   "em",
   "sem_prazo",
+  "urgente",
 ]);
 
-export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo";
+export type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo" | "urgente";
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -93,6 +94,7 @@ export const tasks = pgTable("tasks", {
   previousStatus: taskStatusEnum("previous_status"),
   overdue: boolean("overdue").notNull().default(false),
   completedAt: timestamp("completed_at"),
+  cancelledAt: timestamp("cancelled_at"),
   isApprovalTask: boolean("is_approval_task").notNull().default(false),
   parentTaskId: uuid("parent_task_id").references((): AnyPgColumn => tasks.id, { onDelete: "cascade" }),
   approvalOrder: integer("approval_order"),
@@ -142,6 +144,7 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   createdAt: true,
   updatedAt: true,
   completedAt: true,
+  cancelledAt: true,
 });
 
 export const updateTaskSchema = insertTaskSchema.partial().omit({

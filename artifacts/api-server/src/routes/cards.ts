@@ -35,7 +35,7 @@ const createTaskSchema = z.object({
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
-  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
 });
 
@@ -49,7 +49,7 @@ const updateTaskDetailsSchema = z.object({
   assignedTo: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
-  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo"]).optional(),
+  scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
 

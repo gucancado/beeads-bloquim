@@ -15,8 +15,8 @@ export interface TaskStatusEntry {
 export const TASK_STATUS_ORDER: readonly TaskStatusEntry[] = [
   {
     value: 'draft',
-    label: 'rascunho',
-    labelPlural: 'rascunhos',
+    label: 'em rascunho',
+    labelPlural: 'em rascunho',
     menuLabel: 'rascunho',
     icon: Pencil,
     dot: 'bg-purple-500',
@@ -25,8 +25,8 @@ export const TASK_STATUS_ORDER: readonly TaskStatusEntry[] = [
   },
   {
     value: 'pending',
-    label: 'pendente',
-    labelPlural: 'pendentes',
+    label: 'pronta e aguardando',
+    labelPlural: 'prontas e aguardando',
     menuLabel: 'pronta e aguardando',
     icon: Clock,
     dot: 'bg-blue-500',
@@ -35,8 +35,8 @@ export const TASK_STATUS_ORDER: readonly TaskStatusEntry[] = [
   },
   {
     value: 'in_progress',
-    label: 'em andamento',
-    labelPlural: 'em andamento',
+    label: 'pronta para fazer',
+    labelPlural: 'prontas para fazer',
     menuLabel: 'pronta para fazer',
     icon: Play,
     dot: 'bg-amber-500',

@@ -6,6 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Modalidade de prazo de uma tarefa.
+- `ate`: só dueDate (fazer até).
+- `entre`: janela [startAt, dueDate] (fazer entre).
+- `em`: dia pontual (startAt === dueDate).
+- `sem_prazo`: sem datas.
+- `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).
+
+ */
 export type ScheduleMode = (typeof ScheduleMode)[keyof typeof ScheduleMode];
 
 export const ScheduleMode = {
@@ -13,4 +22,5 @@ export const ScheduleMode = {
   entre: "entre",
   em: "em",
   sem_prazo: "sem_prazo",
+  urgente: "urgente",
 } as const;

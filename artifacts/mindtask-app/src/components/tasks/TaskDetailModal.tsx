@@ -74,7 +74,7 @@ interface UpdateTaskPayload {
   priority?: string;
   dueDate?: string | null;
   startAt?: string | null;
-  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo";
+  scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente";
   isRecurring?: boolean;
   recurrenceConfig?: RecurrenceConfig | null;
 }
@@ -100,9 +100,12 @@ interface TaskDetailModalProps {
   onDuplicated?: (newTaskId: string, newCardId: string | null) => void;
 }
 
-type ScheduleModeValue = "ate" | "entre" | "em" | "sem_prazo";
+type ScheduleModeValue = "ate" | "entre" | "em" | "sem_prazo" | "urgente";
 
+// "urgente" comes first because the lists sort by it as the primary key —
+// keeping the dropdown order matched to the sort order makes the UI legible.
 const SCHEDULE_MODE_OPTIONS: { value: ScheduleModeValue; label: string }[] = [
+  { value: "urgente", label: "urgente" },
   { value: "ate", label: "fazer até" },
   { value: "entre", label: "fazer entre" },
   { value: "em", label: "fazer em" },
@@ -844,7 +847,7 @@ export function TaskDetailModal({
                               onChange={(next) => {
                                 setScheduleMode(next);
                                 markDirty();
-                                if (next === "sem_prazo") {
+                                if (next === "sem_prazo" || next === "urgente") {
                                   setStartAt("");
                                   setDueDate("");
                                   const body = { scheduleMode: next, startAt: null, dueDate: null };
@@ -901,7 +904,7 @@ export function TaskDetailModal({
                             )}
                           </div>
                         </div>
-                        {scheduleMode !== "sem_prazo" && (
+                        {scheduleMode !== "sem_prazo" && scheduleMode !== "urgente" && (
                         <div className="flex items-center gap-1.5 w-[85%]">
                           {scheduleMode === "entre" && (
                             <>

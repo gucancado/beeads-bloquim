@@ -85,6 +85,7 @@ export async function patchTaskStatus(
     previousStatus,
     updatedAt: new Date(),
     completedAt: status === "completed" ? new Date() : null,
+    cancelledAt: status === "blocked" ? new Date() : null,
   };
 
   updateData.overdue = computeOverdue(existing.dueDate, status);

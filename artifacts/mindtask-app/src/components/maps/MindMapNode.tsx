@@ -102,7 +102,7 @@ interface MindMapNodeProps {
     taskId?: string | null;
     taskDueDate?: string | null;
     taskStartAt?: string | null;
-    taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | null;
+    taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" | null;
     taskAssigneeName?: string | null;
     taskAssigneeId?: string | null;
     taskAssigneeAvatarUrl?: string | null;
@@ -125,7 +125,7 @@ interface MindMapNodeProps {
       taskAssigneeAvatarUrl: string | null;
       taskDueDate: string | null;
       taskStartAt: string | null;
-      taskScheduleMode: "ate" | "entre" | "em" | "sem_prazo" | null;
+      taskScheduleMode: "ate" | "entre" | "em" | "sem_prazo" | "urgente" | null;
     }>) => void;
     onEditingChange?: (cardId: string, isEditing: boolean) => void;
     onAutoFocusDone?: (cardId: string) => void;
@@ -352,14 +352,14 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   };
 
-  const serverScheduleMode = (data.taskScheduleMode ?? "ate") as "ate" | "entre" | "em" | "sem_prazo";
+  const serverScheduleMode = (data.taskScheduleMode ?? "ate") as "ate" | "entre" | "em" | "sem_prazo" | "urgente";
   // Local override: lets the user switch to "entre"/"em" before the dates
   // are filled. Cleared once the server's mode catches up.
-  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | null>(null);
+  const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | "urgente" | null>(null);
   useEffect(() => {
     if (pendingMode && serverScheduleMode === pendingMode) setPendingMode(null);
   }, [serverScheduleMode, pendingMode]);
-  const currentScheduleMode: "ate" | "entre" | "em" | "sem_prazo" = pendingMode ?? serverScheduleMode;
+  const currentScheduleMode: "ate" | "entre" | "em" | "sem_prazo" | "urgente" = pendingMode ?? serverScheduleMode;
 
   const handleDueDateSelect = (val: string) => {
     if (currentScheduleMode === "entre" && val && data.taskStartAt) {
@@ -391,8 +391,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
     const isoDate = val + "T12:00:00.000Z";
     if (!pendingMode && data.taskDueDate && data.taskDueDate.slice(0, 10) === val) return;
-    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskDueDate: isoDate };
-    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { dueDate: isoDate };
+    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { taskDueDate: isoDate };
+    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { dueDate: isoDate };
     if (currentScheduleMode === "em") {
       patch.taskStartAt = isoDate;
       apiData.startAt = isoDate;
@@ -444,8 +444,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
     const isoDate = dueDateValue + "T12:00:00.000Z";
     if (!pendingMode && data.taskDueDate && data.taskDueDate.slice(0, 10) === dueDateValue) return;
-    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskDueDate: isoDate };
-    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { dueDate: isoDate };
+    const patch: { taskDueDate: string; taskStartAt?: string | null; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { taskDueDate: isoDate };
+    const apiData: { dueDate: string; startAt?: string | null; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { dueDate: isoDate };
     if (currentScheduleMode === "em") {
       patch.taskStartAt = isoDate;
       apiData.startAt = isoDate;
@@ -463,17 +463,17 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   };
 
-  const handleScheduleModeChange = (next: "ate" | "entre" | "em" | "sem_prazo") => {
+  const handleScheduleModeChange = (next: "ate" | "entre" | "em" | "sem_prazo" | "urgente") => {
     if (next === currentScheduleMode) return;
     // Persist immediately when the mode is fully specifiable from existing
     // data; otherwise switch only the local UI mode and let the date input
     // handler persist mode + dates atomically.
-    if (next === "sem_prazo") {
+    if (next === "sem_prazo" || next === "urgente") {
       setPendingMode(null);
-      data.onInlineUpdate?.(id, { taskScheduleMode: "sem_prazo", taskStartAt: null, taskDueDate: null });
+      data.onInlineUpdate?.(id, { taskScheduleMode: next, taskStartAt: null, taskDueDate: null });
       if (data.taskId) {
         updateTaskDetailsMut.mutate(
-          { workspaceId, mapId, cardId: id, data: { scheduleMode: "sem_prazo", startAt: null, dueDate: null } },
+          { workspaceId, mapId, cardId: id, data: { scheduleMode: next, startAt: null, dueDate: null } },
           { onSuccess: invalidateAll },
         );
       }
@@ -553,8 +553,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       }
       return;
     }
-    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskStartAt: iso };
-    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { startAt: iso };
+    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { taskStartAt: iso };
+    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { startAt: iso };
     if (pendingMode) {
       patch.taskScheduleMode = pendingMode;
       apiData.scheduleMode = pendingMode;
@@ -611,8 +611,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
       }
       return;
     }
-    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { taskStartAt: iso };
-    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" } = { startAt: iso };
+    const patch: { taskStartAt: string; taskScheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { taskStartAt: iso };
+    const apiData: { startAt: string; scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" } = { startAt: iso };
     if (pendingMode) {
       patch.taskScheduleMode = pendingMode;
       apiData.scheduleMode = pendingMode;
@@ -931,7 +931,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             )}
 
             {/* Task schedule fields — stacks vertically in "entre" mode */}
-            {hasTask && !hasDueDate && !editingNoPrazo && (
+            {hasTask && !hasDueDate && !editingNoPrazo && currentScheduleMode !== "urgente" && (
               <button
                 type="button"
                 className="nodrag ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground rounded px-1 hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
@@ -947,6 +947,20 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 <span>sem prazo</span>
               </button>
             )}
+            {hasTask && !hasDueDate && !editingNoPrazo && currentScheduleMode === "urgente" && (
+              <button
+                type="button"
+                className="nodrag ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer"
+                title="Clique para alterar modalidade de prazo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingNoPrazo(true);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <span>urgente</span>
+              </button>
+            )}
             {hasTask && (hasDueDate || editingNoPrazo) && (
               <div
                 ref={scheduleWrapperRef}
@@ -957,12 +971,13 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 <div className="flex items-center gap-1">
                   <select
                     value={currentScheduleMode}
-                    onChange={(e) => { e.stopPropagation(); handleScheduleModeChange(e.target.value as "ate" | "entre" | "em" | "sem_prazo"); }}
+                    onChange={(e) => { e.stopPropagation(); handleScheduleModeChange(e.target.value as "ate" | "entre" | "em" | "sem_prazo" | "urgente"); }}
                     onClick={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => e.stopPropagation()}
                     className="nodrag text-[10px] bg-card border border-border rounded-lg px-1.5 py-0.5 outline-none cursor-pointer"
                     title="Modalidade do fazer"
                   >
+                    <option value="urgente">urgente</option>
                     <option value="ate">fazer até</option>
                     <option value="entre">fazer entre</option>
                     <option value="em">fazer em</option>
@@ -999,7 +1014,9 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                   )}
                 </div>
 
-                {/* Due-date row — below startAt for "entre", inline otherwise */}
+                {/* Due-date row — below startAt for "entre", inline otherwise.
+                    Hidden in "urgente" / "sem_prazo" since they have no dates. */}
+                {currentScheduleMode !== "urgente" && currentScheduleMode !== "sem_prazo" && (
                 <DatePickerPopover
                   value={data.taskDueDate ? data.taskDueDate.slice(0, 10) : ""}
                   onSelect={handleDueDateSelect}
@@ -1027,6 +1044,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                     </button>
                   )}
                 </DatePickerPopover>
+                )}
               </div>
             )}
           </div>

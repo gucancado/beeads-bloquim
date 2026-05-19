@@ -63,7 +63,7 @@ function projectSchedule(
   originalDueDate: Date | null,
   nextDueDate: Date | null,
 ): { startAt: Date | null; dueDate: Date | null } {
-  if (mode === "sem_prazo") return { startAt: null, dueDate: null };
+  if (mode === "sem_prazo" || mode === "urgente") return { startAt: null, dueDate: null };
   if (mode === "ate") return { startAt: null, dueDate: nextDueDate };
   if (mode === "em") return { startAt: nextDueDate, dueDate: nextDueDate };
   // "entre" — invariant from effectiveMode: bounds and nextDueDate are present
@@ -85,7 +85,7 @@ function initialStatus(
   startAt: Date | null,
   dueDate: Date | null,
 ): "pending" | "in_progress" {
-  if (mode === "ate" || mode === "sem_prazo") return "in_progress";
+  if (mode === "ate" || mode === "sem_prazo" || mode === "urgente") return "in_progress";
   return isWithinScheduleWindow(mode, startAt, dueDate) ? "in_progress" : "pending";
 }
 

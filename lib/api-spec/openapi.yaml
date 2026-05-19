@@ -1418,7 +1418,14 @@ components:
 
     ScheduleMode:
       type: string
-      enum: [ate, entre, em, sem_prazo]
+      enum: [ate, entre, em, sem_prazo, urgente]
+      description: |
+        Modalidade de prazo de uma tarefa.
+        - `ate`: só dueDate (fazer até).
+        - `entre`: janela [startAt, dueDate] (fazer entre).
+        - `em`: dia pontual (startAt === dueDate).
+        - `sem_prazo`: sem datas.
+        - `urgente`: sem datas, mas pinada no topo de toda lista (primeiro critério de ordenação).
 
     CardVisualStatus:
       type: string
