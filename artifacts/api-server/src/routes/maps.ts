@@ -1,15 +1,18 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachments, mapShapes } from "@workspace/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull, ilike, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
-import { requireWorkspaceRole } from "../middlewares/permissions";
+import { requireWorkspaceRole, requireMapInWorkspace } from "../middlewares/permissions";
+import { toVisualStatus } from "../services/taskVisualSyncService";
+import { recordTaskActivity } from "../services/taskActivitiesService";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
 
 const mapNameSchema = z.object({ name: z.string().min(1) });
+const attachTaskSchema = z.object({ taskId: z.string().uuid() });
 
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
@@ -41,6 +44,35 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), async (
 
   res.status(201).json(map);
 });
+
+// Busca planos por nome dentro do workspace. Declarada ANTES de `GET /:mapId`
+// para que o segmento literal "search" não seja capturado como UUID inválido.
+router.get(
+  "/search",
+  requireAuth,
+  requireWorkspaceRole(["admin", "editor", "executor"]),
+  async (req: AuthRequest, res) => {
+    const { workspaceId } = req.params;
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (q.length === 0) {
+      res.status(400).json({ error: "Bad Request", message: "query 'q' is required" });
+      return;
+    }
+
+    const userRole = (req as any).memberRole as string | undefined;
+
+    const rows = await db
+      .select()
+      .from(maps)
+      .where(and(eq(maps.workspaceId, workspaceId), ilike(maps.name, `%${q}%`)))
+      .orderBy(desc(maps.updatedAt))
+      .limit(50);
+
+    // Admins veem hidden; demais roles não.
+    const filtered = userRole === "admin" ? rows : rows.filter((m) => !m.hidden);
+    res.json(filtered);
+  },
+);
 
 router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req, res) => {
   const { workspaceId, mapId } = req.params;
@@ -212,5 +244,219 @@ router.post("/:mapId/access", requireAuth, requireWorkspaceRole(["admin", "edito
 
   res.status(204).end();
 });
+
+// Anexa uma task standalone-no-workspace (mapId = null) ao plano. Não cria
+// task nova — apenas vincula uma existente. O agente MCP não lida com cards;
+// aqui o backend cria o card no canvas em uma posição vazia e seta tasks.mapId.
+//
+// Invariantes:
+//  - task.workspaceId === :workspaceId
+//  - task.mapId IS NULL (task ainda não pertence a nenhum plano)
+//  - task.isRecurring === false  (planos não suportam recorrência — mesma
+//    regra de PUT /workspaces/:wsId/tasks/:taskId)
+//  - task.isApprovalTask === false e task.parentTaskId IS NULL
+//    (filhas só vivem dentro do mesmo plano da mãe)
+router.post(
+  "/:mapId/attach-task",
+  requireAuth,
+  requireWorkspaceRole(["admin", "editor"]),
+  requireMapInWorkspace,
+  async (req: AuthRequest, res) => {
+    const parsed = attachTaskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation error", message: parsed.error.message });
+      return;
+    }
+
+    const { workspaceId, mapId } = req.params;
+    const { taskId } = parsed.data;
+    const userId = req.user!.userId;
+
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+    if (!task) {
+      res.status(404).json({ error: "Not found", message: "Task not found" });
+      return;
+    }
+    if (task.workspaceId !== workspaceId) {
+      res.status(400).json({
+        error: "Invalid scope",
+        message: "A tarefa pertence a outro workspace. Anexar entre workspaces não é suportado.",
+      });
+      return;
+    }
+    if (task.mapId !== null) {
+      res.status(409).json({
+        error: "Conflict",
+        message: "Esta tarefa já está anexada a um plano. Use detach-task antes de mover.",
+      });
+      return;
+    }
+    if (task.isRecurring) {
+      res.status(400).json({
+        error: "Invalid task",
+        message: "Tarefas recorrentes não podem ser anexadas a planos.",
+      });
+      return;
+    }
+    if (task.isApprovalTask || task.parentTaskId !== null) {
+      res.status(400).json({
+        error: "Invalid task",
+        message: "Tarefas filhas (subtask/aprovação) não podem ser anexadas individualmente.",
+      });
+      return;
+    }
+
+    // Calcula uma posição livre no canvas: abaixo do card mais ao sul.
+    const [{ maxY } = { maxY: null }] = await db
+      .select({ maxY: sql<number | null>`MAX(${cards.positionY})` })
+      .from(cards)
+      .where(eq(cards.mapId, mapId));
+    const positionY = (maxY ?? -150) + 150;
+
+    const visual = toVisualStatus(task.status ?? "draft", !!task.overdue);
+
+    // Transação garante card + tasks.mapId mudando juntos. Atualizamos a task
+    // PRIMEIRO com WHERE mapId IS NULL — se a guarda perder a corrida, lançamos
+    // pra fazer rollback de tudo (não há card órfão).
+    let result: { card: typeof cards.$inferSelect; task: typeof tasks.$inferSelect };
+    try {
+      result = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(tasks)
+          .set({ mapId, updatedAt: new Date() })
+          .where(and(eq(tasks.id, taskId), isNull(tasks.mapId)))
+          .returning();
+        if (!updated) {
+          throw new Error("CONCURRENT_ATTACH");
+        }
+        const [card] = await tx
+          .insert(cards)
+          .values({
+            mapId,
+            title: task.title,
+            description: task.description,
+            positionX: 0,
+            positionY,
+            statusVisual: visual,
+            taskId: task.id,
+          })
+          .returning();
+        return { card, task: updated };
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "CONCURRENT_ATTACH") {
+        res.status(409).json({
+          error: "Conflict",
+          message: "Tarefa foi anexada a outro plano simultaneamente.",
+        });
+        return;
+      }
+      throw err;
+    }
+
+    const [mapRow] = await db.select({ name: maps.name }).from(maps).where(eq(maps.id, mapId)).limit(1);
+    await recordTaskActivity({
+      taskId,
+      actorId: userId,
+      type: "task_moved",
+      metadata: {
+        kind: "attached_to_plan",
+        toMapId: mapId,
+        toMapName: mapRow?.name ?? null,
+      },
+      source: req.user?.source ?? null,
+    });
+
+    res.status(200).json({ task: result.task, card: result.card });
+  },
+);
+
+// Desanexa uma task de um plano. Remove o card vinculado (cascade limpa
+// connections) e zera tasks.mapId — a task volta a ser standalone-no-workspace.
+//
+// Invariantes:
+//  - task.workspaceId === :workspaceId
+//  - task.mapId === :mapId
+//  - task.isApprovalTask === false  (approval tasks são gerenciadas pela
+//    task pai e não devem ser desanexadas isoladamente)
+router.post(
+  "/:mapId/detach-task",
+  requireAuth,
+  requireWorkspaceRole(["admin", "editor"]),
+  requireMapInWorkspace,
+  async (req: AuthRequest, res) => {
+    const parsed = attachTaskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation error", message: parsed.error.message });
+      return;
+    }
+
+    const { workspaceId, mapId } = req.params;
+    const { taskId } = parsed.data;
+    const userId = req.user!.userId;
+
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+    if (!task) {
+      res.status(404).json({ error: "Not found", message: "Task not found" });
+      return;
+    }
+    if (task.workspaceId !== workspaceId) {
+      res.status(400).json({
+        error: "Invalid scope",
+        message: "A tarefa pertence a outro workspace.",
+      });
+      return;
+    }
+    if (task.mapId !== mapId) {
+      res.status(400).json({
+        error: "Invalid state",
+        message: "A tarefa não está anexada a este plano.",
+      });
+      return;
+    }
+    if (task.isApprovalTask) {
+      res.status(400).json({
+        error: "Invalid task",
+        message: "Tarefas de aprovação não podem ser desanexadas individualmente.",
+      });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      // FK em cardConnections é cascade no card, então deletar o card já limpa
+      // as conexões que entram/saem dele.
+      await tx.delete(cards).where(eq(cards.taskId, taskId));
+      const [updated] = await tx
+        .update(tasks)
+        .set({ mapId: null, updatedAt: new Date() })
+        .where(and(eq(tasks.id, taskId), eq(tasks.mapId, mapId)))
+        .returning();
+      return updated;
+    });
+
+    if (!result) {
+      res.status(409).json({
+        error: "Conflict",
+        message: "Estado do plano mudou durante a operação.",
+      });
+      return;
+    }
+
+    const [mapRow] = await db.select({ name: maps.name }).from(maps).where(eq(maps.id, mapId)).limit(1);
+    await recordTaskActivity({
+      taskId,
+      actorId: userId,
+      type: "task_moved",
+      metadata: {
+        kind: "detached_from_plan",
+        fromMapId: mapId,
+        fromMapName: mapRow?.name ?? null,
+      },
+      source: req.user?.source ?? null,
+    });
+
+    res.status(200).json({ task: result });
+  },
+);
 
 export default router;
