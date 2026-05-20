@@ -2428,6 +2428,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             elevateEdgesOnSelect={false}
             fitView
             fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.2}
             onNodesDelete={(deletedNodes) => {
               deletedNodes.forEach(n => {
                 if (n.type === 'textnode') {
