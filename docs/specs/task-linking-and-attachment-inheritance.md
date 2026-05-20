@@ -440,3 +440,24 @@ Endpoints removidos vs. design antigo: `/links` (GET/POST), `/links/:linkId` (DE
 - Download bloqueado em pending, resolvido em completed
 - Cadeia A→B→C com promoção e gating por status em cada hop
 - Demote em B com inherited_from removendo row e caindo de volta na herança pura
+
++6 cenários "pós-conclusão" em `c:/tmp/post-completion-smoke.ts`:
+- A completed sem anexos → B vê nada
+- Adicionar anexo standard em A completed → B continua sem ver (não é entregável)
+- **Marcar X como deliverable em A (já completed) → B herda imediatamente como `available`**
+- Upload novo com `kind=deliverable` em A já completed → B herda imediatamente
+- Rebaixar entregável em A para standard → some de B
+
+### 14.7 Por que isso funciona sem código adicional
+
+Toda mudança que afeta o que B vê de A é capturada pela JOIN de read-time:
+
+| Evento em A | Como afeta a query em B |
+|---|---|
+| Upload novo em A com `kind=deliverable` | Trigger `trg_attachments_sync_task_links` cria row em `task_attachments(A, X, deliverable)`. Próxima leitura de B inclui X. |
+| Mudar `attachments.kind` de standard→deliverable em A | Trigger sincroniza para `task_attachments.kind`. Próxima leitura de B inclui X. |
+| `A.status` mudar para/de `completed` | A query computa `state` via `CASE WHEN src_task.status='completed'`. Próxima leitura reflete. |
+| Adicionar/remover `card_connection(A→B)` | A query usa essa conexão na JOIN. Próxima leitura reflete. |
+| Soft-delete em A (`attachments.deleted_at`) | A query filtra `WHERE a.deleted_at IS NULL`. |
+
+Não há triggers de propagação, snapshots ou caches a invalidar — o estado canônico é sempre derivado em tempo de leitura.
