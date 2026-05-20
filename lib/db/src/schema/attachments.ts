@@ -5,31 +5,27 @@ import {
   uuid,
   integer,
   index,
-  pgEnum,
-  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./users";
 import { workspaces } from "./workspaces";
-import { tasks } from "./tasks";
 import { cards } from "./cards";
 import { maps } from "./maps";
 import { taskComments } from "./comments";
 
-export const attachmentKindEnum = pgEnum("attachment_kind", [
-  "standard",
-  "deliverable",
-]);
-
-export type AttachmentKind = "standard" | "deliverable";
-
 /**
- * Unified attachments table. Replaces the legacy file_uploads + attachment_links
- * pair. An attachment belongs to a workspace and is anchored to exactly one of
- * task / card / comment / plan via a CHECK constraint.
+ * Unified attachments table. The actual file lives in object storage
+ * (S3-compatible: Cloudflare R2 in prod). The DB only stores metadata +
+ * the storage path needed to fetch it.
  *
- * The actual file lives in object storage (S3-compatible: Cloudflare R2 in
- * prod). The DB only stores metadata + the storage path needed to fetch it.
+ * Per-entity anchoring:
+ *  - tasks → `task_attachments` (join table with per-link kind +
+ *    inherited_from_task_id for canvas-driven inheritance).
+ *  - cards / comments / maps / plans → columns on this table.
+ *
+ * The legacy `task_id` and `kind` columns were dropped in migration 0036;
+ * the trigger that synced them to `task_attachments` was dropped at the
+ * same time.
  */
 export const attachments = pgTable(
   "attachments",
@@ -38,7 +34,6 @@ export const attachments = pgTable(
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "cascade" }),
     cardId: uuid("card_id").references(() => cards.id, { onDelete: "cascade" }),
     commentId: uuid("comment_id").references(() => taskComments.id, {
       onDelete: "cascade",
@@ -57,8 +52,6 @@ export const attachments = pgTable(
     mimeType: text("mime_type").notNull(),
     fileSize: integer("file_size").notNull(),
 
-    kind: attachmentKindEnum("kind").notNull().default("standard"),
-
     uploadedBy: uuid("uploaded_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -71,9 +64,6 @@ export const attachments = pgTable(
       table.workspaceId,
       table.createdAt,
     ),
-    index("idx_attachments_task")
-      .on(table.taskId, table.createdAt)
-      .where(sql`${table.taskId} IS NOT NULL`),
     index("idx_attachments_card")
       .on(table.cardId, table.createdAt)
       .where(sql`${table.cardId} IS NOT NULL`),
@@ -86,15 +76,10 @@ export const attachments = pgTable(
     index("idx_attachments_alive")
       .on(table.workspaceId)
       .where(sql`${table.deletedAt} IS NULL`),
-    // At least one anchor must be set (task | card | comment | map | plan).
-    check(
-      "attachments_has_anchor",
-      sql`(${table.taskId} IS NOT NULL)
-       OR (${table.cardId} IS NOT NULL)
-       OR (${table.commentId} IS NOT NULL)
-       OR (${table.mapId} IS NOT NULL)
-       OR (${table.planId} IS NOT NULL)`,
-    ),
+    // No CHECK constraint enforcing an anchor: task anchoring lives in
+    // task_attachments (separate table), which CHECK can't reference. The
+    // application layer is responsible for ensuring every attachment is
+    // anchored somewhere; orphan rows get cleaned by the GC job.
   ],
 );
 

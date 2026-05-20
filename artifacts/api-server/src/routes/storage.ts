@@ -6,6 +6,7 @@ import {
   attachments,
   cards,
   maps,
+  taskAttachments,
   taskComments,
   tasks,
   workspaceMembers,
@@ -128,8 +129,10 @@ router.post(
       return;
     }
 
-    // Pre-create the attachment row. CHECK constraint on the table forces
-    // at least one of (task|card|comment|map|plan)_id to be set.
+    // Pre-create the attachment row. Entity anchoring lives in dedicated join
+    // tables now — for task uploads, we insert a paired row in
+    // `task_attachments` so listings find it. card/comment/map/plan continue
+    // to use the per-entity columns on `attachments` itself.
     const insertValues = {
       id: attachmentId,
       workspaceId: ownership.workspaceId,
@@ -138,9 +141,7 @@ router.post(
       originalFilename: safeName,
       mimeType: contentType,
       fileSize: sizeBytes,
-      kind: kind ?? "standard",
       uploadedBy: userId,
-      taskId: entityKind === "task" ? entityId : null,
       cardId: entityKind === "card" ? entityId : null,
       commentId: entityKind === "comment" ? entityId : null,
       mapId: entityKind === "map" ? entityId : null,
@@ -148,7 +149,17 @@ router.post(
     } as const;
 
     try {
-      await db.insert(attachments).values(insertValues);
+      await db.transaction(async (tx) => {
+        await tx.insert(attachments).values(insertValues);
+        if (entityKind === "task") {
+          await tx.insert(taskAttachments).values({
+            taskId: entityId,
+            attachmentId,
+            kind: kind ?? "standard",
+            createdBy: userId,
+          });
+        }
+      });
     } catch (err) {
       log.error({ err, attachmentId }, "failed to insert attachment row");
       res.status(500).json({

@@ -117,7 +117,7 @@ router.get("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
       taskApprovalDecision: tasks.approvalStatus,
       taskApprovalOrder: tasks.approvalOrder,
       taskParentApprovalStatus: tasks.parentApprovalStatus,
-      taskAttachmentCount: sql<number>`(SELECT COUNT(*) FROM attachments WHERE task_id = ${tasks.id} AND deleted_at IS NULL)`,
+      taskAttachmentCount: sql<number>`(SELECT COUNT(*) FROM task_attachments ta JOIN attachments a ON a.id = ta.attachment_id WHERE ta.task_id = ${tasks.id} AND a.deleted_at IS NULL)`,
       taskSubtaskCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id})`,
       taskSubtaskCompletedCount: sql<number>`(SELECT COUNT(*) FROM subtasks WHERE task_id = ${tasks.id} AND completed = true)`,
       taskCommentCount: sql<number>`((SELECT COUNT(*) FROM task_comments WHERE task_id = ${tasks.id}) + (SELECT COUNT(*) FROM task_comments tc JOIN tasks ct ON ct.id = tc.task_id WHERE ct.parent_task_id = ${tasks.id} AND ct.is_approval_task = true))`,
