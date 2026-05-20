@@ -197,6 +197,20 @@
       "when": 1779660005000,
       "tag": "0032_add_task_cancelled_at",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1779660006000,
+      "tag": "0033_add_task_links_and_attachment_join",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779660007000,
+      "tag": "0034_attachments_sync_trigger",
+      "breakpoints": true
     }
   ]
 }

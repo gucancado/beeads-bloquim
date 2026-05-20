@@ -1,11 +1,13 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2, Download, Star } from "lucide-react";
+import { Paperclip, X, FileText, FileImage, FileVideo, FileAudio, FileCode, File, Loader2, Download, Star, Link2, Trash2 } from "lucide-react";
 import {
   useListTaskAttachments,
   useDeleteTaskAttachment,
-  useUpdateTaskAttachmentKind,
+  useSetTaskAttachmentKind,
+  useUnlinkAttachmentFromTask,
   getListTaskAttachmentsQueryKey,
+  getListTaskLinksQueryKey,
   customFetch,
 } from "@workspace/api-client-react";
 import type { AttachmentResponse } from "@workspace/api-client-react";
@@ -13,6 +15,7 @@ import { useUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
 import { AttachmentThumbnail } from "@/components/tasks/attachments/AttachmentThumbnail";
 import { AttachmentViewerModal } from "@/components/tasks/attachments/AttachmentViewerModal";
+import { DeleteAttachmentDialog } from "@/components/tasks/attachments/DeleteAttachmentDialog";
 import {
   isSupportedAttachment,
   sortAttachmentsByCreatedAtAsc,
@@ -99,8 +102,13 @@ function AttachmentsSectionWorkspace({
   });
 
   const deleteAttachmentMut = useDeleteTaskAttachment();
-  const updateKindMut = useUpdateTaskAttachmentKind();
+  const setKindMut = useSetTaskAttachmentKind();
+  const unlinkMut = useUnlinkAttachmentFromTask();
+  const [deleteTarget, setDeleteTarget] = useState<AttachmentResponse | null>(null);
   const { uploadFile } = useUpload();
+
+  // Inheritance changes can affect linked tasks' attachments + the links list.
+  const linksKey = getListTaskLinksQueryKey(workspaceId, taskId);
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -131,29 +139,66 @@ function AttachmentsSectionWorkspace({
     }
   }, [uploadFile, taskId, queryClient, attachmentsKey, toast]);
 
-  const handleRemove = useCallback(async (attachmentId: string) => {
+  // "Remove" splits in two flows based on whether the attachment is native
+  // here or inherited via the task-links cascade:
+  //   - native (inheritedFromTaskId === null): show the confirm-delete dialog
+  //     that warns about other tasks linked to the file and runs the hard
+  //     delete on confirm (cascades everywhere via the legacy soft-delete).
+  //   - inherited: just unlink — the file stays on the upstream task.
+  const handleRemove = useCallback(
+    async (attachment: AttachmentResponse) => {
+      if (attachment.inheritedFromTaskId) {
+        try {
+          await unlinkMut.mutateAsync({
+            workspaceId,
+            taskId,
+            attachmentId: attachment.id,
+          });
+          queryClient.invalidateQueries({ queryKey: attachmentsKey });
+          queryClient.invalidateQueries({ queryKey: linksKey });
+        } catch {
+          toast({ title: "Erro ao desvincular anexo", variant: "destructive" });
+        }
+        return;
+      }
+      setDeleteTarget(attachment);
+    },
+    [unlinkMut, workspaceId, taskId, queryClient, attachmentsKey, linksKey, toast],
+  );
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteAttachmentMut.mutateAsync({ workspaceId, taskId, attachmentId });
+      await deleteAttachmentMut.mutateAsync({
+        workspaceId,
+        taskId,
+        attachmentId: deleteTarget.id,
+      });
+      setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: attachmentsKey });
     } catch {
-      toast({ title: "Erro ao remover anexo", variant: "destructive" });
+      toast({ title: "Erro ao apagar anexo", variant: "destructive" });
     }
-  }, [deleteAttachmentMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
+  }, [deleteAttachmentMut, deleteTarget, workspaceId, taskId, queryClient, attachmentsKey, toast]);
 
+  // Kind change uses the inheritance-aware endpoint, so promoting an
+  // inherited attachment in this task propagates it to downstream targets,
+  // and demoting clears the cascade.
   const handleToggleKind = useCallback(async (attachment: AttachmentResponse) => {
     const nextKind = attachment.kind === "deliverable" ? "standard" : "deliverable";
     try {
-      await updateKindMut.mutateAsync({
+      await setKindMut.mutateAsync({
         workspaceId,
         taskId,
         attachmentId: attachment.id,
         data: { kind: nextKind },
       });
       queryClient.invalidateQueries({ queryKey: attachmentsKey });
+      queryClient.invalidateQueries({ queryKey: linksKey });
     } catch {
       toast({ title: "Erro ao atualizar tipo do anexo", variant: "destructive" });
     }
-  }, [updateKindMut, workspaceId, taskId, queryClient, attachmentsKey, toast]);
+  }, [setKindMut, workspaceId, taskId, queryClient, attachmentsKey, linksKey, toast]);
 
   const handleDownload = useCallback((attachment: AttachmentResponse) => {
     const url = `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachment.id}/download`;
@@ -176,23 +221,37 @@ function AttachmentsSectionWorkspace({
   }, [workspaceId, taskId, toast]);
 
   return (
-    <AttachmentsSectionUI
-      workspaceId={workspaceId}
-      taskId={taskId}
-      attachments={attachments ?? []}
-      isLoading={isLoading}
-      uploading={uploading}
-      isDragOver={isDragOver}
-      fileInputRef={fileInputRef}
-      dropTargetEl={dropTargetEl}
-      mode={mode ?? "full"}
-      allowKindToggle={!!allowKindToggle}
-      onFiles={handleFiles}
-      onRemove={handleRemove}
-      onDownload={handleDownload}
-      onToggleKind={handleToggleKind}
-      onDragOver={setIsDragOver}
-    />
+    <>
+      <AttachmentsSectionUI
+        workspaceId={workspaceId}
+        taskId={taskId}
+        attachments={attachments ?? []}
+        isLoading={isLoading}
+        uploading={uploading}
+        isDragOver={isDragOver}
+        fileInputRef={fileInputRef}
+        dropTargetEl={dropTargetEl}
+        mode={mode ?? "full"}
+        allowKindToggle={!!allowKindToggle}
+        onFiles={handleFiles}
+        onRemove={handleRemove}
+        onDownload={handleDownload}
+        onToggleKind={handleToggleKind}
+        onDragOver={setIsDragOver}
+      />
+      {deleteTarget && (
+        <DeleteAttachmentDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          workspaceId={workspaceId}
+          taskId={taskId}
+          attachmentId={deleteTarget.id}
+          fileName={deleteTarget.fileName}
+          isPending={deleteAttachmentMut.isPending}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
+    </>
   );
 }
 
@@ -242,9 +301,9 @@ function AttachmentsSectionStandalone({ taskId, dropTargetEl, mode, allowKindTog
     }
   }, [uploadFile, taskId, queryClient, attachmentsKey, toast]);
 
-  const handleRemove = useCallback(async (attachmentId: string) => {
+  const handleRemove = useCallback(async (attachment: AttachmentResponse) => {
     try {
-      await customFetch<{ success: boolean }>(`/api/my-tasks/${taskId}/attachments/${attachmentId}`, {
+      await customFetch<{ success: boolean }>(`/api/my-tasks/${taskId}/attachments/${attachment.id}`, {
         method: "DELETE",
       });
       queryClient.invalidateQueries({ queryKey: attachmentsKey });
@@ -306,7 +365,7 @@ interface AttachmentsSectionUIProps {
   mode: AttachmentMode;
   allowKindToggle: boolean;
   onFiles: (files: FileList | File[]) => void;
-  onRemove: (attachmentId: string) => void;
+  onRemove: (attachment: AttachmentResponse) => void;
   onDownload: (attachment: AttachmentResponse) => void;
   onToggleKind?: (attachment: AttachmentResponse) => void;
   onDragOver: (value: boolean) => void;
@@ -492,14 +551,20 @@ function AttachmentsSectionUI({
                       <Star className={`w-3 h-3 ${attachment.kind === "deliverable" ? "fill-current" : ""}`} />
                     </button>
                   )}
+                  {attachment.inheritedFromTaskId && (
+                    <span className="absolute bottom-1 left-1 inline-flex items-center gap-0.5 rounded-full bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 text-[10px] font-semibold px-1.5 py-0.5 ring-1 ring-sky-300 dark:ring-sky-800 shadow-sm" title="Herdado de outra tarefa via vínculo">
+                      <Link2 className="w-2.5 h-2.5" />
+                      <span className="lowercase">herdado</span>
+                    </span>
+                  )}
                   {!isReadonly && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
+                      onClick={(e) => { e.stopPropagation(); onRemove(attachment); }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive"
-                      title="Remover anexo"
+                      title={attachment.inheritedFromTaskId ? "Desvincular desta tarefa" : "Apagar arquivo"}
                     >
-                      <X className="w-3 h-3" />
+                      {attachment.inheritedFromTaskId ? <X className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
                     </button>
                   )}
                 </div>
@@ -527,6 +592,12 @@ function AttachmentsSectionUI({
                             <span className="lowercase">entregável</span>
                           </span>
                         )}
+                        {attachment.inheritedFromTaskId && (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 text-[10px] font-semibold px-1.5 py-0.5 ring-1 ring-sky-300 dark:ring-sky-800 shrink-0" title="Herdado de outra tarefa via vínculo">
+                            <Link2 className="w-2.5 h-2.5" />
+                            <span className="lowercase">herdado</span>
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-muted-foreground">{formatFileSize(attachment.fileSize)}</p>
                     </div>
@@ -551,11 +622,11 @@ function AttachmentsSectionUI({
                     {!isReadonly && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
+                        onClick={(e) => { e.stopPropagation(); onRemove(attachment); }}
                         className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                        title="Remover anexo"
+                        title={attachment.inheritedFromTaskId ? "Desvincular desta tarefa" : "Apagar arquivo"}
                       >
-                        <X className="w-3 h-3" />
+                        {attachment.inheritedFromTaskId ? <X className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
                       </button>
                     )}
                   </div>
@@ -573,7 +644,7 @@ function AttachmentsSectionUI({
         initialAttachmentId={viewerAttachmentId}
         getDownloadUrl={getDownloadUrl}
         onDownload={onDownload}
-        onDelete={isReadonly ? undefined : ((att) => onRemove(att.id))}
+        onDelete={isReadonly ? undefined : ((att) => onRemove(att))}
         onAddFiles={isReadonly ? undefined : onFiles}
         uploading={uploading}
       />

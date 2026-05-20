@@ -25,6 +25,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommentsSection } from "@/components/maps/CommentsSection";
 import { ApprovalTaskView } from "@/components/tasks/ApprovalTaskView";
 import { AttachmentsSection } from "@/components/tasks/AttachmentsSection";
+import { TaskLinksSection } from "@/components/tasks/TaskLinksSection";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
@@ -1044,6 +1045,15 @@ export function TaskDetailModal({
                         taskId={taskIdResolved}
                         dropTargetEl={dialogContentEl}
                         allowKindToggle={!!effectiveWorkspaceId}
+                      />
+                    )}
+
+                    {/* Task links — workspace tasks only (plan-scoped feature) */}
+                    {!!effectiveWorkspaceId && !!taskIdResolved && (
+                      <TaskLinksSection
+                        workspaceId={effectiveWorkspaceId}
+                        taskId={taskIdResolved}
+                        mapId={mapId || taskMapId || null}
                       />
                     )}
 

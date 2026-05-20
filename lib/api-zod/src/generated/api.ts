@@ -1012,6 +1012,13 @@ export const ListTaskAttachmentsResponseItem = zod.object({
     .describe(
       "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
     ),
+  inheritedFromTaskId: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe(
+      'Non-null when this attachment surfaces on the task via task-link\ninheritance (the upstream task that exposed it as a deliverable).\nUI may render a \"Herdado de X\" badge. Null for native uploads.\n',
+    ),
 });
 export const ListTaskAttachmentsResponse = zod.array(
   ListTaskAttachmentsResponseItem,
@@ -1069,6 +1076,13 @@ export const UpdateTaskAttachmentKindResponse = zod.object({
     .describe(
       "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
     ),
+  inheritedFromTaskId: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe(
+      'Non-null when this attachment surfaces on the task via task-link\ninheritance (the upstream task that exposed it as a deliverable).\nUI may render a \"Herdado de X\" badge. Null for native uploads.\n',
+    ),
 });
 
 /**
@@ -1084,6 +1098,159 @@ export const DeleteTaskAttachmentResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
 });
+
+/**
+ * @summary List task links (outgoing + incoming) for a task
+ */
+export const ListTaskLinksParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+});
+
+export const ListTaskLinksResponse = zod.object({
+  outgoing: zod.array(
+    zod
+      .object({
+        id: zod.string().uuid(),
+        sourceTaskId: zod.string().uuid(),
+        sourceTitle: zod.string(),
+        targetTaskId: zod.string().uuid(),
+        targetTitle: zod.string(),
+        planId: zod.string().uuid(),
+        createdAt: zod.date(),
+        createdBy: zod.string().uuid().nullish(),
+      })
+      .describe(
+        "Directed link between two tasks in the same plan (source → target).",
+      ),
+  ),
+  incoming: zod.array(
+    zod
+      .object({
+        id: zod.string().uuid(),
+        sourceTaskId: zod.string().uuid(),
+        sourceTitle: zod.string(),
+        targetTaskId: zod.string().uuid(),
+        targetTitle: zod.string(),
+        planId: zod.string().uuid(),
+        createdAt: zod.date(),
+        createdBy: zod.string().uuid().nullish(),
+      })
+      .describe(
+        "Directed link between two tasks in the same plan (source → target).",
+      ),
+  ),
+});
+
+/**
+ * Both tasks must belong to the same plan (map). Inserting a link causes
+every `deliverable`-kind attachment on the source to surface on the
+target as `standard` (inherited). Returns `inheritedCount`.
+422 `LINK_OUT_OF_PLAN` when the tasks aren't in the same plan;
+400 `LINK_SELF` when source equals target.
+
+ * @summary Create a directed link from this task to another (deliverables propagate)
+ */
+export const CreateTaskLinkParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+});
+
+export const CreateTaskLinkBody = zod.object({
+  targetTaskId: zod.string().uuid(),
+});
+
+/**
+ * @summary Remove a task link and cascade inherited attachments
+ */
+export const RemoveTaskLinkParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+  linkId: zod.coerce.string().uuid(),
+});
+
+export const RemoveTaskLinkResponse = zod.object({
+  removedAttachmentCount: zod.number(),
+});
+
+/**
+ * Works for both native and inherited attachments on the task. Changes
+the `task_attachments` row's `kind`. Promotion (`deliverable`)
+propagates the attachment to every downstream task linked from this
+one as `standard`. Demotion (`standard`) runs the cascade that
+clears standard rows inherited from this task. Use this instead of
+the legacy PATCH `/attachments/{attachmentId}` when you need the
+inheritance behaviour — the legacy endpoint only edits the file's
+primary row.
+
+ * @summary Promote or demote an attachment per-link (with propagation)
+ */
+export const SetTaskAttachmentKindParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+  attachmentId: zod.coerce.string().uuid(),
+});
+
+export const SetTaskAttachmentKindBody = zod.object({
+  kind: zod
+    .enum(["standard", "deliverable"])
+    .describe(
+      "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
+    ),
+});
+
+export const SetTaskAttachmentKindResponse = zod
+  .object({
+    kind: zod
+      .enum(["standard", "deliverable"])
+      .describe(
+        "Categorizes attachments. `standard` is the default for general files;\n`deliverable` marks artifacts that approval tasks expose (read-only)\nas the deliverables of their parent task.\n",
+      ),
+    propagatedToCount: zod.number().optional(),
+    removedFromCount: zod.number().optional(),
+  })
+  .describe(
+    "Result of changing an attachment's per-link kind. When promoting to\n`deliverable`, `propagatedToCount` is the number of downstream tasks\nthat newly received the attachment. When demoting to `standard`,\n`removedFromCount` is the number of downstream rows cleaned by the\ncascade.\n",
+  );
+
+/**
+ * Unlinks an attachment from a task (removes the join row). The file
+remains in storage and continues to exist on any other tasks linked
+to it. If the attachment was a deliverable on this task, the cascade
+runs and downstream targets that inherited from this task lose it.
+
+ * @summary Remove the attachment from this task without deleting the file
+ */
+export const UnlinkAttachmentFromTaskParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+  attachmentId: zod.coerce.string().uuid(),
+});
+
+export const UnlinkAttachmentFromTaskResponse = zod.object({
+  downstreamRemovedCount: zod.number(),
+});
+
+/**
+ * Used by the delete-confirmation modal to warn "this file is on N tasks
+and will be removed from all of them" before issuing the hard delete.
+
+ * @summary How many tasks this attachment is linked to
+ */
+export const GetTaskAttachmentUsageParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  taskId: zod.coerce.string().uuid(),
+  attachmentId: zod.coerce.string().uuid(),
+});
+
+export const GetTaskAttachmentUsageResponse = zod
+  .object({
+    taskCount: zod.number(),
+    taskIds: zod.array(zod.string().uuid()),
+  })
+  .describe(
+    "How many tasks an attachment is currently linked to (used by the delete-confirm modal).",
+  );
 
 /**
  * @summary Consolidated activity history for an approval task (parent + sibling approvers)

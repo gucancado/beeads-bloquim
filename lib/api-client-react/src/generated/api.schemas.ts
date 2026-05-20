@@ -435,6 +435,70 @@ export interface AttachmentResponse {
   uploadedBy?: string | null;
   createdAt: string;
   kind: AttachmentKind;
+  /** Non-null when this attachment surfaces on the task via task-link
+inheritance (the upstream task that exposed it as a deliverable).
+UI may render a "Herdado de X" badge. Null for native uploads.
+ */
+  inheritedFromTaskId?: string | null;
+}
+
+/**
+ * Directed link between two tasks in the same plan (source → target).
+ */
+export interface TaskLinkResponse {
+  id: string;
+  sourceTaskId: string;
+  sourceTitle: string;
+  targetTaskId: string;
+  targetTitle: string;
+  planId: string;
+  createdAt: string;
+  createdBy?: string | null;
+}
+
+export interface TaskLinksListResponse {
+  outgoing: TaskLinkResponse[];
+  incoming: TaskLinkResponse[];
+}
+
+export interface CreateTaskLinkRequest {
+  targetTaskId: string;
+}
+
+export interface CreateTaskLinkResponse {
+  link: TaskLinkResponse;
+  /** How many deliverable attachments were propagated to the target. */
+  inheritedCount: number;
+}
+
+export interface RemoveTaskLinkResult {
+  removedAttachmentCount: number;
+}
+
+/**
+ * Result of changing an attachment's per-link kind. When promoting to
+`deliverable`, `propagatedToCount` is the number of downstream tasks
+that newly received the attachment. When demoting to `standard`,
+`removedFromCount` is the number of downstream rows cleaned by the
+cascade.
+
+ */
+export interface PromoteOrDemoteResponse {
+  kind: AttachmentKind;
+  propagatedToCount?: number;
+  removedFromCount?: number;
+}
+
+export interface UnlinkAttachmentResponse {
+  downstreamRemovedCount: number;
+}
+
+/**
+ * How many tasks an attachment is currently linked to (used by the delete-confirm modal).
+ */
+export interface AttachmentUsageResponse {
+  taskCount: number;
+  taskIds: string[];
 }
 
 export interface CreateAttachmentRequest {

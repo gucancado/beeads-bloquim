@@ -6,6 +6,8 @@ export * from "./cards";
 export * from "./comments";
 export * from "./textElements";
 export * from "./attachments";
+export * from "./taskAttachments";
+export * from "./taskLinks";
 export * from "./shapes";
 export * from "./integrations";
 export * from "./preferences";

@@ -197,6 +197,18 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   // POST /my-tasks/:taskId/move-to-workspace. metadata.toWorkspaceId is set;
   // fromWorkspaceId is implicitly null (only standalone → workspace is supported).
   "task_moved",
+  // Task linking + attachment inheritance (spec:
+  // docs/specs/task-linking-and-attachment-inheritance.md). Recorded on BOTH
+  // ends of a link (source and target) for symmetric audit.
+  "task_link_created",
+  "task_link_removed",
+  // Attachment kind changed on a per-task link (task_attachments.kind).
+  // metadata: { attachmentId, filename, propagatedToCount?, removedFromCount? }
+  "attachment_promoted",
+  "attachment_demoted",
+  // Attachment unlinked from a task without deleting the underlying file.
+  // metadata: { attachmentId, filename }
+  "attachment_unlinked",
 ]);
 
 export const taskActivities = pgTable("task_activities", {

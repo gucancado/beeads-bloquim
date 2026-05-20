@@ -17,4 +17,9 @@ export interface AttachmentResponse {
   uploadedBy?: string | null;
   createdAt: Date;
   kind: AttachmentKind;
+  /** Non-null when this attachment surfaces on the task via task-link
+inheritance (the upstream task that exposed it as a deliverable).
+UI may render a "Herdado de X" badge. Null for native uploads.
+ */
+  inheritedFromTaskId?: string | null;
 }
