@@ -18,6 +18,7 @@ import preferencesRouter from "./preferences";
 import textElementsRouter from "./textElements";
 import shapesRouter from "./shapes";
 import taskTemplatesRouter from "./taskTemplates";
+import taskLinksRouter from "./taskLinks";
 import googleCalendarRouter from "./integrations/google-calendar";
 
 const router: IRouter = Router();
@@ -34,6 +35,7 @@ router.use("/workspaces/:workspaceId/maps/:mapId/text-elements", textElementsRou
 router.use("/workspaces/:workspaceId/maps/:mapId/shapes", shapesRouter);
 router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskCommentsRouter);
+router.use("/workspaces/:workspaceId/tasks/:taskId", taskLinksRouter);
 router.use("/my-tasks", myTasksRouter);
 router.use("/tasks", tasksSearchRouter);
 router.use("/task-templates", taskTemplatesRouter);

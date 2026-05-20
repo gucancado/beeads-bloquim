@@ -1051,6 +1051,125 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /workspaces/{workspaceId}/tasks/{taskId}/attachments/{attachmentId}/kind:
+    patch:
+      operationId: setTaskAttachmentKind
+      tags: [tasks]
+      summary: Promote or demote an attachment per-link (with propagation)
+      description: |
+        Works for both native and inherited attachments on the task. Changes
+        the `task_attachments` row's `kind`. Promotion (`deliverable`)
+        propagates the attachment to every downstream task linked from this
+        one as `standard`. Demotion (`standard`) runs the cascade that
+        clears standard rows inherited from this task. Use this instead of
+        the legacy PATCH `/attachments/{attachmentId}` when you need the
+        inheritance behaviour — the legacy endpoint only edits the file's
+        primary row.
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAttachmentKindRequest"
+      responses:
+        "200":
+          description: Kind updated; counts describe the cascade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoteOrDemoteResponse"
+        "404":
+          description: Attachment not linked to task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/tasks/{taskId}/attachments/{attachmentId}/link:
+    delete:
+      operationId: unlinkAttachmentFromTask
+      tags: [tasks]
+      summary: Remove the attachment from this task without deleting the file
+      description: |
+        Unlinks an attachment from a task (removes the join row). The file
+        remains in storage and continues to exist on any other tasks linked
+        to it. If the attachment was a deliverable on this task, the cascade
+        runs and downstream targets that inherited from this task lose it.
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Unlinked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnlinkAttachmentResponse"
+        "404":
+          description: Attachment not linked to task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /workspaces/{workspaceId}/tasks/{taskId}/attachments/{attachmentId}/usage:
+    get:
+      operationId: getTaskAttachmentUsage
+      tags: [tasks]
+      summary: How many tasks this attachment is linked to
+      description: |
+        Used by the delete-confirmation modal to warn "this file is on N tasks
+        and will be removed from all of them" before issuing the hard delete.
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Usage info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentUsageResponse"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /workspaces/{workspaceId}/tasks/{approvalTaskId}/consolidated-activities:
     get:
       operationId: getConsolidatedActivities
@@ -2068,7 +2187,59 @@ components:
           format: date-time
         kind:
           $ref: "#/components/schemas/AttachmentKind"
-      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt, kind]
+        inheritedFromTaskId:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            Non-null when this attachment surfaces on the task via inheritance
+            from an upstream task connected on the canvas (card_connections).
+            UI may render a "Herdado de X" badge. Null for native uploads.
+        state:
+          type: string
+          enum: [available, pending]
+          description: |
+            `available` — clickable/downloadable. `pending` — visible only as a
+            preview because the upstream source task is not `completed` yet.
+            Native uploads are always `available`.
+      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt, kind, state]
+
+    PromoteOrDemoteResponse:
+      type: object
+      description: |
+        Result of changing an attachment's per-link kind. When promoting to
+        `deliverable`, `propagatedToCount` is the number of downstream tasks
+        that newly received the attachment. When demoting to `standard`,
+        `removedFromCount` is the number of downstream rows cleaned by the
+        cascade.
+      properties:
+        kind:
+          $ref: "#/components/schemas/AttachmentKind"
+        propagatedToCount:
+          type: integer
+        removedFromCount:
+          type: integer
+      required: [kind]
+
+    UnlinkAttachmentResponse:
+      type: object
+      properties:
+        downstreamRemovedCount:
+          type: integer
+      required: [downstreamRemovedCount]
+
+    AttachmentUsageResponse:
+      type: object
+      description: How many tasks an attachment is currently linked to (used by the delete-confirm modal).
+      properties:
+        taskCount:
+          type: integer
+        taskIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required: [taskCount, taskIds]
 
     CreateAttachmentRequest:
       type: object

@@ -42,21 +42,13 @@ describe("myTasks attachments authorization", () => {
     expect(Array.isArray(aList.body)).toBe(true);
     expect(aList.body.length).toBe(0);
 
-    // user B is logged in but is not the assignee → all 4 routes must 403
+    // user B is logged in but is not the assignee → the surviving routes
+    // must 403. (POST /my-tasks/:tId/attachments was removed in favour of
+    // /api/storage/uploads/request-url; auth on that flow is enforced via
+    // userIsWorkspaceMember on the storage route, not exercised here.)
     const bList = await b.agent.get(`/api/my-tasks/${taskId}/attachments`);
     expect(bList.status).toBe(403);
     expect(bList.body.error).toBe("Forbidden");
-
-    const bPost = await b.agent
-      .post(`/api/my-tasks/${taskId}/attachments`)
-      .send({
-        objectPath: "/objects/fake.txt",
-        fileName: "fake.txt",
-        fileSize: 10,
-        mimeType: "text/plain",
-      });
-    expect(bPost.status).toBe(403);
-    expect(bPost.body.error).toBe("Forbidden");
 
     const fakeAttachmentId = "00000000-0000-0000-0000-000000000000";
     const bDelete = await b.agent.delete(

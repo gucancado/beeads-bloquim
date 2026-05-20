@@ -425,6 +425,20 @@ export const AttachmentKind = {
   deliverable: "deliverable",
 } as const;
 
+/**
+ * `available` — clickable/downloadable. `pending` — visible only as a
+preview because the upstream source task is not `completed` yet.
+Native uploads are always `available`.
+
+ */
+export type AttachmentResponseState =
+  (typeof AttachmentResponseState)[keyof typeof AttachmentResponseState];
+
+export const AttachmentResponseState = {
+  available: "available",
+  pending: "pending",
+} as const;
+
 export interface AttachmentResponse {
   id: string;
   fileUploadId: string;
@@ -435,6 +449,42 @@ export interface AttachmentResponse {
   uploadedBy?: string | null;
   createdAt: string;
   kind: AttachmentKind;
+  /** Non-null when this attachment surfaces on the task via inheritance
+from an upstream task connected on the canvas (card_connections).
+UI may render a "Herdado de X" badge. Null for native uploads.
+ */
+  inheritedFromTaskId?: string | null;
+  /** `available` — clickable/downloadable. `pending` — visible only as a
+preview because the upstream source task is not `completed` yet.
+Native uploads are always `available`.
+ */
+  state: AttachmentResponseState;
+}
+
+/**
+ * Result of changing an attachment's per-link kind. When promoting to
+`deliverable`, `propagatedToCount` is the number of downstream tasks
+that newly received the attachment. When demoting to `standard`,
+`removedFromCount` is the number of downstream rows cleaned by the
+cascade.
+
+ */
+export interface PromoteOrDemoteResponse {
+  kind: AttachmentKind;
+  propagatedToCount?: number;
+  removedFromCount?: number;
+}
+
+export interface UnlinkAttachmentResponse {
+  downstreamRemovedCount: number;
+}
+
+/**
+ * How many tasks an attachment is currently linked to (used by the delete-confirm modal).
+ */
+export interface AttachmentUsageResponse {
+  taskCount: number;
+  taskIds: string[];
 }
 
 export interface CreateAttachmentRequest {

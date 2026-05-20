@@ -19,6 +19,7 @@ import type {
 import type {
   AddMemberRequest,
   AttachmentResponse,
+  AttachmentUsageResponse,
   AuthResponse,
   CardDetailResponse,
   CardResponse,
@@ -39,12 +40,14 @@ import type {
   LoginRequest,
   MapDetailResponse,
   MapResponse,
+  PromoteOrDemoteResponse,
   RegisterRequest,
   ShapeResponse,
   SuccessResponse,
   TaskResponse,
   TaskWithContextResponse,
   TextElementResponse,
+  UnlinkAttachmentResponse,
   UpdateAttachmentKindRequest,
   UpdateCardRequest,
   UpdateMemberRoleRequest,
@@ -3509,6 +3512,366 @@ export const useDeleteTaskAttachment = <
 > => {
   return useMutation(getDeleteTaskAttachmentMutationOptions(options));
 };
+
+/**
+ * Works for both native and inherited attachments on the task. Changes
+the `task_attachments` row's `kind`. Promotion (`deliverable`)
+propagates the attachment to every downstream task linked from this
+one as `standard`. Demotion (`standard`) runs the cascade that
+clears standard rows inherited from this task. Use this instead of
+the legacy PATCH `/attachments/{attachmentId}` when you need the
+inheritance behaviour — the legacy endpoint only edits the file's
+primary row.
+
+ * @summary Promote or demote an attachment per-link (with propagation)
+ */
+export const getSetTaskAttachmentKindUrl = (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachmentId}/kind`;
+};
+
+export const setTaskAttachmentKind = async (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+  updateAttachmentKindRequest: UpdateAttachmentKindRequest,
+  options?: RequestInit,
+): Promise<PromoteOrDemoteResponse> => {
+  return customFetch<PromoteOrDemoteResponse>(
+    getSetTaskAttachmentKindUrl(workspaceId, taskId, attachmentId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateAttachmentKindRequest),
+    },
+  );
+};
+
+export const getSetTaskAttachmentKindMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setTaskAttachmentKind>>,
+    TError,
+    {
+      workspaceId: string;
+      taskId: string;
+      attachmentId: string;
+      data: BodyType<UpdateAttachmentKindRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setTaskAttachmentKind>>,
+  TError,
+  {
+    workspaceId: string;
+    taskId: string;
+    attachmentId: string;
+    data: BodyType<UpdateAttachmentKindRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["setTaskAttachmentKind"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setTaskAttachmentKind>>,
+    {
+      workspaceId: string;
+      taskId: string;
+      attachmentId: string;
+      data: BodyType<UpdateAttachmentKindRequest>;
+    }
+  > = (props) => {
+    const { workspaceId, taskId, attachmentId, data } = props ?? {};
+
+    return setTaskAttachmentKind(
+      workspaceId,
+      taskId,
+      attachmentId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetTaskAttachmentKindMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setTaskAttachmentKind>>
+>;
+export type SetTaskAttachmentKindMutationBody =
+  BodyType<UpdateAttachmentKindRequest>;
+export type SetTaskAttachmentKindMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Promote or demote an attachment per-link (with propagation)
+ */
+export const useSetTaskAttachmentKind = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setTaskAttachmentKind>>,
+    TError,
+    {
+      workspaceId: string;
+      taskId: string;
+      attachmentId: string;
+      data: BodyType<UpdateAttachmentKindRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setTaskAttachmentKind>>,
+  TError,
+  {
+    workspaceId: string;
+    taskId: string;
+    attachmentId: string;
+    data: BodyType<UpdateAttachmentKindRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getSetTaskAttachmentKindMutationOptions(options));
+};
+
+/**
+ * Unlinks an attachment from a task (removes the join row). The file
+remains in storage and continues to exist on any other tasks linked
+to it. If the attachment was a deliverable on this task, the cascade
+runs and downstream targets that inherited from this task lose it.
+
+ * @summary Remove the attachment from this task without deleting the file
+ */
+export const getUnlinkAttachmentFromTaskUrl = (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachmentId}/link`;
+};
+
+export const unlinkAttachmentFromTask = async (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+  options?: RequestInit,
+): Promise<UnlinkAttachmentResponse> => {
+  return customFetch<UnlinkAttachmentResponse>(
+    getUnlinkAttachmentFromTaskUrl(workspaceId, taskId, attachmentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getUnlinkAttachmentFromTaskMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkAttachmentFromTask>>,
+    TError,
+    { workspaceId: string; taskId: string; attachmentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlinkAttachmentFromTask>>,
+  TError,
+  { workspaceId: string; taskId: string; attachmentId: string },
+  TContext
+> => {
+  const mutationKey = ["unlinkAttachmentFromTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlinkAttachmentFromTask>>,
+    { workspaceId: string; taskId: string; attachmentId: string }
+  > = (props) => {
+    const { workspaceId, taskId, attachmentId } = props ?? {};
+
+    return unlinkAttachmentFromTask(
+      workspaceId,
+      taskId,
+      attachmentId,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlinkAttachmentFromTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlinkAttachmentFromTask>>
+>;
+
+export type UnlinkAttachmentFromTaskMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove the attachment from this task without deleting the file
+ */
+export const useUnlinkAttachmentFromTask = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkAttachmentFromTask>>,
+    TError,
+    { workspaceId: string; taskId: string; attachmentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlinkAttachmentFromTask>>,
+  TError,
+  { workspaceId: string; taskId: string; attachmentId: string },
+  TContext
+> => {
+  return useMutation(getUnlinkAttachmentFromTaskMutationOptions(options));
+};
+
+/**
+ * Used by the delete-confirmation modal to warn "this file is on N tasks
+and will be removed from all of them" before issuing the hard delete.
+
+ * @summary How many tasks this attachment is linked to
+ */
+export const getGetTaskAttachmentUsageUrl = (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+) => {
+  return `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachmentId}/usage`;
+};
+
+export const getTaskAttachmentUsage = async (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+  options?: RequestInit,
+): Promise<AttachmentUsageResponse> => {
+  return customFetch<AttachmentUsageResponse>(
+    getGetTaskAttachmentUsageUrl(workspaceId, taskId, attachmentId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetTaskAttachmentUsageQueryKey = (
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+) => {
+  return [
+    `/api/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachmentId}/usage`,
+  ] as const;
+};
+
+export const getGetTaskAttachmentUsageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTaskAttachmentUsage>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskAttachmentUsage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetTaskAttachmentUsageQueryKey(workspaceId, taskId, attachmentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTaskAttachmentUsage>>
+  > = ({ signal }) =>
+    getTaskAttachmentUsage(workspaceId, taskId, attachmentId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(workspaceId && taskId && attachmentId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaskAttachmentUsage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTaskAttachmentUsageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaskAttachmentUsage>>
+>;
+export type GetTaskAttachmentUsageQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary How many tasks this attachment is linked to
+ */
+
+export function useGetTaskAttachmentUsage<
+  TData = Awaited<ReturnType<typeof getTaskAttachmentUsage>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  workspaceId: string,
+  taskId: string,
+  attachmentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskAttachmentUsage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTaskAttachmentUsageQueryOptions(
+    workspaceId,
+    taskId,
+    attachmentId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Consolidated activity history for an approval task (parent + sibling approvers)
