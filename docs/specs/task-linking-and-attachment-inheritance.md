@@ -461,3 +461,23 @@ Toda mudança que afeta o que B vê de A é capturada pela JOIN de read-time:
 | Soft-delete em A (`attachments.deleted_at`) | A query filtra `WHERE a.deleted_at IS NULL`. |
 
 Não há triggers de propagação, snapshots ou caches a invalidar — o estado canônico é sempre derivado em tempo de leitura.
+
+### 14.8 Fase B aplicada (2026-05-20)
+
+Migration `0036_drop_legacy_attachment_anchors.sql`:
+
+- DROP trigger `trg_attachments_sync_task_links` + função `sync_task_attachments_from_legacy()`
+- DROP CHECK `attachments_has_anchor` + índice `idx_attachments_task`
+- DROP coluna `attachments.task_id`
+- DROP coluna `attachments.kind`
+- DROP type `attachment_kind`
+
+Refactor de código que acompanhou (mesmo PR):
+
+- `routes/storage.ts:request-url`: INSERT em `attachments` + INSERT em `task_attachments` (mesma transação) quando `entityKind === "task"`.
+- `taskAttachmentsService.createTaskAttachment`: dual-insert idem.
+- `taskAttachmentsService.updateTaskAttachmentKind`: escreve direto em `task_attachments.kind`.
+- `taskAttachmentsService.deleteTaskAttachment`: verifica via `task_attachments` antes de soft-delete em `attachments`.
+- 3 COUNTs (workspaceTasks, myTasks, maps): `SELECT COUNT(*) FROM task_attachments JOIN attachments WHERE deleted_at IS NULL`.
+
+`attachments` agora é puramente "ficha do arquivo" — task anchoring vive em `task_attachments`, demais entidades (card/comment/map/plan) continuam com FK direto.

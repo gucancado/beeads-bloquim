@@ -235,11 +235,9 @@ export async function listTaskDeliverableAttachments(
 
 /**
  * Creates an attachment row scoped to a task. The actual file is uploaded
- * separately by the client to the presigned URL returned by the storage route.
- *
- * Writes to `attachments` (legacy task_id + kind columns); the Phase A
- * trigger mirrors it into `task_attachments`. Returns the row in the same
- * shape `listTaskAttachments` produces.
+ * separately by the client to the presigned URL returned by the storage
+ * route. Inserts the file metadata in `attachments` plus a join row in
+ * `task_attachments` so the per-task kind can diverge from the file itself.
  */
 export async function createTaskAttachment(
   workspaceId: string,
@@ -247,38 +245,40 @@ export async function createTaskAttachment(
   actorId: string,
   input: CreateAttachmentInput,
 ): Promise<AttachmentRow> {
-  const [inserted] = await db
-    .insert(attachments)
-    .values({
-      workspaceId,
+  const inserted = await db.transaction(async (tx) => {
+    const [att] = await tx
+      .insert(attachments)
+      .values({
+        workspaceId,
+        bucket: input.bucket,
+        storagePath: input.storagePath,
+        originalFilename: input.fileName,
+        fileSize: input.fileSize,
+        mimeType: input.mimeType,
+        uploadedBy: actorId,
+      })
+      .returning({ id: attachments.id });
+    await tx.insert(taskAttachments).values({
       taskId,
-      bucket: input.bucket,
-      storagePath: input.storagePath,
-      originalFilename: input.fileName,
-      fileSize: input.fileSize,
-      mimeType: input.mimeType,
+      attachmentId: att.id,
       kind: input.kind ?? "standard",
-      uploadedBy: actorId,
-    })
-    .returning({ id: attachments.id });
+      createdBy: actorId,
+    });
+    return att;
+  });
 
   const list = await listTaskAttachments(taskId);
   const row = list.find((r) => r.id === inserted.id);
-  // Should always be found — we just inserted it and the trigger created the
-  // join row. If somehow missing, fall back to a minimal native shape.
-  if (!row) {
-    throw new Error("attachment row not visible after insert");
-  }
+  if (!row) throw new Error("attachment row not visible after insert");
   return row;
 }
 
 /**
- * Updates the kind of an existing attachment via the legacy column
- * `attachments.kind`. The trigger syncs `task_attachments.kind` on the
- * primary row. Returns the updated row, or `null` when no attachment with
- * that id is anchored to the given task at the legacy column.
- *
- * Inheritance-aware promotion (works on inherited rows too) lives in
+ * Updates the per-task kind of an attachment in `task_attachments`. Returns
+ * the resulting row in listing shape, or `null` when the attachment isn't
+ * linked to the given task. This is the inheritance-unaware path, used by
+ * the legacy PATCH endpoint; the inheritance-aware promotion (lookup of
+ * source via canvas connections when no row exists) lives in
  * `taskLinksService.promoteAttachmentInTask`.
  */
 export async function updateTaskAttachmentKind(
@@ -287,41 +287,53 @@ export async function updateTaskAttachmentKind(
   kind: AttachmentKind,
 ): Promise<AttachmentRow | null> {
   const [updated] = await db
-    .update(attachments)
+    .update(taskAttachments)
     .set({ kind })
     .where(
       and(
-        eq(attachments.id, attachmentId),
-        eq(attachments.taskId, taskId),
-        isNull(attachments.deletedAt),
+        eq(taskAttachments.taskId, taskId),
+        eq(taskAttachments.attachmentId, attachmentId),
       ),
     )
-    .returning({ id: attachments.id });
+    .returning({ attachmentId: taskAttachments.attachmentId });
   if (!updated) return null;
   const list = await listTaskAttachments(taskId);
-  return list.find((r) => r.id === updated.id) ?? null;
+  return list.find((r) => r.id === updated.attachmentId) ?? null;
 }
 
 /**
  * Soft-deletes an attachment (sets deleted_at). The file remains in object
  * storage until a future GC job purges it; this preserves history for
- * comments/activities that may reference the attachment.
+ * comments/activities that may reference the attachment. The caller is
+ * expected to have already verified that the attachment is linked to the
+ * task (via task_attachments) — this function only acts on the underlying
+ * `attachments` row.
  *
- * Returns `false` when the attachment does not exist or was already deleted.
+ * Returns `false` when the attachment does not exist, is already deleted,
+ * or is not linked to the given task.
  */
 export async function deleteTaskAttachment(
   taskId: string,
   attachmentId: string,
 ): Promise<boolean> {
+  // Verify the attachment is linked to this task before soft-deleting it.
+  const [linked] = await db
+    .select({ id: taskAttachments.attachmentId })
+    .from(taskAttachments)
+    .where(
+      and(
+        eq(taskAttachments.taskId, taskId),
+        eq(taskAttachments.attachmentId, attachmentId),
+      ),
+    )
+    .limit(1);
+  if (!linked) return false;
+
   const [row] = await db
     .update(attachments)
     .set({ deletedAt: sql`now()` })
     .where(
-      and(
-        eq(attachments.id, attachmentId),
-        eq(attachments.taskId, taskId),
-        isNull(attachments.deletedAt),
-      ),
+      and(eq(attachments.id, attachmentId), isNull(attachments.deletedAt)),
     )
     .returning({ id: attachments.id });
   return Boolean(row);
