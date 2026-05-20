@@ -425,6 +425,20 @@ export const AttachmentKind = {
   deliverable: "deliverable",
 } as const;
 
+/**
+ * `available` — clickable/downloadable. `pending` — visible only as a
+preview because the upstream source task is not `completed` yet.
+Native uploads are always `available`.
+
+ */
+export type AttachmentResponseState =
+  (typeof AttachmentResponseState)[keyof typeof AttachmentResponseState];
+
+export const AttachmentResponseState = {
+  available: "available",
+  pending: "pending",
+} as const;
+
 export interface AttachmentResponse {
   id: string;
   fileUploadId: string;
@@ -435,44 +449,16 @@ export interface AttachmentResponse {
   uploadedBy?: string | null;
   createdAt: string;
   kind: AttachmentKind;
-  /** Non-null when this attachment surfaces on the task via task-link
-inheritance (the upstream task that exposed it as a deliverable).
+  /** Non-null when this attachment surfaces on the task via inheritance
+from an upstream task connected on the canvas (card_connections).
 UI may render a "Herdado de X" badge. Null for native uploads.
  */
   inheritedFromTaskId?: string | null;
-}
-
-/**
- * Directed link between two tasks in the same plan (source → target).
+  /** `available` — clickable/downloadable. `pending` — visible only as a
+preview because the upstream source task is not `completed` yet.
+Native uploads are always `available`.
  */
-export interface TaskLinkResponse {
-  id: string;
-  sourceTaskId: string;
-  sourceTitle: string;
-  targetTaskId: string;
-  targetTitle: string;
-  planId: string;
-  createdAt: string;
-  createdBy?: string | null;
-}
-
-export interface TaskLinksListResponse {
-  outgoing: TaskLinkResponse[];
-  incoming: TaskLinkResponse[];
-}
-
-export interface CreateTaskLinkRequest {
-  targetTaskId: string;
-}
-
-export interface CreateTaskLinkResponse {
-  link: TaskLinkResponse;
-  /** How many deliverable attachments were propagated to the target. */
-  inheritedCount: number;
-}
-
-export interface RemoveTaskLinkResult {
-  removedAttachmentCount: number;
+  state: AttachmentResponseState;
 }
 
 /**

@@ -211,6 +211,13 @@
       "when": 1779660007000,
       "tag": "0034_attachments_sync_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1779660008000,
+      "tag": "0035_drop_task_links",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,6 @@ import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, requireMapInWorkspace } from "../middlewares/permissions";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
-import { cascadeRemoveForTask } from "../services/taskLinksService";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -425,12 +424,6 @@ router.post(
       return;
     }
 
-    // Detaching from a plan invalidates any task_links that include this task
-    // (links are plan-scoped — see docs/specs/task-linking-and-attachment-inheritance.md
-    // §10.7). Run the cascade BEFORE the detach transaction so links and any
-    // inherited attachments downstream are cleaned up.
-    const { removedLinks } = await cascadeRemoveForTask(taskId);
-
     const result = await db.transaction(async (tx) => {
       // FK em cardConnections é cascade no card, então deletar o card já limpa
       // as conexões que entram/saem dele.
@@ -460,28 +453,11 @@ router.post(
         kind: "detached_from_plan",
         fromMapId: mapId,
         fromMapName: mapRow?.name ?? null,
-        removedLinkCount: String(removedLinks.length),
       },
       source: req.user?.source ?? null,
     });
-    // Audit the link removal on each "other end" so the counterpart task's
-    // activity log reflects why a link disappeared.
-    await Promise.all(
-      removedLinks.map((rl) =>
-        recordTaskActivity({
-          taskId: rl.otherTaskId,
-          actorId: userId,
-          type: "task_link_removed",
-          metadata: {
-            otherTaskId: taskId,
-            direction: rl.isSource ? "incoming" : "outgoing",
-            reason: "source_detached_from_plan",
-          },
-        }),
-      ),
-    );
 
-    res.status(200).json({ task: result, removedLinkCount: removedLinks.length });
+    res.status(200).json({ task: result });
   },
 );
 

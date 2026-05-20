@@ -1017,7 +1017,12 @@ export const ListTaskAttachmentsResponseItem = zod.object({
     .uuid()
     .nullish()
     .describe(
-      'Non-null when this attachment surfaces on the task via task-link\ninheritance (the upstream task that exposed it as a deliverable).\nUI may render a \"Herdado de X\" badge. Null for native uploads.\n',
+      'Non-null when this attachment surfaces on the task via inheritance\nfrom an upstream task connected on the canvas (card_connections).\nUI may render a \"Herdado de X\" badge. Null for native uploads.\n',
+    ),
+  state: zod
+    .enum(["available", "pending"])
+    .describe(
+      "`available` — clickable\/downloadable. `pending` — visible only as a\npreview because the upstream source task is not `completed` yet.\nNative uploads are always `available`.\n",
     ),
 });
 export const ListTaskAttachmentsResponse = zod.array(
@@ -1081,7 +1086,12 @@ export const UpdateTaskAttachmentKindResponse = zod.object({
     .uuid()
     .nullish()
     .describe(
-      'Non-null when this attachment surfaces on the task via task-link\ninheritance (the upstream task that exposed it as a deliverable).\nUI may render a \"Herdado de X\" badge. Null for native uploads.\n',
+      'Non-null when this attachment surfaces on the task via inheritance\nfrom an upstream task connected on the canvas (card_connections).\nUI may render a \"Herdado de X\" badge. Null for native uploads.\n',
+    ),
+  state: zod
+    .enum(["available", "pending"])
+    .describe(
+      "`available` — clickable\/downloadable. `pending` — visible only as a\npreview because the upstream source task is not `completed` yet.\nNative uploads are always `available`.\n",
     ),
 });
 
@@ -1097,80 +1107,6 @@ export const DeleteTaskAttachmentParams = zod.object({
 export const DeleteTaskAttachmentResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
-});
-
-/**
- * @summary List task links (outgoing + incoming) for a task
- */
-export const ListTaskLinksParams = zod.object({
-  workspaceId: zod.coerce.string().uuid(),
-  taskId: zod.coerce.string().uuid(),
-});
-
-export const ListTaskLinksResponse = zod.object({
-  outgoing: zod.array(
-    zod
-      .object({
-        id: zod.string().uuid(),
-        sourceTaskId: zod.string().uuid(),
-        sourceTitle: zod.string(),
-        targetTaskId: zod.string().uuid(),
-        targetTitle: zod.string(),
-        planId: zod.string().uuid(),
-        createdAt: zod.date(),
-        createdBy: zod.string().uuid().nullish(),
-      })
-      .describe(
-        "Directed link between two tasks in the same plan (source → target).",
-      ),
-  ),
-  incoming: zod.array(
-    zod
-      .object({
-        id: zod.string().uuid(),
-        sourceTaskId: zod.string().uuid(),
-        sourceTitle: zod.string(),
-        targetTaskId: zod.string().uuid(),
-        targetTitle: zod.string(),
-        planId: zod.string().uuid(),
-        createdAt: zod.date(),
-        createdBy: zod.string().uuid().nullish(),
-      })
-      .describe(
-        "Directed link between two tasks in the same plan (source → target).",
-      ),
-  ),
-});
-
-/**
- * Both tasks must belong to the same plan (map). Inserting a link causes
-every `deliverable`-kind attachment on the source to surface on the
-target as `standard` (inherited). Returns `inheritedCount`.
-422 `LINK_OUT_OF_PLAN` when the tasks aren't in the same plan;
-400 `LINK_SELF` when source equals target.
-
- * @summary Create a directed link from this task to another (deliverables propagate)
- */
-export const CreateTaskLinkParams = zod.object({
-  workspaceId: zod.coerce.string().uuid(),
-  taskId: zod.coerce.string().uuid(),
-});
-
-export const CreateTaskLinkBody = zod.object({
-  targetTaskId: zod.string().uuid(),
-});
-
-/**
- * @summary Remove a task link and cascade inherited attachments
- */
-export const RemoveTaskLinkParams = zod.object({
-  workspaceId: zod.coerce.string().uuid(),
-  taskId: zod.coerce.string().uuid(),
-  linkId: zod.coerce.string().uuid(),
-});
-
-export const RemoveTaskLinkResponse = zod.object({
-  removedAttachmentCount: zod.number(),
 });
 
 /**

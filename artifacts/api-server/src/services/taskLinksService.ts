@@ -1,34 +1,35 @@
 import { db } from "@workspace/db";
 import {
-  tasks,
-  taskLinks,
   taskAttachments,
   attachments,
+  cards,
+  cardConnections,
+  tasks,
 } from "@workspace/db/schema";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 /**
- * Service for the task-link feature + attachment inheritance.
+ * Attachment-inheritance service. The directed link between tasks lives in
+ * `card_connections` on the canvas (source_card_id → target_card_id), not in
+ * a dedicated table. Listings JOIN against card_connections + tasks.status to
+ * compute which deliverables flow into the current task, gated on the source
+ * being `completed`.
+ *
  * Spec: docs/specs/task-linking-and-attachment-inheritance.md
  *
- * Reads/writes ONLY the new join table `task_attachments` (and `task_links`).
- * The legacy `attachments.task_id` + `attachments.kind` columns are kept in
- * sync by `taskAttachmentsService` during the Phase A→B window — this service
- * doesn't touch them directly.
+ * Only mutations covered here:
+ *   - `promoteAttachmentInTask(B, X)`   — UPSERT into task_attachments(B, X, deliverable)
+ *   - `demoteAttachmentInTask(B, X)`    — UPDATE/DELETE task_attachments(B, X)
+ *   - `unlinkAttachmentFromTask(B, X)`  — DELETE task_attachments(B, X)
+ *   - `getAttachmentUsageCount(X)`      — for the delete-confirm modal
+ *
+ * Reads are in `taskAttachmentsService.listTaskAttachments` (UNION of native
+ * rows + dynamic inheritance via card_connections).
  */
-
-const MAX_PROPAGATION_DEPTH = 10;
 
 export class TaskLinkError extends Error {
   constructor(
-    public code:
-      | "LINK_OUT_OF_PLAN"
-      | "LINK_SELF"
-      | "LINK_EXISTS"
-      | "LINK_NOT_FOUND"
-      | "TASK_NOT_FOUND"
-      | "ATTACHMENT_NOT_LINKED"
-      | "LINK_DEPTH_EXCEEDED",
+    public code: "ATTACHMENT_NOT_LINKED" | "TASK_NOT_FOUND" | "ATTACHMENT_NOT_FOUND",
     message: string,
     public httpStatus = 422,
   ) {
@@ -37,293 +38,70 @@ export class TaskLinkError extends Error {
   }
 }
 
-interface PlanContext {
-  planId: string;
-  workspaceId: string;
-}
-
 /**
- * Loads both tasks and checks they belong to the same plan (D7). Throws
- * LINK_OUT_OF_PLAN if either is missing a map_id, or if their map_ids differ.
+ * For an attachment that's reaching a task B via inheritance (no row in
+ * task_attachments yet), find the upstream source task that exposes it as a
+ * deliverable. Used when promoting: we want to remember where it came from
+ * so the listing can later show "Herdado de X". If multiple sources exist
+ * (B has connections from A1 and A2, both with X as deliverable), we pick
+ * any one — the user can see only one chain anyway.
  */
-async function validateLinkScope(
-  sourceTaskId: string,
+async function lookupInheritanceSource(
   targetTaskId: string,
-): Promise<PlanContext> {
-  if (sourceTaskId === targetTaskId) {
-    throw new TaskLinkError(
-      "LINK_SELF",
-      "Não é possível vincular uma tarefa a si mesma.",
-      400,
-    );
-  }
-  const rows = await db
-    .select({
-      id: tasks.id,
-      mapId: tasks.mapId,
-      workspaceId: tasks.workspaceId,
-    })
-    .from(tasks)
-    .where(inArray(tasks.id, [sourceTaskId, targetTaskId]));
-
-  if (rows.length < 2) {
-    throw new TaskLinkError(
-      "TASK_NOT_FOUND",
-      "Uma das tarefas não existe.",
-      404,
-    );
-  }
-  const source = rows.find((r) => r.id === sourceTaskId)!;
-  const target = rows.find((r) => r.id === targetTaskId)!;
-  if (!source.mapId || !target.mapId || source.mapId !== target.mapId) {
-    throw new TaskLinkError(
-      "LINK_OUT_OF_PLAN",
-      "Tarefas precisam estar no mesmo plano para serem vinculadas.",
-    );
-  }
-  if (!source.workspaceId || source.workspaceId !== target.workspaceId) {
-    // Should never happen if map_id matches (tasks in same map share workspace).
-    throw new TaskLinkError(
-      "LINK_OUT_OF_PLAN",
-      "Tarefas estão em workspaces diferentes.",
-    );
-  }
-  return { planId: source.mapId, workspaceId: source.workspaceId };
-}
-
-export interface TaskLinkRow {
-  id: string;
-  sourceTaskId: string;
-  sourceTitle: string;
-  targetTaskId: string;
-  targetTitle: string;
-  planId: string;
-  createdAt: Date;
-  createdBy: string | null;
-}
-
-/**
- * Returns links where `taskId` is either source or target. Caller filters by
- * direction.
- */
-export async function listTaskLinks(
-  taskId: string,
-): Promise<{ outgoing: TaskLinkRow[]; incoming: TaskLinkRow[] }> {
-  const sourceTasks = db.$with("source_tasks").as(
-    db.select({ id: tasks.id, title: tasks.title }).from(tasks),
-  );
-  const rows = await db
-    .with(sourceTasks)
-    .select({
-      id: taskLinks.id,
-      sourceTaskId: taskLinks.sourceTaskId,
-      targetTaskId: taskLinks.targetTaskId,
-      planId: taskLinks.planId,
-      createdAt: taskLinks.createdAt,
-      createdBy: taskLinks.createdBy,
-      sourceTitle: sql<string>`(SELECT title FROM ${tasks} WHERE id = ${taskLinks.sourceTaskId})`,
-      targetTitle: sql<string>`(SELECT title FROM ${tasks} WHERE id = ${taskLinks.targetTaskId})`,
-    })
-    .from(taskLinks)
-    .where(
-      or(
-        eq(taskLinks.sourceTaskId, taskId),
-        eq(taskLinks.targetTaskId, taskId),
-      ),
-    );
-
-  const outgoing: TaskLinkRow[] = [];
-  const incoming: TaskLinkRow[] = [];
-  for (const r of rows) {
-    if (r.sourceTaskId === taskId) outgoing.push(r);
-    else incoming.push(r);
-  }
-  return { outgoing, incoming };
-}
-
-/**
- * Creates a directed link source→target inside a single plan, then propagates
- * every deliverable-kind attachment from source to target as standard (one
- * level — propagation only chains via explicit promotion downstream).
- *
- * Returns { link, inheritedCount } so the route can write activity metadata.
- */
-export async function createTaskLink(
-  sourceTaskId: string,
-  targetTaskId: string,
-  userId: string,
-): Promise<{ link: typeof taskLinks.$inferSelect; inheritedCount: number }> {
-  const ctx = await validateLinkScope(sourceTaskId, targetTaskId);
-
-  return await db.transaction(async (tx) => {
-    // Insert link (idempotent via unique index). Conflict → fetch existing.
-    const inserted = await tx
-      .insert(taskLinks)
-      .values({
-        workspaceId: ctx.workspaceId,
-        planId: ctx.planId,
-        sourceTaskId,
-        targetTaskId,
-        createdBy: userId,
-      })
-      .onConflictDoNothing({
-        target: [taskLinks.sourceTaskId, taskLinks.targetTaskId],
-      })
-      .returning();
-
-    let link = inserted[0];
-    if (!link) {
-      const [existing] = await tx
-        .select()
-        .from(taskLinks)
-        .where(
-          and(
-            eq(taskLinks.sourceTaskId, sourceTaskId),
-            eq(taskLinks.targetTaskId, targetTaskId),
-          ),
-        )
-        .limit(1);
-      if (!existing) {
-        throw new TaskLinkError(
-          "LINK_EXISTS",
-          "Conflito ao criar vínculo.",
-          409,
-        );
-      }
-      // Already existed — return idempotent success without re-inheriting.
-      return { link: existing, inheritedCount: 0 };
-    }
-
-    // Propagate source's current deliverables → target as standard.
-    const result = await tx.execute(sql`
-      INSERT INTO task_attachments (
-        task_id, attachment_id, kind, inherited_from_task_id, created_by, created_at
-      )
-      SELECT
-        ${targetTaskId}::uuid,
-        ta.attachment_id,
-        'standard'::task_attachment_kind,
-        ${sourceTaskId}::uuid,
-        ${userId}::uuid,
-        now()
-      FROM task_attachments ta
-      JOIN attachments a ON a.id = ta.attachment_id
-      WHERE ta.task_id = ${sourceTaskId}
-        AND ta.kind = 'deliverable'
-        AND a.deleted_at IS NULL
-      ON CONFLICT (task_id, attachment_id) DO NOTHING
-    `);
-    // pg driver returns `rowCount` on the result; drizzle wraps it.
-    const inheritedCount = Number((result as { rowCount?: number }).rowCount ?? 0);
-
-    return { link, inheritedCount };
-  });
-}
-
-/**
- * Removes a link by id and runs the demote-cascade for any attachments that
- * had been inherited from the source into the target side. Returns the removed
- * link metadata (or null if not found) plus the count of attachment links
- * cleaned up downstream.
- */
-export async function removeTaskLink(
-  linkId: string,
-): Promise<{ link: typeof taskLinks.$inferSelect; removedAttachmentCount: number } | null> {
-  return await db.transaction(async (tx) => {
-    const [link] = await tx
-      .select()
-      .from(taskLinks)
-      .where(eq(taskLinks.id, linkId))
-      .limit(1);
-    if (!link) return null;
-
-    // Collect attachments inherited into target from source — these are the
-    // ones the cascade will need to clear if they're still standard.
-    const inheritedRows = await tx
-      .select({ attachmentId: taskAttachments.attachmentId })
-      .from(taskAttachments)
-      .where(
-        and(
-          eq(taskAttachments.taskId, link.targetTaskId),
-          eq(taskAttachments.inheritedFromTaskId, link.sourceTaskId),
-          eq(taskAttachments.kind, "standard"),
-        ),
-      );
-
-    let removedCount = 0;
-    for (const { attachmentId } of inheritedRows) {
-      removedCount += await demoteCascadeForAttachment(
-        tx,
-        attachmentId,
-        link.sourceTaskId,
-      );
-    }
-
-    await tx.delete(taskLinks).where(eq(taskLinks.id, linkId));
-
-    return { link, removedAttachmentCount: removedCount };
-  });
-}
-
-/**
- * Cascades the removal of "standard, inherited from N" rows of an attachment
- * across the downstream chain. Each iteration deletes rows whose
- * inherited_from_task_id matches a frontier task, and then expands the
- * frontier to any task that just lost the attachment (those become origins
- * for further deletion). Depth guard at MAX_PROPAGATION_DEPTH.
- */
-async function demoteCascadeForAttachment(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   attachmentId: string,
-  rootTaskId: string,
-): Promise<number> {
-  let frontier: string[] = [rootTaskId];
-  let depth = 0;
-  let totalRemoved = 0;
-  const visited = new Set<string>([rootTaskId]);
-
-  while (frontier.length > 0) {
-    if (depth > MAX_PROPAGATION_DEPTH) {
-      throw new TaskLinkError(
-        "LINK_DEPTH_EXCEEDED",
-        "A cadeia de propagação tem mais de 10 níveis. Remova vínculos intermediários antes de continuar.",
-      );
-    }
-    const deleted = await tx
-      .delete(taskAttachments)
-      .where(
-        and(
-          eq(taskAttachments.attachmentId, attachmentId),
-          inArray(taskAttachments.inheritedFromTaskId, frontier),
-          eq(taskAttachments.kind, "standard"),
-        ),
-      )
-      .returning({ taskId: taskAttachments.taskId });
-
-    totalRemoved += deleted.length;
-    frontier = [];
-    for (const { taskId } of deleted) {
-      if (!visited.has(taskId)) {
-        visited.add(taskId);
-        frontier.push(taskId);
-      }
-    }
-    depth++;
-  }
-  return totalRemoved;
+): Promise<string | null> {
+  const [row] = await db
+    .select({ taskId: cards.taskId })
+    .from(cards)
+    .innerJoin(cardConnections, eq(cardConnections.sourceCardId, cards.id))
+    .innerJoin(
+      sql`cards target_card`,
+      sql`target_card.id = ${cardConnections.targetCardId} AND target_card.task_id = ${targetTaskId}`,
+    )
+    .innerJoin(
+      taskAttachments,
+      and(
+        eq(taskAttachments.taskId, cards.taskId),
+        eq(taskAttachments.attachmentId, attachmentId),
+        eq(taskAttachments.kind, "deliverable"),
+      ),
+    )
+    .limit(1);
+  return row?.taskId ?? null;
 }
 
 /**
- * Promotes (B, X) to deliverable and propagates X to every downstream target
- * of B as standard. Returns the number of new task_attachments rows created
- * downstream (used by activity log).
+ * Promotes attachment X in task B to `deliverable`, so it flows downstream
+ * via inheritance (to tasks linked from B via card_connections, gated on B
+ * being completed at read time).
+ *
+ * Works in three scenarios:
+ *   1. X is a native upload on B (row exists, kind=standard).
+ *   2. X is already a row on B with kind=deliverable (no-op effectively).
+ *   3. X is inherited from a source A (no row exists). Then we INSERT a new
+ *      row pointing at A as inherited_from_task_id.
+ *
+ * Returns the resulting row.
  */
 export async function promoteAttachmentInTask(
   taskId: string,
   attachmentId: string,
   userId: string,
-): Promise<{ propagatedToCount: number }> {
+): Promise<{ taskId: string; attachmentId: string; kind: "deliverable" }> {
+  // Verify the attachment exists at all (otherwise the UPSERT will silently
+  // INSERT a phantom row pointing at a non-existent attachment_id — the FK
+  // would actually catch it, but giving a clearer error is nicer).
+  const [att] = await db
+    .select({ id: attachments.id })
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
+  if (!att) {
+    throw new TaskLinkError("ATTACHMENT_NOT_FOUND", "Anexo não encontrado.", 404);
+  }
+
   return await db.transaction(async (tx) => {
+    // Try update first — if a row exists, just flip kind.
     const updated = await tx
       .update(taskAttachments)
       .set({ kind: "deliverable" })
@@ -334,88 +112,53 @@ export async function promoteAttachmentInTask(
         ),
       )
       .returning({ taskId: taskAttachments.taskId });
-    if (updated.length === 0) {
+
+    if (updated.length > 0) {
+      return { taskId, attachmentId, kind: "deliverable" as const };
+    }
+
+    // No row → infer source via card_connections and INSERT.
+    const inheritedFrom = await lookupInheritanceSource(taskId, attachmentId);
+    if (!inheritedFrom) {
       throw new TaskLinkError(
         "ATTACHMENT_NOT_LINKED",
-        "Anexo não está vinculado a esta tarefa.",
+        "Anexo não está vinculado a esta tarefa nem é herdado de tarefa conectada.",
         404,
       );
     }
-
-    // Propagate to downstream targets as standard.
-    const result = await tx.execute(sql`
-      INSERT INTO task_attachments (
-        task_id, attachment_id, kind, inherited_from_task_id, created_by, created_at
-      )
-      SELECT
-        tl.target_task_id,
-        ${attachmentId}::uuid,
-        'standard'::task_attachment_kind,
-        ${taskId}::uuid,
-        ${userId}::uuid,
-        now()
-      FROM task_links tl
-      JOIN attachments a ON a.id = ${attachmentId}::uuid
-      WHERE tl.source_task_id = ${taskId}
-        AND a.deleted_at IS NULL
-      ON CONFLICT (task_id, attachment_id) DO NOTHING
-    `);
-    const propagatedToCount = Number(
-      (result as { rowCount?: number }).rowCount ?? 0,
-    );
-    return { propagatedToCount };
+    await tx.insert(taskAttachments).values({
+      taskId,
+      attachmentId,
+      kind: "deliverable",
+      inheritedFromTaskId: inheritedFrom,
+      createdBy: userId,
+    });
+    return { taskId, attachmentId, kind: "deliverable" as const };
   });
 }
 
 /**
- * Demotes (B, X) to standard and runs the demote cascade on B as origin —
- * downstream rows that were standard with inherited_from=B get cleared.
+ * Demotes attachment X in task B from `deliverable` to `standard`.
+ * If the row had `inherited_from_task_id IS NOT NULL` (it was a promoted
+ * inheritance, not a native upload), removing the deliverable flag means it
+ * should fall back to the inherited-only state — so we DELETE the row
+ * entirely; the read-time JOIN will still surface X as `pending`/`available`
+ * via card_connections.
+ *
+ * For native uploads (inherited_from_task_id IS NULL), we UPDATE to standard.
+ *
+ * Either way, downstream tasks lose access (the read-time JOIN no longer sees
+ * a deliverable row on B).
  */
 export async function demoteAttachmentInTask(
   taskId: string,
   attachmentId: string,
-): Promise<{ removedFromCount: number }> {
-  return await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(taskAttachments)
-      .set({ kind: "standard" })
-      .where(
-        and(
-          eq(taskAttachments.taskId, taskId),
-          eq(taskAttachments.attachmentId, attachmentId),
-        ),
-      )
-      .returning({ taskId: taskAttachments.taskId });
-    if (updated.length === 0) {
-      throw new TaskLinkError(
-        "ATTACHMENT_NOT_LINKED",
-        "Anexo não está vinculado a esta tarefa.",
-        404,
-      );
-    }
-    const removedFromCount = await demoteCascadeForAttachment(
-      tx,
-      attachmentId,
-      taskId,
-    );
-    return { removedFromCount };
-  });
-}
-
-/**
- * Unlinks an attachment from a task (removes the join row). If the row was
- * a deliverable, also runs the demote cascade so downstream targets that
- * inherited from this task lose the attachment.
- *
- * Returns true if a row was removed, false if no such link existed.
- */
-export async function unlinkAttachmentFromTask(
-  taskId: string,
-  attachmentId: string,
-): Promise<{ removed: boolean; downstreamRemovedCount: number }> {
+): Promise<{ taskId: string; attachmentId: string; kind: "standard" } | null> {
   return await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ kind: taskAttachments.kind })
+      .select({
+        inheritedFromTaskId: taskAttachments.inheritedFromTaskId,
+      })
       .from(taskAttachments)
       .where(
         and(
@@ -424,34 +167,64 @@ export async function unlinkAttachmentFromTask(
         ),
       )
       .limit(1);
+    if (!existing) return null;
 
-    if (!existing) return { removed: false, downstreamRemovedCount: 0 };
-
-    let downstreamRemovedCount = 0;
-    if (existing.kind === "deliverable") {
-      downstreamRemovedCount = await demoteCascadeForAttachment(
-        tx,
-        attachmentId,
-        taskId,
-      );
+    if (existing.inheritedFromTaskId !== null) {
+      // Promoted-from-inheritance row → remove it; the inherited listing
+      // (via card_connections JOIN) continues to surface the attachment.
+      await tx
+        .delete(taskAttachments)
+        .where(
+          and(
+            eq(taskAttachments.taskId, taskId),
+            eq(taskAttachments.attachmentId, attachmentId),
+          ),
+        );
+    } else {
+      await tx
+        .update(taskAttachments)
+        .set({ kind: "standard" })
+        .where(
+          and(
+            eq(taskAttachments.taskId, taskId),
+            eq(taskAttachments.attachmentId, attachmentId),
+          ),
+        );
     }
-
-    await tx
-      .delete(taskAttachments)
-      .where(
-        and(
-          eq(taskAttachments.taskId, taskId),
-          eq(taskAttachments.attachmentId, attachmentId),
-        ),
-      );
-
-    return { removed: true, downstreamRemovedCount };
+    return { taskId, attachmentId, kind: "standard" as const };
   });
 }
 
 /**
- * Returns how many tasks an attachment is currently linked to (alive only).
- * Used by the confirm-delete modal to warn "this attachment is on N tasks".
+ * Unlinks the attachment from a task by removing the row in task_attachments.
+ * If the row was kind=deliverable, downstream tasks stop seeing X (read-time
+ * JOIN sees no deliverable). The file stays in storage.
+ *
+ * If the task is only seeing X via inheritance (no row exists), there's
+ * nothing to remove — the caller should disable the action in that case.
+ */
+export async function unlinkAttachmentFromTask(
+  taskId: string,
+  attachmentId: string,
+): Promise<{ removed: boolean }> {
+  const result = await db
+    .delete(taskAttachments)
+    .where(
+      and(
+        eq(taskAttachments.taskId, taskId),
+        eq(taskAttachments.attachmentId, attachmentId),
+      ),
+    )
+    .returning({ taskId: taskAttachments.taskId });
+  return { removed: result.length > 0 };
+}
+
+/**
+ * Counts the tasks an attachment is currently linked to (alive rows only).
+ * Used by the delete-confirm modal so the user knows "this file is on N
+ * tasks". This counts ONLY explicit rows in task_attachments — not the
+ * dynamic inheritance reach (since deleting the file is a hard delete and
+ * the FK CASCADE handles all rows automatically).
  */
 export async function getAttachmentUsageCount(
   attachmentId: string,
@@ -464,65 +237,5 @@ export async function getAttachmentUsageCount(
   return { taskCount: taskIds.length, taskIds };
 }
 
-/**
- * Removes all links where `taskId` is source or target, running the cascade
- * for each (so downstream targets lose attachments inherited from `taskId`).
- * Intended to be called from the detach-task handler before
- * `UPDATE tasks SET map_id = NULL`. Returns the list of "other endpoints"
- * affected, so the caller can write activity entries on each.
- */
-export async function cascadeRemoveForTask(
-  taskId: string,
-): Promise<{ removedLinks: Array<{ id: string; otherTaskId: string; isSource: boolean }> }> {
-  return await db.transaction(async (tx) => {
-    const links = await tx
-      .select()
-      .from(taskLinks)
-      .where(
-        or(
-          eq(taskLinks.sourceTaskId, taskId),
-          eq(taskLinks.targetTaskId, taskId),
-        ),
-      );
-
-    for (const link of links) {
-      if (link.sourceTaskId === taskId) {
-        // Find attachments target has that were inherited from this task,
-        // then cascade.
-        const inheritedRows = await tx
-          .select({ attachmentId: taskAttachments.attachmentId })
-          .from(taskAttachments)
-          .where(
-            and(
-              eq(taskAttachments.taskId, link.targetTaskId),
-              eq(taskAttachments.inheritedFromTaskId, taskId),
-              eq(taskAttachments.kind, "standard"),
-            ),
-          );
-        for (const { attachmentId } of inheritedRows) {
-          await demoteCascadeForAttachment(tx, attachmentId, taskId);
-        }
-      }
-      // For incoming links (taskId is target), no attachment cascade is
-      // needed — the inherited rows live on this task and will be cleaned
-      // up by the broader detach flow (caller can choose to clear them).
-    }
-
-    if (links.length > 0) {
-      await tx.delete(taskLinks).where(
-        inArray(
-          taskLinks.id,
-          links.map((l) => l.id),
-        ),
-      );
-    }
-
-    return {
-      removedLinks: links.map((l) => ({
-        id: l.id,
-        otherTaskId: l.sourceTaskId === taskId ? l.targetTaskId : l.sourceTaskId,
-        isSource: l.sourceTaskId === taskId,
-      })),
-    };
-  });
-}
+// Suppress unused-import warnings for symbols kept available to callers.
+void tasks;

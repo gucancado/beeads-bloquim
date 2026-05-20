@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttachmentKind } from "./attachmentKind";
+import type { AttachmentResponseState } from "./attachmentResponseState";
 
 export interface AttachmentResponse {
   id: string;
@@ -17,9 +18,14 @@ export interface AttachmentResponse {
   uploadedBy?: string | null;
   createdAt: Date;
   kind: AttachmentKind;
-  /** Non-null when this attachment surfaces on the task via task-link
-inheritance (the upstream task that exposed it as a deliverable).
+  /** Non-null when this attachment surfaces on the task via inheritance
+from an upstream task connected on the canvas (card_connections).
 UI may render a "Herdado de X" badge. Null for native uploads.
  */
   inheritedFromTaskId?: string | null;
+  /** `available` — clickable/downloadable. `pending` — visible only as a
+preview because the upstream source task is not `completed` yet.
+Native uploads are always `available`.
+ */
+  state: AttachmentResponseState;
 }

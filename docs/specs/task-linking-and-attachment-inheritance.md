@@ -1,9 +1,17 @@
 # Spec — Vínculo entre tarefas e herança de entregáveis
 
-**Status:** proposta
+**Status:** implementada (revisada em 2026-05-20)
 **Autor:** gustavo.azvd@gmail.com
-**Data:** 2026-05-19
+**Data:** 2026-05-19 (revisada 2026-05-20)
 **Escopo:** monorepo `beeads-bloquim` (MindTask) — backend, frontend, schema, OpenAPI
+
+> **Revisão 2026-05-20** — o design original criava uma tabela `task_links`
+> dedicada e uma "seção tarefas ligadas" na UI. Após review do usuário, o
+> vínculo passou a ser o existente entre cards no canvas (`card_connections`),
+> e a herança ficou gated por `tasks.status = 'completed'` na fonte, com
+> estados `available` / `pending` computados em read-time. As seções abaixo
+> que ainda mencionam `task_links` refletem o design antigo e estão sendo
+> mantidas como histórico; ver § 14 para o modelo vigente.
 
 ---
 
@@ -374,3 +382,61 @@ Inserção/delete de vínculo grava activity nas **duas** tarefas (source e targ
 ## 13. Perguntas em aberto
 
 Resolvidas em 2026-05-19 — ver D7, D8, D9 na §3.
+
+---
+
+## 14. Modelo vigente (após revisão 2026-05-20)
+
+Substitui as §§ 4–10 para fins de implementação. Mantém §11 (não-objetivos) e §12 (rollout) com ajustes pontuais.
+
+### 14.1 Decisões revisadas
+
+| # | Decisão |
+|---|---------|
+| R1 | **Vínculo entre tarefas = `card_connections`.** A conexão visual no canvas (source_card → target_card) é o vínculo. Não há tabela `task_links`. Não há seção "tarefas ligadas" na UI. |
+| R2 | **Herança gated por status.** Para tarefa A com X marcado como deliverable, B (conectada como target) só vê X como **`available`** (clicável) se `A.status = 'completed'`. Senão, B vê como **`pending`** (preview, não-clicável). |
+| R3 | **Espelhamento em tempo real.** Quando A muda de status, o estado em B muda no próximo read. Sem snapshots/triggers — é uma JOIN dinâmica. |
+| R4 | **Promoção funciona em pending.** O usuário pode marcar como entregável um anexo herdado mesmo no estado pending. Isso cria uma row em `task_attachments(B, X, deliverable, inherited_from=A)` que só fica `available` quando A completa. |
+| R5 | **Cadeia A→B→C** requer: card_connection(A→B) + A.completed + (X deliverable em A) + (B promove X) + B.completed. Cada hop precisa de promoção explícita E status completed. |
+| R6 | Demote em B com inherited_from != NULL **remove a row** (cai de volta no estado puramente herdado de A, se A→B ainda existir). Demote em B com inherited_from = NULL (native) **só muda kind**. |
+| R7 | **Unlink** é uma operação só sobre rows em `task_attachments`. Anexos puramente herdados (sem row) não têm botão "remover" na UI — para parar de receber, o usuário desconecta os cards no canvas. |
+
+### 14.2 Schema
+
+- **`task_attachments`** mantém-se (PK composta, kind, inherited_from_task_id, created_by, created_at). Existe apenas para uploads nativos OU promoções manuais.
+- **`task_links`** removida (migration 0035).
+- **Trigger `trg_attachments_sync_task_links`** mantida — sincroniza writes legacy em `attachments` → `task_attachments` (POST /storage/uploads/request-url cria a row de join automaticamente).
+
+### 14.3 Listagem `listTaskAttachments(taskId)`
+
+`SELECT ... UNION ALL ...`:
+
+1. **Rows diretas** (task_attachments WHERE task_id = B), com:
+   - `state = 'available'` se `inherited_from_task_id IS NULL`, senão `state = inherited_from_task.status = 'completed' ? 'available' : 'pending'`.
+2. **Inherited dinâmico** (sem row): para cada `card_connection(src_card→target_card)` onde `target_card.task_id = B`, JOIN com `task_attachments(src_card.task_id, kind='deliverable')`. Filtra `attachments NOT EXISTS` em rows diretas. `state = src_task.status = 'completed' ? 'available' : 'pending'`. `kind` sempre `standard` (visualmente, em B o anexo aparece como comum). `inheritedFromTaskId = src_task.id`.
+
+### 14.4 Endpoints mantidos
+
+| Método | Rota | Função |
+|--------|------|--------|
+| `GET /workspaces/:wId/tasks/:tId/attachments` | (existente) | retorna lista unificada com `state` e `inheritedFromTaskId`. |
+| `PATCH /workspaces/:wId/tasks/:tId/attachments/:aId/kind` | (novo) | promove/demote inheritance-aware. Promover anexo herdado pendente cria a row com `inherited_from_task_id` resolvido por lookup nas conexões. |
+| `DELETE /workspaces/:wId/tasks/:tId/attachments/:aId/link` | (novo) | DELETE row em task_attachments. Sem cascata (propagação é dinâmica). |
+| `GET /workspaces/:wId/tasks/:tId/attachments/:aId/usage` | (novo) | conta rows diretas em task_attachments — usado pelo modal de confirm-delete. |
+| `DELETE /workspaces/:wId/tasks/:tId/attachments/:aId` | (existente) | hard-delete do arquivo (soft-delete em `attachments.deleted_at`). UI mostra modal antes. |
+
+Endpoints removidos vs. design antigo: `/links` (GET/POST), `/links/:linkId` (DELETE). Cascade no detach-task também removida.
+
+### 14.5 UI
+
+- **TaskLinksSection**: removida.
+- **AttachmentsSection**: badges `entregável` (kind=deliverable) + `herdado` (state=available com inheritedFromTaskId) ou `pendente` (state=pending). Anexos `pending` aparecem com opacity 50%, cursor `not-allowed`, sem botão de download/remover. Botão promover (★) funciona em pending.
+- **DeleteAttachmentDialog**: mantido, com warning de N tarefas.
+
+### 14.6 Smoke tests (dev)
+
+10 cenários cobertos em `c:/tmp/inheritance-smoke.ts`:
+- Pending por status pending na fonte → real-time mirror em mudança de status
+- Download bloqueado em pending, resolvido em completed
+- Cadeia A→B→C com promoção e gating por status em cada hop
+- Demote em B com inherited_from removendo row e caindo de volta na herança pura

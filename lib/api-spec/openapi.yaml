@@ -1051,122 +1051,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /workspaces/{workspaceId}/tasks/{taskId}/links:
-    get:
-      operationId: listTaskLinks
-      tags: [tasks]
-      summary: List task links (outgoing + incoming) for a task
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - name: taskId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: Task links grouped by direction
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskLinksListResponse"
-        "404":
-          description: Task not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    post:
-      operationId: createTaskLink
-      tags: [tasks]
-      summary: Create a directed link from this task to another (deliverables propagate)
-      description: |
-        Both tasks must belong to the same plan (map). Inserting a link causes
-        every `deliverable`-kind attachment on the source to surface on the
-        target as `standard` (inherited). Returns `inheritedCount`.
-        422 `LINK_OUT_OF_PLAN` when the tasks aren't in the same plan;
-        400 `LINK_SELF` when source equals target.
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - name: taskId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateTaskLinkRequest"
-      responses:
-        "201":
-          description: Link created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateTaskLinkResponse"
-        "400":
-          description: Validation error or self-link
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Task not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "422":
-          description: Tasks are not in the same plan
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /workspaces/{workspaceId}/tasks/{taskId}/links/{linkId}:
-    delete:
-      operationId: removeTaskLink
-      tags: [tasks]
-      summary: Remove a task link and cascade inherited attachments
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - name: taskId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - name: linkId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: Link removed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RemoveTaskLinkResult"
-        "403":
-          description: Link does not belong to this task
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Link not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /workspaces/{workspaceId}/tasks/{taskId}/attachments/{attachmentId}/kind:
     patch:
       operationId: setTaskAttachmentKind
@@ -2308,77 +2192,17 @@ components:
           format: uuid
           nullable: true
           description: |
-            Non-null when this attachment surfaces on the task via task-link
-            inheritance (the upstream task that exposed it as a deliverable).
+            Non-null when this attachment surfaces on the task via inheritance
+            from an upstream task connected on the canvas (card_connections).
             UI may render a "Herdado de X" badge. Null for native uploads.
-      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt, kind]
-
-    TaskLinkResponse:
-      type: object
-      description: Directed link between two tasks in the same plan (source → target).
-      properties:
-        id:
+        state:
           type: string
-          format: uuid
-        sourceTaskId:
-          type: string
-          format: uuid
-        sourceTitle:
-          type: string
-        targetTaskId:
-          type: string
-          format: uuid
-        targetTitle:
-          type: string
-        planId:
-          type: string
-          format: uuid
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-          format: uuid
-          nullable: true
-      required: [id, sourceTaskId, sourceTitle, targetTaskId, targetTitle, planId, createdAt]
-
-    TaskLinksListResponse:
-      type: object
-      properties:
-        outgoing:
-          type: array
-          items:
-            $ref: "#/components/schemas/TaskLinkResponse"
-        incoming:
-          type: array
-          items:
-            $ref: "#/components/schemas/TaskLinkResponse"
-      required: [outgoing, incoming]
-
-    CreateTaskLinkRequest:
-      type: object
-      properties:
-        targetTaskId:
-          type: string
-          format: uuid
-      required: [targetTaskId]
-
-    CreateTaskLinkResponse:
-      type: object
-      properties:
-        link:
-          $ref: "#/components/schemas/TaskLinkResponse"
-        inheritedCount:
-          type: integer
-          description: How many deliverable attachments were propagated to the target.
-      required: [link, inheritedCount]
-
-    RemoveTaskLinkResult:
-      type: object
-      properties:
-        removedAttachmentCount:
-          type: integer
-      required: [removedAttachmentCount]
+          enum: [available, pending]
+          description: |
+            `available` — clickable/downloadable. `pending` — visible only as a
+            preview because the upstream source task is not `completed` yet.
+            Native uploads are always `available`.
+      required: [id, fileUploadId, objectPath, fileName, fileSize, mimeType, createdAt, kind, state]
 
     PromoteOrDemoteResponse:
       type: object
