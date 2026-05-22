@@ -489,7 +489,7 @@ function AttachmentsSectionUI({
   return (
     <div className="space-y-2">
       {!isReadonly && isDragOver && (
-        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-2xl">
+        <div className="fixed inset-0 z-overlay pointer-events-none flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-2xl">
           <div className="text-center">
             <Paperclip className="w-8 h-8 text-primary mx-auto mb-2" />
             <p className="text-sm font-semibold text-primary lowercase">solte para anexar</p>

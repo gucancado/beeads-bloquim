@@ -161,8 +161,8 @@ export function TaskTable({
           {visibleSections.length === 0 && (
             <tbody>
               <tr>
-                <td colSpan={totalColumns} className="px-4 py-8 text-center text-sm text-muted-foreground/60 lowercase">
-                  nada
+                <td colSpan={totalColumns} className="px-4 py-12 text-center text-sm text-muted-foreground/70 lowercase">
+                  nenhuma tarefa para mostrar.
                 </td>
               </tr>
             </tbody>

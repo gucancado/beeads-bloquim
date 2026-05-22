@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { User } from "lucide-react";
 import type { WorkspaceMemberResponse } from "@workspace/api-client-react";
+import { MemberSelectList, type MemberItem } from "@/components/tasks/MemberSelectList";
 
 function getInitials(name: string) {
   return name
@@ -29,6 +30,12 @@ export function AssigneeAvatarPicker({
   const selectedMember = members?.find(m => m.userId === assignedTo) ?? null;
   const assigneeName = selectedMember?.user.name ?? null;
   const assigneeAvatarUrl = selectedMember?.user.avatarUrl ?? null;
+
+  const memberItems: MemberItem[] = (members ?? []).map(m => ({
+    userId: m.userId,
+    name: m.user.name,
+    avatarUrl: m.user.avatarUrl ?? null,
+  }));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,30 +72,15 @@ export function AssigneeAvatarPicker({
         className="w-auto p-1 rounded-xl min-w-[180px]"
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <button
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/60 text-left transition-colors rounded-lg"
-          onClick={() => { onSelect("unassigned"); setOpen(false); }}
-        >
-          <User className="w-4 h-4 text-muted-foreground shrink-0" />
-          <span className="text-sm text-muted-foreground lowercase">Sem responsável</span>
-        </button>
-        {members?.map(m => (
-          <button
-            key={m.userId}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/60 text-left transition-colors rounded-lg ${assignedTo === m.userId ? "font-semibold" : ""}`}
-            onClick={() => { onSelect(m.userId); setOpen(false); }}
-          >
-            <Avatar className="w-6 h-6 shrink-0">
-              {m.user.avatarUrl ? (
-                <AvatarImage src={m.user.avatarUrl} alt={m.user.name} className="object-cover" />
-              ) : null}
-              <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
-                {getInitials(m.user.name)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm text-foreground">{m.user.name}</span>
-          </button>
-        ))}
+        <MemberSelectList
+          members={memberItems}
+          selectedId={assignedTo && assignedTo !== "unassigned" ? assignedTo : null}
+          onSelect={(id) => {
+            onSelect(id ?? "unassigned");
+            setOpen(false);
+          }}
+          unassignedLabel="Sem responsável"
+        />
       </PopoverContent>
     </Popover>
   );

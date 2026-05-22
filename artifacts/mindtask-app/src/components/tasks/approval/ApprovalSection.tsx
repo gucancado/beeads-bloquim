@@ -271,6 +271,7 @@ export function ApprovalSection({
               <span className="text-[11px] text-muted-foreground lowercase">modo:</span>
               <button
                 onClick={() => patchModeMut.mutate("sequential")}
+                title="Aprovadores na ordem — cada um só pode aprovar depois do anterior."
                 className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all lowercase ${
                   approvalMode === "sequential"
                     ? "bg-foreground text-background border-foreground"
@@ -281,6 +282,7 @@ export function ApprovalSection({
               </button>
               <button
                 onClick={() => patchModeMut.mutate("parallel")}
+                title="Aprovadores em paralelo — qualquer um pode aprovar a qualquer momento."
                 className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all lowercase ${
                   approvalMode === "parallel"
                     ? "bg-foreground text-background border-foreground"

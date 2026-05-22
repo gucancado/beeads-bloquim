@@ -3,13 +3,15 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { DashboardGreeting } from "@/components/DashboardGreeting";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
-import { Loader2, Plus } from "lucide-react";
+import { Inbox, Plus, RotateCcw } from "lucide-react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItemMember, TaskListItemData } from "@/components/tasks/TaskListItem";
 import { TaskTable } from "@/components/tasks/TaskTable";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
+import { TaskTableSkeleton } from "@/components/tasks/TaskTableSkeleton";
 import { groupTasksByDeadline, selectWindow, type TimeWindow } from "@/lib/groupTasksByDeadline";
 import { ateSextaLabel } from "@/lib/groupTasksByDeadline";
 import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
@@ -33,10 +35,49 @@ interface StandaloneTask {
 
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
+const VALID_TIME_WINDOWS: TimeWindow[] = ["hoje", "ate_sexta", "todas"];
+const VALID_STATUSES = new Set(STATUS_OPTIONS.map(o => o.value));
+
+function readInitialFilters() {
+  if (typeof window === "undefined") {
+    return { status: "in_progress", window: "hoje" as TimeWindow, assignees: ["me"] };
+  }
+  const p = new URLSearchParams(window.location.search);
+  const rawStatus = p.get("status");
+  const rawWindow = p.get("window") as TimeWindow | null;
+  const rawAssignees = p.get("assignees");
+  return {
+    status: rawStatus && VALID_STATUSES.has(rawStatus) ? rawStatus : "in_progress",
+    window: rawWindow && VALID_TIME_WINDOWS.includes(rawWindow) ? rawWindow : ("hoje" as TimeWindow),
+    assignees: rawAssignees ? rawAssignees.split(",").filter(Boolean) : ["me"],
+  };
+}
+
 export default function MyTasksPage() {
-  const [selectedStatus, setSelectedStatus] = useState<string>("in_progress");
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
-  const [timeWindow, setTimeWindow] = useState<TimeWindow>("hoje");
+  const initial = readInitialFilters();
+  const [selectedStatus, setSelectedStatus] = useState<string>(initial.status);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(initial.assignees);
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>(initial.window);
+
+  // Sync filter state → URL (query string only, preserves path so deep links keep
+  // working). Defaults are stripped so a clean URL like /my-tasks stays clean.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (selectedStatus === "in_progress") p.delete("status");
+    else p.set("status", selectedStatus);
+    if (timeWindow === "hoje") p.delete("window");
+    else p.set("window", timeWindow);
+    if (selectedAssignees.length === 1 && selectedAssignees[0] === "me") {
+      p.delete("assignees");
+    } else {
+      p.set("assignees", selectedAssignees.join(","));
+    }
+    const qs = p.toString();
+    const next = `${window.location.pathname}${qs ? "?" + qs : ""}`;
+    if (window.location.pathname + window.location.search !== next) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [selectedStatus, timeWindow, selectedAssignees]);
 
   // Se o usuário tinha "ate_sexta" selecionado quando o relógio virou pra
   // sexta-feira, o botão some — fallback automático pra "hoje".
@@ -258,9 +299,7 @@ export default function MyTasksPage() {
           </div>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-10 h-10 animate-spin text-primary" />
-            </div>
+            <TaskTableSkeleton />
           ) : (() => {
             // Em status terminais (completed/blocked) ordenamos pelo timestamp
             // de conclusão/cancelamento; em qualquer outro estado o backend já
@@ -284,10 +323,45 @@ export default function MyTasksPage() {
             }
 
             if (flatTasks.length === 0) {
+              const hasNonDefaultFilters =
+                selectedStatus !== "in_progress" ||
+                timeWindow !== "todas" ||
+                selectedAssignees.length !== 1 ||
+                selectedAssignees[0] !== "me";
+              const resetFilters = () => {
+                setSelectedStatus("in_progress");
+                setTimeWindow("todas");
+                setSelectedAssignees(["me"]);
+              };
               return (
-                <div className="text-center py-24">
-                  <p className="text-muted-foreground lowercase">nada</p>
-                </div>
+                <Empty className="border border-dashed border-border/60 bg-card/30 my-8">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Inbox />
+                    </EmptyMedia>
+                    <EmptyTitle className="lowercase">
+                      {hasNonDefaultFilters ? "nada por aqui" : "tudo limpo"}
+                    </EmptyTitle>
+                    <EmptyDescription>
+                      {hasNonDefaultFilters
+                        ? "nenhuma tarefa bate com esses filtros."
+                        : "você não tem tarefas em andamento no momento."}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    {hasNonDefaultFilters ? (
+                      <Button variant="outline" size="sm" onClick={resetFilters}>
+                        <RotateCcw className="w-4 h-4" />
+                        limpar filtros
+                      </Button>
+                    ) : (
+                      <Button size="sm" onClick={handleNewTaskClick}>
+                        <Plus className="w-4 h-4" />
+                        nova tarefa
+                      </Button>
+                    )}
+                  </EmptyContent>
+                </Empty>
               );
             }
 

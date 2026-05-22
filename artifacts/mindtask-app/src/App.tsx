@@ -1,9 +1,10 @@
 import { Component, ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, MutationCache } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { toast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 
 import LoginPage from "@/pages/login";
@@ -18,7 +19,25 @@ import SettingsMcpPage from "@/pages/settings/mcp";
 import PrivacidadePage from "@/pages/privacidade";
 import TermosPage from "@/pages/termos";
 
+// Safety net: any mutation that goes through React Query and fails without a
+// caller-side onError handler triggers a destructive toast. Mutations that
+// already show a tailored toast in their onError are unaffected (this is a
+// fallback, not a replacement). Direct customFetch calls outside useMutation
+// still need their own toast — see TaskListItem.
+const mutationCache = new MutationCache({
+  onError: (error, _vars, _ctx, mutation) => {
+    if (mutation.options.onError) return;
+    const message = error instanceof Error ? error.message : "Tente novamente.";
+    toast({
+      title: "Não foi possível salvar.",
+      description: message,
+      variant: "destructive",
+    });
+  },
+});
+
 const queryClient = new QueryClient({
+  mutationCache,
   defaultOptions: {
     queries: {
       throwOnError: false,

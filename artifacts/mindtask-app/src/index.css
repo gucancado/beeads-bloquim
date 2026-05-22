@@ -136,6 +136,22 @@
   }
 }
 
+/*
+ * Z-index scale — semantic utilities replace ad-hoc `z-[9998]`/`z-[9999]`
+ * sprinkled across the app.
+ *
+ *   z-toast          (100)   sonner/Radix toast viewport
+ *   z-overlay-backdrop (9998) full-screen click-catcher behind a portal popup
+ *   z-overlay        (9999)  portal-rendered dropdown / popup content
+ *
+ * 9998/9999 are kept (not normalised lower) because they need to win over
+ * stacking contexts created by ReactFlow nodes which can reach into the
+ * thousands.
+ */
+@utility z-toast { z-index: 100; }
+@utility z-overlay-backdrop { z-index: 9998; }
+@utility z-overlay { z-index: 9999; }
+
 /* React Flow customizations for a premium look */
 .react-flow__selection {
   background: hsl(36 100% 50% / 0.08);
@@ -150,11 +166,28 @@
 .react-flow__node {
   border-radius: var(--radius-xl);
 }
+/*
+ * ReactFlow's default ".react-flow__node.selected" applies outline+box-shadow.
+ * For image shape nodes we want the shape itself to be the "selected" visual
+ * (handled inside ShapeNode), so we suppress the default chrome. Our selector
+ * already has higher specificity than the library's (3 classes vs 2), so no
+ * !important needed.
+ */
 .react-flow__node.shape-image-node.selected,
 .react-flow__node.shape-image-node:focus,
 .react-flow__node.shape-image-node:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+  outline: none;
+  box-shadow: none;
+}
+/*
+ * Line shapes: disable pointer-events on the wrapper so clicks on the empty
+ * area of the line's bounding box fall through to the pane. The visible
+ * stroke and resize handles inside the SVG opt back in via their own
+ * pointer-events attributes (stroke / all), which override the wrapper's
+ * `none` per the CSS spec.
+ */
+.react-flow__node.shape-line-node {
+  pointer-events: none;
 }
 .react-flow__handle {
   width: 10px;
@@ -170,15 +203,29 @@
   stroke: hsl(var(--primary));
   stroke-width: 3;
 }
-.react-flow__controls-button {
-  background-color: hsl(var(--card)) !important;
-  border-color: hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+/*
+ * ReactFlow ships ".react-flow__controls-button" (specificity 0,1,0) inside
+ * the ".react-flow__controls" wrapper. We piggyback on the wrapper to reach
+ * (0,2,0) and beat the library defaults without !important.
+ */
+.react-flow__controls .react-flow__controls-button {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
-.react-flow__controls-button:hover {
-  background-color: hsl(var(--accent)) !important;
+.react-flow__controls .react-flow__controls-button:hover {
+  background-color: hsl(var(--accent));
+}
+
+/* Alt held = next drag will duplicate. Cursor hint over draggable nodes.
+ * Override Tailwind's per-element cursor classes (cursor-pointer etc.) so
+ * the hint is visible regardless of which sub-element of the node is under
+ * the pointer. */
+body[data-alt-key="true"] .react-flow__node,
+body[data-alt-key="true"] .react-flow__node * {
+  cursor: copy !important;
 }
 
 /* Drop target highlight when dragging from + handle to connect tasks */
@@ -286,7 +333,7 @@
   width: 2rem;
   height: 2rem;
   opacity: 1;
-  background-color: #d1fae5;
+  background-color: hsl(var(--status-completed) / 0.18);
 }
 
 /* Preserve rich text formatting (bold/italic) in text node view mode */

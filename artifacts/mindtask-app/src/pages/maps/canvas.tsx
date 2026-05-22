@@ -369,6 +369,23 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
   const shapeDrawRef = useRef<{ startX: number; startY: number; flowX: number; flowY: number } | null>(null);
   const [shapeGhost, setShapeGhost] = useState<{ x: number; y: number; w: number; h: number; rawAbsW?: number; rawAbsH?: number; dxSign?: number; dySign?: number } | null>(null);
+  // Alt+drag ghosts: dashed-outline placeholders that follow the cursor
+  // without moving the underlying nodes; duplication happens on mouseup.
+  // `shapeKind` is set for shapenodes so we can render an ellipse / line
+  // outline that matches the source shape (default is a rectangle).
+  // For lines, `lineCoords` carries the endpoints already scaled to screen px.
+  const [altDrag, setAltDrag] = useState<{
+    cursor: { x: number; y: number };
+    ghosts: Array<{
+      nodeId: string;
+      dx: number;
+      dy: number;
+      width: number;
+      height: number;
+      shapeKind?: 'rect' | 'ellipse' | 'line' | 'image';
+      lineCoords?: { x1: number; y1: number; x2: number; y2: number };
+    }>;
+  } | null>(null);
   const shapeToolRef = useRef<'line' | 'rect' | 'ellipse' | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [imageUploading, setImageUploading] = useState(false);
@@ -637,7 +654,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     type: 'shapenode',
     position: { x: shape.positionX, y: shape.positionY },
     zIndex: shapeNodeZIndex(shape.type as ShapeKind),
-    className: shape.type === 'image' ? 'shape-image-node' : undefined,
+    className: shape.type === 'image'
+      ? 'shape-image-node'
+      : shape.type === 'line'
+        ? 'shape-line-node'
+        : undefined,
     data: {
       type: shape.type,
       positionX: shape.positionX,
@@ -1093,6 +1114,201 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     return () => document.removeEventListener('keydown', handleNodeShortcuts);
   }, [setNodes, navigate, canvasBasePath, handleOpenPanel, handleAddChildCard, handleInlineUpdate, workspaceId, mapId]);
 
+  // Track Alt key globally so the canvas can show a "copy" cursor over
+  // draggable nodes, signaling that the next drag will duplicate.
+  useEffect(() => {
+    const handleAltDown = (e: KeyboardEvent) => {
+      if (e.altKey) document.body.dataset.altKey = 'true';
+    };
+    const handleAltUp = (e: KeyboardEvent) => {
+      if (!e.altKey) delete document.body.dataset.altKey;
+    };
+    const handleBlur = () => { delete document.body.dataset.altKey; };
+    window.addEventListener('keydown', handleAltDown);
+    window.addEventListener('keyup', handleAltUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleAltDown);
+      window.removeEventListener('keyup', handleAltUp);
+      window.removeEventListener('blur', handleBlur);
+      delete document.body.dataset.altKey;
+    };
+  }, []);
+
+  // Alt+drag duplication: clones the node at the drop position.
+  // Tasks reuse the deep-duplicate endpoint (subtasks + approvers), then
+  // override the card position. Shapes/texts copy all visual fields and
+  // post a fresh element. Approval/join nodes are skipped silently.
+  const duplicateNodeAtDrop = useCallback(
+    (node: Node, dropPos: { x: number; y: number }) => {
+      if (node.type === 'approvalnode' || node.type === 'joinnode') return;
+
+      const mapDataWithText = mapDataRef.current as
+        | (typeof mapDataRef.current & {
+            textElements?: Array<{
+              id: string;
+              content: string;
+              positionX: number;
+              positionY: number;
+              width: number;
+              height: number;
+              fontSize: number;
+              color: string;
+            }>;
+            shapes?: ShapeResponse[];
+          })
+        | undefined;
+
+      if (node.type === 'textnode') {
+        const source = mapDataWithText?.textElements?.find(el => el.id === node.id);
+        if (!source) return;
+        createTextMut.mutate(
+          {
+            workspaceId,
+            mapId,
+            data: {
+              positionX: dropPos.x,
+              positionY: dropPos.y,
+              width: source.width,
+              height: source.height,
+              fontSize: source.fontSize,
+              color: source.color,
+              content: source.content,
+            },
+          },
+          {
+            onSuccess: (newEl) => {
+              const newNode: Node = {
+                id: newEl.id,
+                type: 'textnode',
+                position: { x: newEl.positionX, y: newEl.positionY },
+                zIndex: LAYER_TEXT,
+                data: {
+                  elementId: newEl.id,
+                  content: newEl.content,
+                  fontSize: newEl.fontSize,
+                  color: newEl.color,
+                  workspaceId,
+                  mapId,
+                  onDelete: handleDeleteTextNode,
+                },
+              };
+              setNodes(prev => [...prev, newNode]);
+              queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            },
+            onError: () => {
+              toast({ title: 'Erro ao duplicar texto', variant: 'destructive' });
+            },
+          },
+        );
+        return;
+      }
+
+      if (node.type === 'shapenode') {
+        const source = mapDataWithText?.shapes?.find(sh => sh.id === node.id);
+        if (!source) return;
+        const sourceAny = source as ShapeResponse & { attachmentId?: string | null };
+        createShapeMut.mutate(
+          {
+            workspaceId,
+            mapId,
+            data: {
+              type: source.type,
+              positionX: dropPos.x,
+              positionY: dropPos.y,
+              width: source.width,
+              height: source.height,
+              rotation: source.rotation ?? 0,
+              color: source.color,
+              filled: source.filled,
+              strokeStyle: source.strokeStyle,
+              x1: source.x1 ?? null,
+              y1: source.y1 ?? null,
+              x2: source.x2 ?? null,
+              y2: source.y2 ?? null,
+              ...(sourceAny.attachmentId ? { attachmentId: sourceAny.attachmentId } : {}),
+            } as Parameters<typeof createShapeMut.mutate>[0]['data'],
+          },
+          {
+            onSuccess: (shape) => {
+              const newNode = buildShapeNode(shape);
+              setNodes(prev => [newNode, ...prev]);
+              queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            },
+            onError: () => {
+              toast({ title: 'Erro ao duplicar forma', variant: 'destructive' });
+            },
+          },
+        );
+        return;
+      }
+
+      // Mindmap card (task or plain card).
+      const sourceCard = mapDataRef.current?.cards.find(c => c.id === node.id);
+      if (!sourceCard) return;
+      const taskId = (sourceCard as { taskId?: string | null }).taskId ?? null;
+
+      if (!taskId) {
+        // Plain card without a linked task — shallow copy.
+        createCardMut.mutate(
+          {
+            workspaceId,
+            mapId,
+            data: {
+              title: sourceCard.title,
+              positionX: dropPos.x,
+              positionY: dropPos.y,
+            },
+          },
+          {
+            onSuccess: () => {
+              queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+            },
+            onError: () => {
+              toast({ title: 'Erro ao duplicar card', variant: 'destructive' });
+            },
+          },
+        );
+        return;
+      }
+
+      // Task card — deep duplicate via the existing endpoint, then override position.
+      (async () => {
+        try {
+          const result = await customFetch<{ id: string; cardId?: string | null }>(
+            `/api/workspaces/${workspaceId}/tasks/${taskId}/duplicate`,
+            { method: 'POST' },
+          );
+          const newCardId = result.cardId ?? null;
+          if (newCardId) {
+            updateCardMut.mutate({
+              workspaceId,
+              mapId,
+              cardId: newCardId,
+              data: { positionX: dropPos.x, positionY: dropPos.y },
+            });
+          }
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
+        } catch {
+          toast({ title: 'Erro ao duplicar tarefa', variant: 'destructive' });
+        }
+      })();
+    },
+    [
+      workspaceId,
+      mapId,
+      createCardMut,
+      createTextMut,
+      createShapeMut,
+      updateCardMut,
+      buildShapeNode,
+      handleDeleteTextNode,
+      setNodes,
+      queryClient,
+    ],
+  );
+
   const onNodeDragStart = useCallback(
     (_event: React.MouseEvent, _node: Node) => {
       if (dragStartSnapshotRef.current) return;
@@ -1379,7 +1595,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         }
       });
     },
-    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut],
+    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, pushSnapshot],
   );
 
   const updateCardMutRef = useRef(updateCardMut);
@@ -1802,6 +2018,206 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     };
     el.addEventListener('mousedown', handleMouseDown);
     return () => el.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
+  // Latest-value refs so the alt-drag effect can stay mounted once and still
+  // reach updated callback identities without re-attaching every render.
+  const getViewportRef = useRef(getViewport);
+  getViewportRef.current = getViewport;
+  const setViewportRef = useRef(setViewport);
+  setViewportRef.current = setViewport;
+  const duplicateNodeAtDropRef = useRef(duplicateNodeAtDrop);
+  duplicateNodeAtDropRef.current = duplicateNodeAtDrop;
+
+  // Alt+drag duplication: intercept mousedown in capture phase so React Flow
+  // never starts its own drag. Render dashed-outline "ghost" placeholders that
+  // follow the cursor; on mouseup, duplicate each node at the dropped flow
+  // position (preserving relative offsets for multi-selection). The move/up
+  // listeners are attached imperatively inside the mousedown handler — no
+  // useEffect timing race.
+  //
+  // Attached at the document level (not reactFlowRef.current) so the listener
+  // is wired up on the first mount of CanvasInner, even while the canvas is
+  // still rendering its loading state and the wrapper div doesn't exist yet.
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!event.altKey) return;
+      if (event.button !== 0) return;
+      const target = event.target as Element | null;
+      const nodeEl = target?.closest('.react-flow__node') as HTMLElement | null;
+      if (!nodeEl) return;
+      const clickedId = nodeEl.getAttribute('data-id');
+      if (!clickedId) return;
+
+      const clickedNode = nodesRef.current.find(n => n.id === clickedId);
+      if (!clickedNode) return;
+      if (clickedNode.type === 'approvalnode' || clickedNode.type === 'joinnode') return;
+
+      // If the clicked node is in the current selection, drag the whole
+      // selection; otherwise drag only the clicked node. Approval/join
+      // nodes are always filtered out.
+      const isClickedSelected = clickedNode.selected === true;
+      const targets = (
+        isClickedSelected
+          ? nodesRef.current.filter(n => n.selected === true)
+          : [clickedNode]
+      ).filter(n => n.type !== 'approvalnode' && n.type !== 'joinnode');
+      if (targets.length === 0) return;
+
+      // Block React Flow's d3-drag and the sibling snapshot listener.
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      const startCursor = { x: event.clientX, y: event.clientY };
+
+      const ghostDescriptors = targets.map(n => {
+        const domEl = document.querySelector(`.react-flow__node[data-id="${n.id}"]`) as HTMLElement | null;
+        const rect = domEl?.getBoundingClientRect();
+        const width = rect?.width ?? 200;
+        const height = rect?.height ?? 80;
+        const dx = (rect?.left ?? startCursor.x) - startCursor.x;
+        const dy = (rect?.top ?? startCursor.y) - startCursor.y;
+        const shapeData = n.type === 'shapenode'
+          ? (n.data as { type?: 'rect' | 'ellipse' | 'line' | 'image'; width?: number; height?: number; x1?: number | null; y1?: number | null; x2?: number | null; y2?: number | null })
+          : null;
+        const shapeKind = shapeData?.type;
+        let lineCoords: { x1: number; y1: number; x2: number; y2: number } | undefined;
+        if (
+          shapeKind === 'line' &&
+          shapeData?.width && shapeData.width > 0 &&
+          shapeData.height && shapeData.height > 0 &&
+          shapeData.x1 != null && shapeData.y1 != null &&
+          shapeData.x2 != null && shapeData.y2 != null
+        ) {
+          // Endpoints are stored in flow units (relative to the shape's flow
+          // bbox); scale to the screen-px ghost size.
+          const sx = width / shapeData.width;
+          const sy = height / shapeData.height;
+          lineCoords = {
+            x1: shapeData.x1 * sx,
+            y1: shapeData.y1 * sy,
+            x2: shapeData.x2 * sx,
+            y2: shapeData.y2 * sy,
+          };
+        }
+        return { nodeId: n.id, dx, dy, width, height, shapeKind, lineCoords };
+      });
+
+      // Snapshot of the source nodes — closed over by the handlers below so
+      // we don't depend on state by the time mouseup fires.
+      const dragData = {
+        startCursor,
+        nodes: targets.map(n => ({
+          node: n,
+          flowOriginX: n.position.x,
+          flowOriginY: n.position.y,
+        })),
+      };
+
+      setAltDrag({ cursor: startCursor, ghosts: ghostDescriptors });
+
+      const handleMove = (ev: MouseEvent) => {
+        setAltDrag(s => (s ? { ...s, cursor: { x: ev.clientX, y: ev.clientY } } : s));
+      };
+
+      const cleanup = () => {
+        document.removeEventListener('mousemove', handleMove, true);
+        document.removeEventListener('mouseup', handleUp, true);
+        document.removeEventListener('keydown', handleEscape, true);
+        setAltDrag(null);
+      };
+
+      const handleUp = (ev: MouseEvent) => {
+        cleanup();
+        const dxScreen = ev.clientX - dragData.startCursor.x;
+        const dyScreen = ev.clientY - dragData.startCursor.y;
+        const zoom = getViewportRef.current().zoom || 1;
+        const dxFlow = dxScreen / zoom;
+        const dyFlow = dyScreen / zoom;
+        dragData.nodes.forEach(({ node, flowOriginX, flowOriginY }) => {
+          duplicateNodeAtDropRef.current(node, {
+            x: flowOriginX + dxFlow,
+            y: flowOriginY + dyFlow,
+          });
+        });
+      };
+
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') cleanup();
+      };
+
+      // Capture-phase document listeners — guaranteed to run before any other
+      // mousemove/mouseup logic the page might have (e.g. shape drawing).
+      document.addEventListener('mousemove', handleMove, true);
+      document.addEventListener('mouseup', handleUp, true);
+      document.addEventListener('keydown', handleEscape, true);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown, { capture: true });
+    return () => document.removeEventListener('mousedown', handleMouseDown, { capture: true });
+  }, []);
+
+  // Right-button drag panning over nodes/edges. React Flow's panOnDrag={[2]}
+  // already handles right-drag on the empty pane; this extends it so the user
+  // can start the drag with the cursor over any element (card, text, shape,
+  // edge) and still pan the whole map. We track deltas at the document level
+  // and apply them directly via setViewport.
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 2) return;
+      const target = event.target as Element | null;
+      if (!target) return;
+      // Only intercept when the right-click starts on an element. Pane drags
+      // already work natively — letting React Flow keep handling them avoids
+      // double-handling and preserves selection-box behavior.
+      const onElement = target.closest('.react-flow__node, .react-flow__edge');
+      if (!onElement) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      let lastX = event.clientX;
+      let lastY = event.clientY;
+      let moved = false;
+      const previousBodyCursor = document.body.style.cursor;
+      document.body.style.cursor = 'grabbing';
+
+      const handleMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - lastX;
+        const dy = ev.clientY - lastY;
+        lastX = ev.clientX;
+        lastY = ev.clientY;
+        if (dx !== 0 || dy !== 0) moved = true;
+        const vp = getViewportRef.current();
+        setViewportRef.current({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom });
+      };
+
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove, true);
+        document.removeEventListener('mouseup', handleUp, true);
+        document.body.style.cursor = previousBodyCursor;
+        // If the user actually dragged, swallow the contextmenu that fires
+        // after a right-drag (it would otherwise pop up at the release point).
+        // A pure right-click without movement is left alone — the existing
+        // pane onContextMenu handler still prevents it elsewhere.
+        if (moved) {
+          const swallow = (e: Event) => {
+            e.preventDefault();
+            e.stopPropagation();
+            document.removeEventListener('contextmenu', swallow, true);
+          };
+          document.addEventListener('contextmenu', swallow, { capture: true, once: true });
+        }
+      };
+
+      document.addEventListener('mousemove', handleMove, true);
+      document.addEventListener('mouseup', handleUp, true);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown, { capture: true });
+    return () => document.removeEventListener('mousedown', handleMouseDown, { capture: true });
   }, []);
 
   const createTextAt = useCallback((flowX: number, flowY: number) => {
@@ -2269,13 +2685,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
         {textGhost && (
           <div
-            className="pointer-events-none fixed z-[9999] border-2 border-dashed border-blue-400 bg-blue-50/70 dark:bg-blue-950/50 rounded-lg"
+            className="pointer-events-none fixed z-overlay border-2 border-dashed border-blue-400 bg-blue-50/70 dark:bg-blue-950/50 rounded-lg"
             style={{ left: textGhost.x - 100, top: textGhost.y - 40, width: 200, height: 80 }}
           />
         )}
 
         {shapeGhost && (shapeGhost.w > 2 || (shapeTool === 'line' && shapeGhost.h > 2)) && (
-          <div className="pointer-events-none fixed z-[9998]" style={{ left: shapeGhost.x, top: shapeGhost.y, width: Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0), height: Math.max(shapeGhost.h, 4) }}>
+          <div className="pointer-events-none fixed z-overlay-backdrop" style={{ left: shapeGhost.x, top: shapeGhost.y, width: Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0), height: Math.max(shapeGhost.h, 4) }}>
             <svg width={Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0)} height={Math.max(shapeGhost.h, 4)} style={{ overflow: 'visible' }}>
               {shapeTool === 'rect' && (
                 <rect x={1} y={1} width={shapeGhost.w - 2} height={Math.max(shapeGhost.h - 2, 2)} rx={4} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
@@ -2300,10 +2716,66 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
         {cardGhost && (
           <div
-            className="pointer-events-none fixed z-[9999] border-2 border-dashed border-primary bg-primary/10 rounded-xl"
+            className="pointer-events-none fixed z-overlay border-2 border-dashed border-primary bg-primary/10 rounded-xl"
             style={{ left: cardGhost.x - 90, top: cardGhost.y - 36, width: 180, height: 72 }}
           />
         )}
+
+        {altDrag && altDrag.ghosts.map(g => {
+          const left = altDrag.cursor.x + g.dx;
+          const top = altDrag.cursor.y + g.dy;
+          if (g.shapeKind === 'ellipse') {
+            return (
+              <svg
+                key={g.nodeId}
+                className="pointer-events-none fixed z-overlay"
+                style={{ left, top, width: g.width, height: g.height, overflow: 'visible' }}
+                width={g.width}
+                height={g.height}
+              >
+                <ellipse
+                  cx={g.width / 2}
+                  cy={g.height / 2}
+                  rx={Math.max(g.width / 2 - 1, 1)}
+                  ry={Math.max(g.height / 2 - 1, 1)}
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  fill="hsl(var(--primary) / 0.1)"
+                />
+              </svg>
+            );
+          }
+          if (g.shapeKind === 'line' && g.lineCoords) {
+            return (
+              <svg
+                key={g.nodeId}
+                className="pointer-events-none fixed z-overlay"
+                style={{ left, top, width: g.width, height: g.height, overflow: 'visible' }}
+                width={g.width}
+                height={g.height}
+              >
+                <line
+                  x1={g.lineCoords.x1}
+                  y1={g.lineCoords.y1}
+                  x2={g.lineCoords.x2}
+                  y2={g.lineCoords.y2}
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeDasharray="6 4"
+                />
+              </svg>
+            );
+          }
+          return (
+            <div
+              key={g.nodeId}
+              className="pointer-events-none fixed z-overlay border-2 border-dashed border-primary bg-primary/10 rounded-xl"
+              style={{ left, top, width: g.width, height: g.height }}
+            />
+          );
+        })}
 
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
           <Button
@@ -2429,6 +2901,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             fitView
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.2}
+            maxZoom={2.5}
             onNodesDelete={(deletedNodes) => {
               deletedNodes.forEach(n => {
                 if (n.type === 'textnode') {

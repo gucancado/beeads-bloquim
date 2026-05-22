@@ -1,8 +1,7 @@
 // Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
 // always-leading "title" cell) are rendered in the order defined by the
 // user's saved column preferences — passed in via `columnOrder`.
-import { useState, useRef, useCallback, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useCallback, useEffect } from "react";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate, addOneDayYmd } from "@/lib/utils";
 import { DatePickerPopover } from "@/components/ui/date-picker-popover";
@@ -18,6 +17,9 @@ import { getColorByIndex } from "@workspace/db/colorPalette";
 import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useToast } from "@/hooks/use-toast";
 import { TaskColumnKey, TASK_COLUMN_WIDTH_CLASS } from "@/lib/taskColumnConstants";
+import { EditableTitle } from "@/components/ui/editable-title";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MemberSelectList } from "@/components/tasks/MemberSelectList";
 
 function getInitials(name: string) {
   return name
@@ -136,7 +138,6 @@ export function TaskListItem({
   const [editingTitle, setEditingTitle] = useState(false);
   const isApprovalTask = !!task.isApprovalTask;
   const displayTitle = getApprovalDisplayTitle(localTask);
-  const [titleValue, setTitleValue] = useState(task.cardTitle || task.title);
   const [statusOpen, setStatusOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -145,42 +146,10 @@ export function TaskListItem({
   useEffect(() => {
     if (pendingMode && localTask.scheduleMode === pendingMode) setPendingMode(null);
   }, [localTask.scheduleMode, pendingMode]);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
-  const [modalityOpen, setModalityOpen] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
-
-  const closeAllDropdowns = useCallback(() => {
-    setStatusOpen(false);
-    setAssigneeOpen(false);
-    setModalityOpen(false);
-  }, []);
-
-  const anyDropdownOpen = statusOpen || assigneeOpen || modalityOpen;
-
-  useEffect(() => {
-    if (!anyDropdownOpen) return;
-    const close = () => closeAllDropdowns();
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [anyDropdownOpen, closeAllDropdowns]);
-
-  const openDropdownAt = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const top = rect.bottom + 4;
-    const left = Math.min(rect.left, window.innerWidth - 180);
-    setDropdownPos({ top: Math.min(top, window.innerHeight - 200), left: Math.max(4, left) });
-  };
 
   useEffect(() => {
     setLocalTask(task);
-    if (!editingTitle) {
-      setTitleValue(task.cardTitle || task.title);
-    }
-  }, [task, editingTitle]);
+  }, [task]);
 
   const isOverdue = !!localTask.overdue && localTask.status !== "completed" && localTask.status !== "blocked";
   const isLinkedToCard = !!(task.cardId && task.mapId);
@@ -210,8 +179,13 @@ export function TaskListItem({
       invalidate();
     } catch (err) {
       console.error("Inline edit failed:", err);
+      toast({
+        title: "Não foi possível salvar a alteração.",
+        description: err instanceof Error ? err.message : "Tente novamente.",
+        variant: "destructive",
+      });
     }
-  }, [task.workspaceId, task.id, invalidate, isStandaloneTask]);
+  }, [task.workspaceId, task.id, invalidate, isStandaloneTask, toast]);
 
   const invalidateCounts = useCallback(() => {
     countsQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
@@ -235,8 +209,13 @@ export function TaskListItem({
       invalidateCounts();
     } catch (err) {
       console.error("Inline status update failed:", err);
+      toast({
+        title: "Não foi possível mudar o status.",
+        description: err instanceof Error ? err.message : "Tente novamente.",
+        variant: "destructive",
+      });
     }
-  }, [task.workspaceId, task.id, isStandaloneTask, invalidate, invalidateCounts]);
+  }, [task.workspaceId, task.id, isStandaloneTask, invalidate, invalidateCounts, toast]);
 
   const updateCardTitle = useCallback(async (newTitle: string) => {
     try {
@@ -248,38 +227,22 @@ export function TaskListItem({
       invalidate();
     } catch (err) {
       console.error("Inline card title edit failed:", err);
+      toast({
+        title: "Não foi possível renomear o card.",
+        description: err instanceof Error ? err.message : "Tente novamente.",
+        variant: "destructive",
+      });
     }
-  }, [task.workspaceId, task.mapId, task.cardId, invalidate]);
+  }, [task.workspaceId, task.mapId, task.cardId, invalidate, toast]);
 
-  const handleTitleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTitleValue(localTask.cardTitle || localTask.title);
-    setEditingTitle(true);
-    setTimeout(() => titleInputRef.current?.focus(), 0);
-  };
-
-  const handleTitleSave = () => {
-    setEditingTitle(false);
-    const trimmed = titleValue.trim();
-    if (!trimmed || trimmed === (localTask.cardTitle || localTask.title)) return;
+  const handleTitleSave = (next: string) => {
     setSavingField("title");
+    const done = () => setSavingField(null);
     if (isLinkedToCard) {
-      updateCardTitle(trimmed).finally(() => setSavingField(null));
+      updateCardTitle(next).finally(done);
     } else {
-      patchTask({ title: trimmed }).finally(() => setSavingField(null));
+      patchTask({ title: next }).finally(done);
     }
-  };
-
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleTitleSave();
-    if (e.key === "Escape") { setEditingTitle(false); setTitleValue(localTask.cardTitle || localTask.title); }
-  };
-
-  const handleStatusClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    openDropdownAt(e);
-    setStatusOpen(v => !v);
-    setAssigneeOpen(false);
   };
 
   const handlePrioritySelect = (val: string) => {
@@ -293,14 +256,6 @@ export function TaskListItem({
     setLocalTask(prev => ({ ...prev, status: val }));
     setSavingField("status");
     patchStatus(val).finally(() => setSavingField(null));
-  };
-
-  const handleAssigneeClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (members.length === 0) return;
-    openDropdownAt(e);
-    setAssigneeOpen(v => !v);
-    setStatusOpen(false);
   };
 
   const handleAssigneeSelect = (memberId: string | null) => {
@@ -420,24 +375,43 @@ export function TaskListItem({
     setPendingMode(next);
   };
 
-  const handleModalityClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (modalityOpen) {
-      setModalityOpen(false);
-      return;
-    }
-    closeAllDropdowns();
-    openDropdownAt(e);
-    setModalityOpen(true);
-  };
-
-
   const handleRowClick = () => {
     if (editingTitle || statusOpen || assigneeOpen) return;
     onOpenDetail?.(localTask);
   };
 
   const workspaceColorHex = getColorByIndex(localTask.workspaceColorIndex ?? null);
+
+  /**
+   * Wraps any modality trigger button in a Radix Popover with the shared list
+   * of options. Replaces the previous createPortal-based custom dropdown — gains
+   * focus trap, keyboard navigation, click-outside-to-close out of the box.
+   */
+  const wrapModalityPopover = (trigger: React.ReactNode) => (
+    <Popover>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="p-1 rounded-xl min-w-[140px]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        {SCHEDULE_MODE_OPTIONS.map(opt => {
+          const isCurrent = effectiveMode === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleModalitySelect(opt.value)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors flex items-center gap-2 rounded-md ${isCurrent ? "font-semibold bg-muted/30" : ""}`}
+              aria-pressed={isCurrent}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
 
   // ─── Cell renderers ───────────────────────────────────────────────────────
 
@@ -453,24 +427,16 @@ export function TaskListItem({
             {displayTitle}
           </h3>
         </>
-      ) : editingTitle ? (
-        <input
-          ref={titleInputRef}
-          value={titleValue}
-          onChange={e => setTitleValue(e.target.value)}
-          onBlur={handleTitleSave}
-          onKeyDown={handleTitleKeyDown}
-          onClick={e => e.stopPropagation()}
-          className="text-base font-semibold text-foreground w-full bg-transparent border-b border-primary outline-none"
-        />
       ) : (
-        <h3
-          className="text-base font-semibold text-foreground truncate cursor-text hover:underline decoration-dotted"
-          onClick={handleTitleClick}
-          title="Clique para editar o título"
-        >
-          {displayTitle}
-        </h3>
+        <EditableTitle
+          value={localTask.cardTitle || localTask.title}
+          onSave={handleTitleSave}
+          onEditingChange={setEditingTitle}
+          stopPropagation
+          hoverTitle="Clique para editar o título"
+          displayClassName="text-base font-semibold text-foreground truncate hover:underline decoration-dotted"
+          inputClassName="text-base font-semibold text-foreground"
+        />
       )}
     </div>
   );
@@ -480,98 +446,126 @@ export function TaskListItem({
     const StatusIcon = entry?.icon;
     return (
       <div onClick={e => e.stopPropagation()} className="inline-flex">
-        <Badge
-          variant="outline"
-          className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
-          onClick={handleStatusClick}
-          title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
-          aria-label={entry?.label ?? localTask.status}
+        <Popover
+          open={statusOpen}
+          onOpenChange={(open) => {
+            setStatusOpen(open);
+            if (open) setAssigneeOpen(false);
+          }}
         >
-          {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
-        </Badge>
-        {statusOpen && createPortal(
-          <>
-            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-            <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[180px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-              {STATUS_OPTIONS.map(opt => {
-                const OptIcon = opt.icon;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleStatusSelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${localTask.status === opt.value ? "opacity-60" : ""}`}
-                  >
-                    <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace("bg-", "text-")}`} />
-                    {opt.menuLabel}
-                  </button>
-                );
-              })}
-            </div>
-          </>,
-          document.body
-        )}
+          <PopoverTrigger asChild>
+            <Badge
+              variant="outline"
+              className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
+              title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
+              aria-label={entry?.label ?? localTask.status}
+            >
+              {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
+            </Badge>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="p-1 rounded-xl min-w-[180px]"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            {STATUS_OPTIONS.map(opt => {
+              const OptIcon = opt.icon;
+              const isCurrent = localTask.status === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleStatusSelect(opt.value)}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted/60 transition-colors flex items-center gap-2 rounded-md ${isCurrent ? "bg-muted/30" : ""}`}
+                  aria-pressed={isCurrent}
+                >
+                  <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace("bg-", "text-")}`} />
+                  {opt.menuLabel}
+                </button>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
       </div>
     );
   };
 
-  const renderAssigneeCell = () => (
-    <div onClick={e => e.stopPropagation()} className="inline-flex">
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div
-              className={`flex items-center cursor-pointer ${members.length > 0 ? "hover:opacity-70" : ""} ${savingField === "assignee" ? "opacity-60" : ""}`}
-              onClick={handleAssigneeClick}
+  const renderAssigneeCell = () => {
+    const trigger = (
+      <div
+        className={`flex items-center ${members.length > 0 ? "cursor-pointer hover:opacity-70" : "cursor-default"} ${savingField === "assignee" ? "opacity-60" : ""}`}
+      >
+        {localTask.assigneeName ? (
+          <Avatar
+            key={`${localTask.assignedTo ?? "none"}|${localTask.assigneeAvatarUrl ?? ""}`}
+            className="w-[26px] h-[26px] shrink-0"
+          >
+            {localTask.assigneeAvatarUrl ? (
+              <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
+            ) : null}
+            <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
+              {getInitials(localTask.assigneeName)}
+            </AvatarFallback>
+          </Avatar>
+        ) : (
+          <User className="w-[21px] h-[21px] shrink-0 text-muted-foreground" />
+        )}
+      </div>
+    );
+
+    return (
+      <div onClick={e => e.stopPropagation()} className="inline-flex">
+        {members.length === 0 ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipContent>{localTask.assigneeName ?? "sem responsável"}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <Popover
+            open={assigneeOpen}
+            onOpenChange={(open) => {
+              setAssigneeOpen(open);
+              if (open) setStatusOpen(false);
+            }}
+          >
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={localTask.assigneeName ?? "atribuir responsável"}
+                      className="appearance-none bg-transparent border-0 p-0 m-0"
+                    >
+                      {trigger}
+                    </button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{localTask.assigneeName ?? "sem responsável"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <PopoverContent
+              align="start"
+              className="w-auto p-1 rounded-xl min-w-[180px]"
+              onCloseAutoFocus={(e) => e.preventDefault()}
             >
-              {localTask.assigneeName ? (
-                <Avatar key={`${localTask.assignedTo ?? "none"}|${localTask.assigneeAvatarUrl ?? ""}`} className="w-[26px] h-[26px] shrink-0">
-                  {localTask.assigneeAvatarUrl ? (
-                    <AvatarImage src={localTask.assigneeAvatarUrl} alt={localTask.assigneeName} className="object-cover" />
-                  ) : null}
-                  <AvatarFallback className="text-[11px] font-semibold bg-primary/10 text-primary">
-                    {getInitials(localTask.assigneeName)}
-                  </AvatarFallback>
-                </Avatar>
-              ) : (
-                <User className="w-[21px] h-[21px] shrink-0 text-muted-foreground" />
-              )}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {localTask.assigneeName ?? "sem responsável"}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      {assigneeOpen && members.length > 0 && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-          <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(null); }}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2"
-            >
-              <User className="w-3 h-3" /> Sem responsável
-            </button>
-            {members.map(m => (
-              <button
-                key={m.userId}
-                onClick={(e) => { e.stopPropagation(); handleAssigneeSelect(m.userId); }}
-                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${localTask.assignedTo === m.userId ? "font-semibold" : ""}`}
-              >
-                {m.avatarUrl ? (
-                  <img src={m.avatarUrl} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                ) : (
-                  <User className="w-3 h-3" />
-                )}
-                {m.name}
-              </button>
-            ))}
-          </div>
-        </>,
-        document.body
-      )}
-    </div>
-  );
+              <MemberSelectList
+                density="compact"
+                members={members}
+                selectedId={localTask.assignedTo ?? null}
+                onSelect={(id) => {
+                  setAssigneeOpen(false);
+                  handleAssigneeSelect(id);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+    );
+  };
 
   const renderPriorityCell = () => (
     <div onClick={e => e.stopPropagation()} className="inline-flex">
@@ -618,26 +612,28 @@ export function TaskListItem({
       return (
         <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
           {effectiveMode === "urgente" ? (
-            <button
-              type="button"
-              onClick={handleModalityClick}
-              disabled={savingField === "scheduleMode"}
-              className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-              title="Clique para alterar modalidade de prazo"
-            >
-              urgente
-            </button>
+            wrapModalityPopover(
+              <button
+                type="button"
+                disabled={savingField === "scheduleMode"}
+                className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+                title="Clique para alterar modalidade de prazo"
+              >
+                urgente
+              </button>
+            )
           ) : effectiveMode === "sem_prazo" ? (
-            <button
-              type="button"
-              onClick={handleModalityClick}
-              disabled={savingField === "scheduleMode"}
-              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-              title="Clique para alterar modalidade de prazo"
-            >
-              <CalendarIcon className="w-3 h-3 shrink-0" />
-              sem prazo
-            </button>
+            wrapModalityPopover(
+              <button
+                type="button"
+                disabled={savingField === "scheduleMode"}
+                className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+                title="Clique para alterar modalidade de prazo"
+              >
+                <CalendarIcon className="w-3 h-3 shrink-0" />
+                sem prazo
+              </button>
+            )
           ) : (
             <DatePickerPopover
               value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
@@ -658,79 +654,46 @@ export function TaskListItem({
             </DatePickerPopover>
           )}
           {recurrenceIcon}
-          {modalityOpen && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-                {SCHEDULE_MODE_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={(e) => { e.stopPropagation(); handleModalitySelect(opt.value); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${effectiveMode === opt.value ? "font-semibold" : ""}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </>,
-            document.body
-          )}
         </div>
       );
     }
 
     return (
     <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
-      {effectiveMode === "sem_prazo" ? (
-        <button
-          type="button"
-          onClick={handleModalityClick}
-          disabled={savingField === "scheduleMode"}
-          className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-          title="Clique para alterar modalidade de prazo"
-        >
-          <CalendarIcon className="w-3 h-3 shrink-0" />
-          <span>sem prazo</span>
-        </button>
-      ) : effectiveMode === "urgente" ? (
-        <button
-          type="button"
-          onClick={handleModalityClick}
-          disabled={savingField === "scheduleMode"}
-          className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-          title="Clique para alterar modalidade de prazo"
-        >
-          <span>urgente</span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={handleModalityClick}
-          disabled={savingField === "scheduleMode"}
-          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground hover:text-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-          title="Modalidade do fazer"
-        >
-          {SCHEDULE_MODE_LABELS[effectiveMode] ?? effectiveMode}
-        </button>
-      )}
-
-      {modalityOpen && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); }} />
-          <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px]" style={{ top: dropdownPos.top, left: dropdownPos.left }}>
-            {SCHEDULE_MODE_OPTIONS.map(opt => (
+      {effectiveMode === "sem_prazo"
+        ? wrapModalityPopover(
+            <button
+              type="button"
+              disabled={savingField === "scheduleMode"}
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+              title="Clique para alterar modalidade de prazo"
+            >
+              <CalendarIcon className="w-3 h-3 shrink-0" />
+              <span>sem prazo</span>
+            </button>
+          )
+        : effectiveMode === "urgente"
+          ? wrapModalityPopover(
               <button
-                key={opt.value}
-                onClick={(e) => { e.stopPropagation(); handleModalitySelect(opt.value); }}
-                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${effectiveMode === opt.value ? "font-semibold" : ""}`}
+                type="button"
+                disabled={savingField === "scheduleMode"}
+                className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+                title="Clique para alterar modalidade de prazo"
               >
-                {opt.label}
+                <span>urgente</span>
               </button>
-            ))}
-          </div>
-        </>,
-        document.body
-      )}
+            )
+          : wrapModalityPopover(
+              <button
+                type="button"
+                disabled={savingField === "scheduleMode"}
+                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground hover:text-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
+                title="Modalidade do fazer"
+              >
+                {SCHEDULE_MODE_LABELS[effectiveMode] ?? effectiveMode}
+              </button>
+            )
+      }
 
       {effectiveMode === "entre" && (
         <DatePickerPopover

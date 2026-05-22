@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
-import { Loader2, ListTodo, GripVertical } from "lucide-react";
+import { Loader2, ListTodo, GripVertical, Search, X } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -17,8 +17,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getColorByIndex } from "@workspace/db/colorPalette";
+
+const SEARCH_THRESHOLD = 8;
+
+function matches(text: string, q: string) {
+  return text.toLowerCase().includes(q);
+}
 
 interface SidebarMap {
   id: string;
@@ -69,35 +75,43 @@ function CollapsedWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) 
   );
 }
 
-function SortableWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) {
+function WorkspaceItemContent({
+  workspace,
+  dragHandleAttrs,
+  dragHandleListeners,
+  visibleMaps,
+}: {
+  workspace: SidebarWorkspace;
+  dragHandleAttrs?: ReturnType<typeof useSortable>["attributes"];
+  dragHandleListeners?: ReturnType<typeof useSortable>["listeners"];
+  visibleMaps?: SidebarMap[];
+}) {
   const [location] = useLocation();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: workspace.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
   const isWsActive = location.startsWith(`/workspaces/${workspace.id}`);
-  const hasMaps = workspace.maps.length > 0;
+  const mapsToRender = visibleMaps ?? workspace.maps;
+  const hasMaps = mapsToRender.length > 0;
 
   return (
-    <div ref={setNodeRef} style={style} className="group/ws">
+    <>
       <div className="flex items-center gap-1 px-3 py-2 rounded-xl hover:bg-sidebar-accent/30 transition-all duration-200">
-        <button
-          {...attributes}
-          {...listeners}
-          className="text-sidebar-foreground/20 hover:text-sidebar-foreground/50 cursor-grab active:cursor-grabbing shrink-0 touch-none opacity-0 group-hover/ws:opacity-100 transition-opacity"
-          tabIndex={-1}
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </button>
+        {dragHandleAttrs && dragHandleListeners ? (
+          <button
+            {...dragHandleAttrs}
+            {...dragHandleListeners}
+            className="text-sidebar-foreground/20 hover:text-sidebar-foreground/50 cursor-grab active:cursor-grabbing shrink-0 touch-none opacity-0 group-hover/ws:opacity-100 transition-opacity"
+            tabIndex={-1}
+            aria-label="Reordenar workspace"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          // Reserve the gutter so workspaces still line up visually during search.
+          <span className="w-3.5 h-3.5 shrink-0" aria-hidden />
+        )}
         {workspace.colorIndex && <WorkspaceColorDot colorIndex={workspace.colorIndex} size={10} />}
         <Link href={`/workspaces/${workspace.id}`} className="flex-1 min-w-0">
           <span
+            title={workspace.name}
             className={`flex items-center gap-2 text-sm font-medium truncate cursor-pointer transition-colors ${
               isWsActive
                 ? "text-sidebar-accent-foreground"
@@ -111,11 +125,12 @@ function SortableWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) {
 
       {hasMaps && (
         <div className="ml-[38px] space-y-0.5 mb-1">
-          {workspace.maps.map((map) => {
+          {mapsToRender.map((map) => {
             const isMapActive = location === `/workspaces/${workspace.id}/maps/${map.id}`;
             return (
               <Link key={map.id} href={`/workspaces/${workspace.id}/maps/${map.id}`}>
                 <span
+                  title={map.name}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer text-xs ${
                     isMapActive
                       ? "bg-sidebar-accent text-primary font-medium"
@@ -129,6 +144,36 @@ function SortableWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) {
           })}
         </div>
       )}
+    </>
+  );
+}
+
+function SortableWorkspaceItem({ workspace }: { workspace: SidebarWorkspace }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: workspace.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="group/ws">
+      <WorkspaceItemContent
+        workspace={workspace}
+        dragHandleAttrs={attributes}
+        dragHandleListeners={listeners}
+      />
+    </div>
+  );
+}
+
+function PlainWorkspaceItem({ workspace, visibleMaps }: { workspace: SidebarWorkspace; visibleMaps?: SidebarMap[] }) {
+  return (
+    <div className="group/ws">
+      <WorkspaceItemContent workspace={workspace} visibleMaps={visibleMaps} />
     </div>
   );
 }
@@ -146,12 +191,34 @@ export function SidebarWorkspaceList({ collapsed, enabled }: Props) {
   });
 
   const [items, setItems] = useState<SidebarWorkspace[]>([]);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (data) {
       setItems(data);
     }
   }, [data]);
+
+  const showSearch = !collapsed && items.length >= SEARCH_THRESHOLD;
+  const trimmedSearch = search.trim().toLowerCase();
+  const isSearching = !!trimmedSearch;
+  // When searching, also narrow each workspace's maps list to matches — but
+  // keep the workspace in the result if either its own name or any map name
+  // matches (so a hit-by-name workspace shows all its maps for context).
+  const filteredItems = useMemo(() => {
+    if (!trimmedSearch) return items.map(ws => ({ ws, visibleMaps: undefined as SidebarMap[] | undefined }));
+    return items
+      .map(ws => {
+        const wsMatches = matches(ws.name, trimmedSearch);
+        const mapMatches = ws.maps.filter(m => matches(m.name, trimmedSearch));
+        if (!wsMatches && mapMatches.length === 0) return null;
+        return {
+          ws,
+          visibleMaps: wsMatches ? ws.maps : mapMatches,
+        };
+      })
+      .filter((x): x is { ws: SidebarWorkspace; visibleMaps: SidebarMap[] | undefined } => x !== null);
+  }, [items, trimmedSearch]);
 
   const saveOrderMutation = useMutation({
     mutationFn: (workspaceIds: string[]) =>
@@ -188,10 +255,51 @@ export function SidebarWorkspaceList({ collapsed, enabled }: Props) {
 
   return (
     <div>
+      {showSearch && (
+        <div className="px-3 mb-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-sidebar-foreground/40 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") setSearch("");
+              }}
+              placeholder="buscar"
+              aria-label="Buscar workspace ou mapa"
+              className="w-full bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/40 text-sm rounded-lg pl-8 pr-7 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Limpar busca"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-sidebar-foreground/50 hover:text-sidebar-foreground rounded p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {isLoading ? (
         <div className="px-4 py-2 flex items-center gap-2 text-sidebar-foreground/40 text-sm">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Carregando...</span>
+        </div>
+      ) : isSearching ? (
+        // Reorder is disabled while filtering — moving items in a filtered list
+        // would silently scramble the underlying order.
+        <div className="space-y-0.5">
+          {filteredItems.map(({ ws, visibleMaps }) => (
+            <PlainWorkspaceItem key={ws.id} workspace={ws} visibleMaps={visibleMaps} />
+          ))}
+          {filteredItems.length === 0 && (
+            <p className="px-3 py-4 text-xs text-sidebar-foreground/40 lowercase">
+              nada encontrado pra "{trimmedSearch}".
+            </p>
+          )}
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

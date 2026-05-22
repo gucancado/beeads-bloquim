@@ -1,5 +1,4 @@
 import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex, formatDueDate, addOneDayYmd } from '@/lib/utils';
 import { DatePickerPopover } from '@/components/ui/date-picker-popover';
@@ -11,6 +10,8 @@ import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorksp
 import { AssigneeAvatarPicker } from '@/components/tasks/AssigneeAvatarPicker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { EditableTitle } from '@/components/ui/editable-title';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 function stripHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -216,10 +217,8 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     query: { enabled: !!workspaceId && hasTask },
   });
 
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState(data.title);
+  const [autoFocusTitleTrigger, setAutoFocusTitleTrigger] = useState(false);
   const [editingStatus, setEditingStatus] = useState(false);
-  const [statusDropdownPos, setStatusDropdownPos] = useState({ top: 0, left: 0 });
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateValue, setDueDateValue] = useState(
     data.taskDueDate ? data.taskDueDate.split('T')[0] : '',
@@ -242,20 +241,6 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     }
   };
 
-  useEffect(() => {
-    if (!editingStatus) return;
-    const close = () => setEditingStatus(false);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [editingStatus]);
-
-  useEffect(() => {
-    setTitleValue(data.title);
-  }, [data.title]);
 
   useEffect(() => {
     setDueDateValue(data.taskDueDate ? data.taskDueDate.split('T')[0] : '');
@@ -269,43 +254,27 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
     if (data.taskDueDate && editingNoPrazo) setEditingNoPrazo(false);
   }, [data.taskDueDate, editingNoPrazo]);
 
-  const titleInputRef = useRef<HTMLInputElement>(null);
-
-  const shouldSelectOnEdit = useRef(false);
-
   useEffect(() => {
-    if (!data.autoFocusTitle) return;
-    shouldSelectOnEdit.current = true;
-    setEditingTitle(true);
-    data.onEditingChange?.(id, true);
+    if (data.autoFocusTitle) {
+      setAutoFocusTitleTrigger(true);
+    }
   }, [data.autoFocusTitle]);
 
-  useEffect(() => {
-    if (!editingTitle || !shouldSelectOnEdit.current) return;
-    shouldSelectOnEdit.current = false;
-    const capturedId = id;
-    const capturedOnDone = data.onAutoFocusDone;
-    const raf = requestAnimationFrame(() => {
-      const el = titleInputRef.current;
-      if (el) {
-        el.focus();
-        el.select();
-      }
-      capturedOnDone?.(capturedId);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [editingTitle]);
-
-  const handleTitleBlur = () => {
-    setEditingTitle(false);
-    data.onEditingChange?.(id, false);
-    const trimmed = titleValue.trim();
-    if (!trimmed || trimmed === data.title) return;
-    data.onInlineUpdate?.(id, { title: trimmed });
+  const handleTitleSave = (next: string) => {
+    data.onInlineUpdate?.(id, { title: next });
     updateCardMut.mutate(
-      { workspaceId, mapId, cardId: id, data: { title: trimmed } },
+      { workspaceId, mapId, cardId: id, data: { title: next } },
       { onSuccess: invalidateAll },
     );
+  };
+
+  const handleTitleEditingChange = (editing: boolean) => {
+    data.onEditingChange?.(id, editing);
+  };
+
+  const handleAutoFocusConsumed = () => {
+    setAutoFocusTitleTrigger(false);
+    data.onAutoFocusDone?.(id);
   };
 
   const handleStatusChange = (newStatus: string) => {
@@ -689,8 +658,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               {data.title}
             </h3>
             <button
-              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer"
-              style={{ backgroundColor: '#e5e7eb', color: '#9ca3af' }}
+              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer bg-muted text-muted-foreground"
               title="Expandir card"
               onClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
             >
@@ -802,29 +770,18 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         )}
 
         <div className="flex items-start justify-between gap-3 mt-2">
-          {editingTitle ? (
-            <input
-              ref={titleInputRef}
-              autoFocus
-              autoCapitalize="none"
-              className="nodrag font-display font-bold text-foreground text-base leading-tight break-words pr-2 bg-transparent border-b border-primary outline-none w-full min-w-0"
-              value={titleValue}
-              onChange={e => setTitleValue(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } if (e.key === 'Escape') { setTitleValue(data.title); setEditingTitle(false); data.onEditingChange?.(id, false); } }}
-              onClick={e => e.stopPropagation()}
-              onDoubleClick={e => e.stopPropagation()}
-            />
-          ) : (
-            <h3
-              className="font-display font-bold text-foreground text-base leading-tight break-words pr-2 cursor-text hover:bg-muted/30 rounded px-0.5 transition-colors"
-              title="Clique para editar o título"
-              onClick={(e) => { e.stopPropagation(); setEditingTitle(true); data.onEditingChange?.(id, true); }}
-              onDoubleClick={(e) => e.stopPropagation()}
-            >
-              {data.title}
-            </h3>
-          )}
+          <EditableTitle
+            value={data.title}
+            onSave={handleTitleSave}
+            onEditingChange={handleTitleEditingChange}
+            stopPropagation
+            nodragForReactFlow
+            autoFocus={autoFocusTitleTrigger}
+            onAutoFocusConsumed={handleAutoFocusConsumed}
+            displayClassName="font-display font-bold text-foreground text-base leading-tight break-words pr-2 hover:bg-muted/30 rounded px-0.5 transition-colors"
+            inputClassName="font-display font-bold text-foreground text-base leading-tight break-words pr-2"
+            hoverTitle="Clique para editar o título"
+          />
           <button
             className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer"
             style={{
@@ -1057,22 +1014,13 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               const entry = getStatusOrderEntry(data.statusVisual);
               const StatusIcon = entry?.icon;
               const ariaLabel = entry?.label ?? statusLabel(data.statusVisual);
-              return (
+              const badge = (
                 <div
                   className={`flex items-center justify-center w-6 h-6 rounded-full ${hasTask ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
                   style={{ backgroundColor: color, color: '#fff' }}
                   title={hasTask ? `status: ${ariaLabel}. Clique para alterar.` : `status: ${ariaLabel}`}
                   aria-label={ariaLabel}
                   onDoubleClick={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    if (!hasTask) return;
-                    e.stopPropagation();
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
-                    const left = Math.max(4, Math.min(rect.left, window.innerWidth - 180));
-                    setStatusDropdownPos({ top, left });
-                    setEditingStatus(v => !v);
-                  }}
                 >
                   {StatusIcon ? (
                     <StatusIcon className="w-3.5 h-3.5" />
@@ -1080,6 +1028,34 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                     <span className="text-[9px] font-semibold tracking-wider lowercase">{ariaLabel}</span>
                   )}
                 </div>
+              );
+              if (!hasTask) return badge;
+              return (
+                <Popover open={editingStatus} onOpenChange={setEditingStatus}>
+                  <PopoverTrigger asChild>{badge}</PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="p-1 rounded-xl min-w-[180px]"
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                  >
+                    {STATUS_OPTIONS.map(opt => {
+                      const OptIcon = opt.icon;
+                      const isCurrent = data.statusVisual === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => handleStatusChange(opt.value)}
+                          className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted/60 transition-colors flex items-center gap-2 rounded-md ${isCurrent ? 'bg-muted/30' : ''}`}
+                          aria-pressed={isCurrent}
+                        >
+                          <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace('bg-', 'text-')}`} />
+                          {opt.menuLabel}
+                        </button>
+                      );
+                    })}
+                  </PopoverContent>
+                </Popover>
               );
             })()}
             {data.taskParentApprovalStatus && (
@@ -1122,27 +1098,6 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 </span>
               )}
             </div>
-          )}
-          {editingStatus && createPortal(
-            <>
-              <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setEditingStatus(false); }} />
-              <div className="fixed z-[9999] bg-card border border-border rounded-xl shadow-lg py-1 min-w-[180px]" style={{ top: statusDropdownPos.top, left: statusDropdownPos.left }}>
-                {STATUS_OPTIONS.map(opt => {
-                  const OptIcon = opt.icon;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={(e) => { e.stopPropagation(); handleStatusChange(opt.value); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors flex items-center gap-2 ${data.statusVisual === opt.value ? 'opacity-60' : ''}`}
-                    >
-                      <OptIcon className={`w-3.5 h-3.5 ${opt.dot.replace('bg-', 'text-')}`} />
-                      {opt.menuLabel}
-                    </button>
-                  );
-                })}
-              </div>
-            </>,
-            document.body
           )}
         </div>
       </div>

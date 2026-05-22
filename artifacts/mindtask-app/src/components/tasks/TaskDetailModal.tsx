@@ -29,6 +29,8 @@ import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
+import { AutosaveIndicator } from "@/components/ui/autosave-indicator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
 import { TaskAssociationChips } from "@/components/tasks/association/TaskAssociationChips";
 import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";
@@ -37,6 +39,8 @@ import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { useAutoCreateTask } from "@/components/tasks/useAutoCreateTask";
 import { useTaskDetailForm } from "@/components/tasks/useTaskDetailForm";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { canPersistScheduleMode } from "@/lib/scheduleMode";
 
 interface TaskResponseExtended extends TaskResponse {
   overdue?: boolean;
@@ -120,32 +124,27 @@ function ScheduleModeDropdown({
   onChange: (next: ScheduleModeValue) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
   const current = SCHEDULE_MODE_OPTIONS.find(o => o.value === value);
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 text-xs font-medium text-foreground border border-border rounded-lg px-2.5 py-1 bg-background hover:border-primary/50 transition-colors"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-1 text-xs font-medium text-foreground border border-border rounded-lg px-2.5 py-1 bg-background hover:border-primary/50 transition-colors"
+        >
+          <span className="lowercase">{current?.label ?? value}</span>
+          <ChevronDown className="w-3 h-3 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="p-1 rounded-xl min-w-[140px]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <span className="lowercase">{current?.label ?? value}</span>
-        <ChevronDown className="w-3 h-3 text-muted-foreground" />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[120px] overflow-hidden">
-          {SCHEDULE_MODE_OPTIONS.map(opt => (
+        {SCHEDULE_MODE_OPTIONS.map(opt => {
+          const isCurrent = opt.value === value;
+          return (
             <button
               key={opt.value}
               type="button"
@@ -153,15 +152,16 @@ function ScheduleModeDropdown({
                 onChange(opt.value);
                 setOpen(false);
               }}
-              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs lowercase hover:bg-muted transition-colors text-left"
+              className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs lowercase rounded-md hover:bg-muted/60 transition-colors text-left ${isCurrent ? "bg-muted/30" : ""}`}
+              aria-pressed={isCurrent}
             >
               <span>{opt.label}</span>
-              {opt.value === value && <Check className="w-3 h-3 text-primary shrink-0" />}
+              {isCurrent && <Check className="w-3 h-3 text-primary shrink-0" />}
             </button>
-          ))}
-        </div>
-      )}
-    </div>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -716,8 +716,26 @@ export function TaskDetailModal({
               </Button>
             </div>
           ) : isLoading || (isCardMode && !card) ? (
-            <div className="flex-1 flex items-center justify-center p-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="flex-1 p-5 space-y-4" aria-busy="true" aria-label="Carregando tarefa">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-32" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <div className="grid grid-cols-3 gap-3 pt-2">
+                <Skeleton className="h-16 rounded-xl" />
+                <Skeleton className="h-16 rounded-xl" />
+                <Skeleton className="h-16 rounded-xl" />
+              </div>
+              <Skeleton className="h-32 w-full rounded-xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-full rounded-lg" />
+                <Skeleton className="h-8 w-3/4 rounded-lg" />
+              </div>
             </div>
           ) : isCardMode && card?.task?.isApprovalTask && card.task.id ? (
             <ApprovalTaskView
@@ -784,7 +802,17 @@ export function TaskDetailModal({
                   }
                 />
                 <div className="mt-2">
-                  <label className="text-xs font-semibold text-muted-foreground tracking-wider mb-1 block lowercase">Título</label>
+                  <div className="flex items-center justify-between mb-1 min-h-[18px]">
+                    <label className="text-xs font-semibold text-muted-foreground tracking-wider block lowercase">Título</label>
+                    <AutosaveIndicator
+                      isSaving={
+                        updateCardMut.isPending ||
+                        updateTaskDetailsMut.isPending ||
+                        updateTaskStatusMut.isPending ||
+                        saveMutation.isPending
+                      }
+                    />
+                  </div>
                   <Input
                     value={title}
                     autoCapitalize="none"
@@ -855,11 +883,7 @@ export function TaskDetailModal({
                                   else if (isEditing && resolvedTaskId) saveMutation.mutate({ body, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                                   return;
                                 }
-                                const canPersist =
-                                  next === "ate" ||
-                                  (next === "em" && !!dueDate) ||
-                                  (next === "entre" && !!startAt && !!dueDate);
-                                if (!canPersist) return;
+                                if (!canPersistScheduleMode(next, startAt, dueDate)) return;
                                 const body: { scheduleMode: ScheduleModeValue; startAt?: string | null } = { scheduleMode: next };
                                 if (next === "ate") { setStartAt(""); body.startAt = null; }
                                 if (next === "em" && dueDate) { setStartAt(dueDate); body.startAt = dueDate + "T12:00:00.000Z"; }
@@ -925,11 +949,7 @@ export function TaskDetailModal({
                                     else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, startAt: v + "T12:00:00.000Z", dueDate: autoDue + "T12:00:00.000Z" }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                                     return;
                                   }
-                                  const canPersist =
-                                    (scheduleMode as "ate" | "entre" | "em") === "ate" ||
-                                    ((scheduleMode as "ate" | "entre" | "em") === "em" && !!dueDate) ||
-                                    ((scheduleMode as "ate" | "entre" | "em") === "entre" && !!v && !!dueDate);
-                                  if (!canPersist) return;
+                                  if (!canPersistScheduleMode(scheduleMode, v, dueDate)) return;
                                   if (isCardMode) saveCardTaskDetails({ startAt: v, scheduleMode });
                                   else if (isEditing && resolvedTaskId) saveMutation.mutate({ body: { scheduleMode, startAt: v ? v + "T12:00:00.000Z" : null, dueDate: dueDate || null }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
                                 }}
@@ -958,11 +978,7 @@ export function TaskDetailModal({
                               }
                               setDueDate(v);
                               markDirty();
-                              const canPersist =
-                                scheduleMode === "ate" ||
-                                (scheduleMode === "em" && !!v) ||
-                                (scheduleMode === "entre" && !!startAt && !!v);
-                              if (!canPersist) return;
+                              if (!canPersistScheduleMode(scheduleMode, startAt, v)) return;
                               if (scheduleMode === "em") {
                                 setStartAt(v);
                                 if (isCardMode) saveCardTaskDetails({ dueDate: v, startAt: v, scheduleMode });
@@ -990,6 +1006,36 @@ export function TaskDetailModal({
 
                         </div>
                         )}
+                        {(() => {
+                          // Inline validation hints — these complement the existing
+                          // min/max constraints on the date pickers (which already
+                          // prevent invalid picks) by surfacing the *reason* the user
+                          // can't save yet when datas are missing or inconsistent.
+                          if (scheduleMode === "entre") {
+                            if (startAt && dueDate && startAt > dueDate) {
+                              return (
+                                <p className="mt-1.5 text-[11px] text-destructive lowercase">
+                                  início deve ser antes ou igual ao fim.
+                                </p>
+                              );
+                            }
+                            if ((startAt && !dueDate) || (!startAt && dueDate)) {
+                              return (
+                                <p className="mt-1.5 text-[11px] text-muted-foreground/80 lowercase">
+                                  preencha início e fim pra salvar a janela.
+                                </p>
+                              );
+                            }
+                          }
+                          if (scheduleMode === "em" && !dueDate) {
+                            return (
+                              <p className="mt-1.5 text-[11px] text-muted-foreground/80 lowercase">
+                                escolha o dia.
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       {/* Priority */}
