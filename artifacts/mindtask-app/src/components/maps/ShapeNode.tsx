@@ -541,18 +541,33 @@ function ShapeNode({ id, data, selected, xPos, yPos }: ShapeNodeProps) {
             />
           )}
           {data.type === 'line' && (
-            <line
-              x1={lx1}
-              y1={ly1}
-              x2={lx2}
-              y2={ly2}
-              stroke={color}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeDasharray={strokeDash}
-              pointerEvents="all"
-              style={{ cursor: 'grab' }}
-            />
+            <g>
+              {/* Invisible hit target — wider than the visible stroke so the
+                  line is easy to click without pixel-precision; stroke-only
+                  hit-testing keeps the bbox "empty area" un-clickable. */}
+              <line
+                x1={lx1}
+                y1={ly1}
+                x2={lx2}
+                y2={ly2}
+                stroke="transparent"
+                strokeWidth={12}
+                strokeLinecap="round"
+                pointerEvents="stroke"
+                style={{ cursor: 'grab' }}
+              />
+              <line
+                x1={lx1}
+                y1={ly1}
+                x2={lx2}
+                y2={ly2}
+                stroke={color}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeDasharray={strokeDash}
+                pointerEvents="none"
+              />
+            </g>
           )}
 
           {selected && data.type === 'line' && lineHandles.map(({ endpoint, cx, cy }) => (
