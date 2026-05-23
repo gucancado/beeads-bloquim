@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggleFloat } from "@/components/layout/ThemeToggleFloat";
+import { readReturnUrl, withReturnUrl } from "@/lib/return-url";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -20,6 +21,11 @@ export default function RegisterPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+        const ret = readReturnUrl();
+        if (ret) {
+          window.location.href = ret;
+          return;
+        }
         setLocation("/workspaces");
       },
       onError: (error: any) => {
@@ -108,7 +114,7 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-muted-foreground">
             já tem conta?{" "}
-            <Link href="/login">
+            <Link href={withReturnUrl("/login")}>
               <span className="text-primary font-semibold hover:underline cursor-pointer">entra aqui</span>
             </Link>
           </p>

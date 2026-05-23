@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggleFloat } from "@/components/layout/ThemeToggleFloat";
+import { readReturnUrl, withReturnUrl } from "@/lib/return-url";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,6 +20,12 @@ export default function LoginPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+        const ret = readReturnUrl();
+        if (ret) {
+          // full-page nav porque pode ser cross-subdomain (ex.: painel.beeads.com.br)
+          window.location.href = ret;
+          return;
+        }
         setLocation("/my-tasks");
       },
       onError: (error: any) => {
@@ -86,7 +93,7 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-muted-foreground">
             não tem conta?{" "}
-            <Link href="/register">
+            <Link href={withReturnUrl("/register")}>
               <span className="text-primary font-semibold hover:underline cursor-pointer">cria uma, uai</span>
             </Link>
           </p>
