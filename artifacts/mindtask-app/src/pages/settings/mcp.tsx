@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { Button } from "@beeads/ui";
 import { Skeleton } from "@beeads/ui";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@beeads/ui";
 import { AlertCircle, Check, ChevronDown, Copy, Plug, RefreshCw, ShieldCheck, BookOpen, PencilLine } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 

@@ -8,7 +8,7 @@ import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarCh
 import { Button } from "@beeads/ui";
 import { Input } from "@beeads/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@beeads/ui";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@beeads/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@beeads/ui";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@beeads/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
