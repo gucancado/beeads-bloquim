@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Badge } from "@beeads/ui";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { getPriorityColor, getPriorityStars, translatePriority, PRIORITY_OPTIONS } from "./priorityUtils";
 
 interface PriorityBadgeProps {

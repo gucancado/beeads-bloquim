@@ -1,6 +1,6 @@
 import { UserX } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beeads/ui";
 
 function getInitials(name: string) {
   return name

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
 

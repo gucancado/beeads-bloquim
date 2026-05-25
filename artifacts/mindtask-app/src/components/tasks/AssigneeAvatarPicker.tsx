@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
 import { User } from "lucide-react";
 import type { WorkspaceMemberResponse } from "@workspace/api-client-react";
 import { MemberSelectList, type MemberItem } from "@/components/tasks/MemberSelectList";

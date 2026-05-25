@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@beeads/ui";
 import { Button } from "@beeads/ui";
 import { Input } from "@beeads/ui";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
@@ -39,7 +39,7 @@ import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { useAutoCreateTask } from "@/components/tasks/useAutoCreateTask";
 import { useTaskDetailForm } from "@/components/tasks/useTaskDetailForm";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { canPersistScheduleMode } from "@/lib/scheduleMode";
 
 interface TaskResponseExtended extends TaskResponse {

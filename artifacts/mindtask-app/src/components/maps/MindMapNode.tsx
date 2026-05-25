@@ -5,13 +5,13 @@ import { DatePickerPopover } from '@/components/ui/date-picker-popover';
 import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized, getStatusOrderEntry } from '@/lib/taskStatusConstants';
 import { Maximize2, Calendar, Plus, Paperclip, ListChecks, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
 import { useUpdateCard, useUpdateTaskStatus, useUpdateTaskDetails, useListWorkspaceMembers } from '@workspace/api-client-react';
 import { AssigneeAvatarPicker } from '@/components/tasks/AssigneeAvatarPicker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { EditableTitle } from '@/components/ui/editable-title';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 
 function stripHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');

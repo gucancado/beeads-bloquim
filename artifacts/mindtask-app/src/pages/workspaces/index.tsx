@@ -8,14 +8,14 @@ import { FolderGit2, Plus, Loader2, EyeOff, Eye, Trash2 } from "lucide-react";
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
 import { Button } from "@beeads/ui";
 import { Input } from "@beeads/ui";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@beeads/ui";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@beeads/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useListWorkspacesWithHidden, useToggleWorkspaceHidden, useDeleteWorkspace, useUpdateWorkspaceColor } from "@/hooks/useHidden";
 import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beeads/ui";
 
 function translateRole(role: string) {
   switch (role) {

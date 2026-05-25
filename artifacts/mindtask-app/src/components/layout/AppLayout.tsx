@@ -5,7 +5,7 @@ import { LogOut, CheckSquare, NotebookPen, Folders, Loader2, PanelLeftClose, Pan
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@beeads/ui";
 import { User as UserIcon, FileText as FileTextIcon, Plug as PlugIcon, Zap as ZapIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SidebarWorkspaceList } from "@/components/layout/SidebarWorkspaceList";

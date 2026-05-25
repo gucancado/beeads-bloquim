@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@beeads/ui";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { Button } from "@beeads/ui";
 import { Input } from "@beeads/ui";

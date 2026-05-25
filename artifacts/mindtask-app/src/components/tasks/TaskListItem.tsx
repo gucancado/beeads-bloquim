@@ -7,7 +7,7 @@ import { formatDueDate, addOneDayYmd } from "@/lib/utils";
 import { DatePickerPopover } from "@/components/ui/date-picker-popover";
 import { Badge } from "@beeads/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,7 +18,7 @@ import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle"
 import { useToast } from "@/hooks/use-toast";
 import { TaskColumnKey, TASK_COLUMN_WIDTH_CLASS } from "@/lib/taskColumnConstants";
 import { EditableTitle } from "@/components/ui/editable-title";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { MemberSelectList } from "@/components/tasks/MemberSelectList";
 
 function getInitials(name: string) {

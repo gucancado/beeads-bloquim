@@ -1,5 +1,5 @@
 import { Repeat } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { RecurrencePanel } from "@/components/tasks/RecurrencePanel";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
 

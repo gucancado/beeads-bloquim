@@ -8,7 +8,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@beeads/ui";
 import { Loader2 } from "lucide-react";
 
 interface DeleteAttachmentDialogProps {
