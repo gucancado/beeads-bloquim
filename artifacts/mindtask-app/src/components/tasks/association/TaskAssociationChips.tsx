@@ -1,5 +1,5 @@
 import { Map as MapIcon, Plus } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@beeads/ui";
 import { getColorByIndex } from "@workspace/db/colorPalette";
 
 export interface WorkspaceChipOption {

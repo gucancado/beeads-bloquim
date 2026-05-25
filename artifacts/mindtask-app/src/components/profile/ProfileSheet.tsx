@@ -13,14 +13,14 @@ import {
   type UserPronouns,
   type UserResponse,
 } from "@workspace/api-client-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@beeads/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@beeads/ui";
 import { PhoneInput } from "./PhoneInput";
 import { useAvatarUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
