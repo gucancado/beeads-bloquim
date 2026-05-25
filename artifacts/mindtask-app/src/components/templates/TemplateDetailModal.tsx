@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Input } from "@beeads/ui";
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Flag, Loader2, ListChecks, GripVertical, X, Plus } from "lucide-react";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@beeads/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getPriorityColor, getPriorityStars, translatePriority, PRIORITY_OPTIONS } from "./priorityUtils";
 

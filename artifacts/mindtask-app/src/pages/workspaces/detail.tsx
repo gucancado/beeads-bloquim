@@ -5,8 +5,8 @@ import { PageBreadcrumb, PageBreadcrumbItem } from "@/components/layout/PageBrea
 import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden, useDeleteMap } from "@/hooks/useHidden";
 import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@beeads/ui";
+import { Input } from "@beeads/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +19,7 @@ import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItemMember, TaskListItemData } from "@/components/tasks/TaskListItem";
 import { TaskTable } from "@/components/tasks/TaskTable";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";

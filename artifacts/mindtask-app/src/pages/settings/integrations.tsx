@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@beeads/ui";
+import { Switch } from "@beeads/ui";
 import { Loader2, Calendar, ExternalLink, Unplug, AlertCircle, Plug } from "lucide-react";
 import {
   useGoogleCalendarStatus,

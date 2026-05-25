@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@beeads/ui";
+import { Input } from "@beeads/ui";
+import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
 import { Loader2, Save, Building2, Pencil, EyeOff, Camera, Plug } from "lucide-react";
 import { Link } from "wouter";
 import { useMyWorkspaces, useUpdateMe } from "@/hooks/useProfile";

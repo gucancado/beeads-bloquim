@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@beeads/ui";
+import { Input } from "@beeads/ui";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Loader2, Flag, Calendar, User, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
@@ -30,7 +30,7 @@ import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { AutosaveIndicator } from "@/components/ui/autosave-indicator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@beeads/ui";
 import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
 import { TaskAssociationChips } from "@/components/tasks/association/TaskAssociationChips";
 import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";

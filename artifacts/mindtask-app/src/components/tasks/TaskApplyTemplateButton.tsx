@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@beeads/ui";
 import {
   AlertDialog,
   AlertDialogAction,

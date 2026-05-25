@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
 import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
 

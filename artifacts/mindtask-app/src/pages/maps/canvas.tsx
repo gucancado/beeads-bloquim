@@ -19,7 +19,7 @@ import { useUpload } from "@workspace/object-storage-web";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import type { ShapeResponse } from "@workspace/api-client-react";
 import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@beeads/ui";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Search, X, Loader2, Calendar, SlidersHorizontal, Check, ChevronDown, AlertTriangle } from "lucide-react";
 import { customFetch } from "@workspace/api-client-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
 import { translatePriority, getPriorityColor } from "@/components/tasks/priorityUtils";
 import { useMyWorkspaces } from "@/hooks/useProfile";
 import { TASK_STATUS_ORDER, getStatusOrderEntry } from "@/lib/taskStatusConstants";

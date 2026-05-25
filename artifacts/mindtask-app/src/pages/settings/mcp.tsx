@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@beeads/ui";
+import { Skeleton } from "@beeads/ui";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertCircle, Check, ChevronDown, Copy, Plug, RefreshCw, ShieldCheck, BookOpen, PencilLine } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
