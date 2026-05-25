@@ -173,7 +173,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
       >
         <SheetTitle className="sr-only">Perfil do usuário</SheetTitle>
         {/* Header */}
-        <div className="p-6 border-b bg-slate-50 dark:bg-slate-900">
+        <div className="p-6 border-b border-border bg-muted/40">
           <PageBreadcrumb items={[{ label: "perfil" }]} className="mb-4" />
           <div className="flex items-center gap-4">
             <div className="relative shrink-0 group">

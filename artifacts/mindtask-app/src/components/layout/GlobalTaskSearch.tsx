@@ -279,7 +279,7 @@ export function GlobalTaskSearch() {
                         className={`inline-flex items-center justify-center w-7 h-7 rounded-full border transition-all ${
                           active
                             ? opt.activeClass
-                            : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
+                            : "bg-card text-muted-foreground border-border hover:border-foreground/40"
                         }`}
                       >
                         <OptIcon className="w-3.5 h-3.5" />

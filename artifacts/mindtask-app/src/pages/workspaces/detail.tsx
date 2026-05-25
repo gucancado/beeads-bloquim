@@ -86,7 +86,7 @@ function MapCard({ map, workspaceId, isAdmin }: {
             <Map className="w-6 h-6" />
           </div>
           <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-lg font-bold font-display text-foreground group-hover/card:text-primary transition-colors">{map.name}</h3>
+            <h3 className="text-lg font-medium font-display text-foreground group-hover/card:text-primary transition-colors">{map.name}</h3>
             {map.hidden && (
               <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 lowercase">
                 <EyeOff className="w-3 h-3" /> Oculto
@@ -616,7 +616,9 @@ export default function WorkspaceDetailPage() {
             <Dialog open={isMapDialogOpen} onOpenChange={setIsMapDialogOpen}>
               <DialogContent className="sm:max-w-md rounded-2xl">
                 <DialogHeader>
-                  <DialogTitle className="text-2xl font-display lowercase">Criar Plano</DialogTitle>
+                  <DialogTitle className="text-2xl font-display font-medium tracking-tight lowercase">
+                    Criar <span className="italic text-honey-deep">·</span> Plano
+                  </DialogTitle>
                   <DialogDescription className="lowercase">Dê um nome para o seu novo plano de planejamento visual.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreateMap} className="space-y-6 mt-2">
@@ -673,13 +675,13 @@ export default function WorkspaceDetailPage() {
                   ) : maps?.length === 0 && showHiddenMaps ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground lowercase">Nenhum plano oculto</h3>
+                      <h3 className="text-xl font-medium font-display text-foreground lowercase">Nenhum plano oculto</h3>
                       <p className="text-muted-foreground mt-2 lowercase">Não há planos ocultos neste espaço.</p>
                     </div>
                   ) : maps?.length === 0 && !isAdmin ? (
                     <div className="text-center py-20 bg-background rounded-3xl border border-dashed border-border">
                       <Map className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold font-display text-foreground lowercase">Nenhum plano criado</h3>
+                      <h3 className="text-xl font-medium font-display text-foreground lowercase">Nenhum plano criado</h3>
                       <p className="text-muted-foreground mt-2 lowercase">Comece a planejar visualmente com um plano.</p>
                     </div>
                   ) : (
@@ -834,21 +836,21 @@ export default function WorkspaceDetailPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
                         <p className="text-muted-foreground text-sm font-medium tracking-wider mb-2 lowercase">Total de Planos</p>
-                        <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalMaps}</p>
+                        <p className="text-4xl font-display font-medium text-foreground">{dashboard.totalMaps}</p>
                       </div>
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
                         <p className="text-muted-foreground text-sm font-medium tracking-wider mb-2 lowercase">Total de Cards</p>
-                        <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalCards}</p>
+                        <p className="text-4xl font-display font-medium text-foreground">{dashboard.totalCards}</p>
                       </div>
                       <div className="bg-card p-6 rounded-2xl border shadow-sm">
                         <p className="text-muted-foreground text-sm font-medium tracking-wider mb-2 lowercase">Total de Tarefas</p>
-                        <p className="text-4xl font-display font-bold text-foreground">{dashboard.totalTasks}</p>
+                        <p className="text-4xl font-display font-medium text-foreground">{dashboard.totalTasks}</p>
                       </div>
 
                       <div className="md:col-span-2 bg-card p-8 rounded-2xl border shadow-sm">
                         <div className="flex items-center gap-3 mb-6">
                           <BarChart3 className="w-5 h-5 text-primary" />
-                          <h3 className="text-xl font-bold font-display lowercase">Tarefas por Status</h3>
+                          <h3 className="text-xl font-medium font-display lowercase">Tarefas por Status</h3>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                           {[
@@ -866,7 +868,7 @@ export default function WorkspaceDetailPage() {
                       </div>
 
                       <div className="bg-card p-8 rounded-2xl border shadow-sm">
-                        <h3 className="text-xl font-bold font-display mb-6 lowercase">Por Prioridade</h3>
+                        <h3 className="text-xl font-medium font-display mb-6 lowercase">Por Prioridade</h3>
                         <div className="space-y-4">
                           {[
                             { label: 'Máxima', value: dashboard.tasksByPriority.critical, color: 'bg-red-500' },
@@ -1024,7 +1026,9 @@ export default function WorkspaceDetailPage() {
       }}>
         <DialogContent className="sm:max-w-lg rounded-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-display lowercase">Convidar Membro</DialogTitle>
+            <DialogTitle className="text-2xl font-display font-medium tracking-tight lowercase">
+              Convidar <span className="italic text-honey-deep">·</span> Membro
+            </DialogTitle>
             <DialogDescription className="lowercase">Adicione membros pelo e-mail ou selecione da lista abaixo.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddMember} className="flex flex-col gap-5 mt-2 min-h-0 flex-1">

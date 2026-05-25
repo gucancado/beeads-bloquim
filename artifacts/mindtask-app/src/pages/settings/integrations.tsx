@@ -78,7 +78,7 @@ export default function SettingsIntegrationsPage() {
                 <Calendar className="w-6 h-6 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-display font-semibold lowercase">Google Agenda</h2>
+                <h2 className="text-lg font-display font-medium tracking-tight lowercase">Google <span className="italic text-honey-deep">·</span> Agenda</h2>
                 <p className="text-sm text-muted-foreground mt-1 lowercase">
                   Visualize seus eventos do dia diretamente em "suas tarefas". somente leitura.
                 </p>

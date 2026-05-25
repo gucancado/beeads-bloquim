@@ -152,7 +152,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {!collapsed && (
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <NotebookPen className="w-6 h-6 shrink-0 text-primary" />
-              <span className="font-display font-bold text-xl tracking-tight truncate lowercase">Bloquim</span>
+              <span className="font-display text-xl font-medium tracking-tight truncate lowercase text-sidebar-foreground">
+                blo<span className="italic text-honey-deep">·</span>quim
+              </span>
             </div>
           )}
           <div className={`flex items-center gap-1 ${collapsed ? 'flex-col w-full' : ''}`}>

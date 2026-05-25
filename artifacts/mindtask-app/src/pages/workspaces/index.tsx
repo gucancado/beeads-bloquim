@@ -129,7 +129,7 @@ function WorkspaceCard({ ws, showHidden }: {
                   style={{ backgroundColor: iconBg }}
                 />
               </div>
-              <h3 className="text-xl font-bold font-display text-foreground group-hover/card:text-primary transition-colors truncate">{ws.name}</h3>
+              <h3 className="text-xl font-medium font-display text-foreground group-hover/card:text-primary transition-colors truncate">{ws.name}</h3>
             </div>
             {ws.hidden && (
               <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 lowercase">
@@ -438,7 +438,9 @@ export default function WorkspacesPage() {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md rounded-2xl">
                   <DialogHeader>
-                    <DialogTitle className="text-2xl font-display lowercase">Criar Espaço de Trabalho</DialogTitle>
+                    <DialogTitle className="text-2xl font-display font-medium tracking-tight lowercase">
+                      Criar <span className="italic text-honey-deep">·</span> Espaço de Trabalho
+                    </DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleCreate} className="space-y-6 mt-4">
                     <div className="space-y-2">
@@ -516,7 +518,7 @@ export default function WorkspacesPage() {
               <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
                 <FolderGit2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold font-display text-foreground lowercase">
+              <h3 className="text-2xl font-medium font-display text-foreground lowercase">
                 {selectedUserIds.length > 0 ? "Nenhum espaço com esses membros" : showHidden ? "Nenhum espaço oculto" : "Nenhum espaço ainda"}
               </h3>
               <p className="text-muted-foreground mt-2 mb-8 max-w-md mx-auto lowercase">

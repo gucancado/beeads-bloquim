@@ -49,7 +49,10 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
-            <NotebookPen className="w-14 h-14 text-primary mx-auto mb-6" />
+            <NotebookPen className="w-14 h-14 text-primary mx-auto mb-4" />
+            <h1 className="font-display text-3xl font-medium tracking-tight lowercase">
+              blo<span className="italic text-honey-deep">·</span>quim
+            </h1>
             <p className="text-muted-foreground mt-2">oi! quer ver o que tem no seu bloquim?<br/>então entra aí =)</p>
           </div>
 

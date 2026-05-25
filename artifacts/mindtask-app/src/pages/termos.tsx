@@ -9,10 +9,14 @@ export default function TermosPage() {
       <div className="max-w-3xl mx-auto px-6 py-12 lg:py-16">
         <Link href="/" className="inline-flex items-center gap-2 mb-10 text-sm text-muted-foreground hover:text-foreground">
           <NotebookPen className="w-5 h-5" />
-          <span className="font-display font-semibold">Bloquim</span>
+          <span className="font-display font-medium tracking-tight lowercase">
+            blo<span className="italic text-honey-deep">·</span>quim
+          </span>
         </Link>
 
-        <h1 className="text-3xl font-display font-bold mb-2">Termos de Serviço</h1>
+        <h1 className="text-3xl font-display font-medium tracking-tight mb-2">
+          Termos <span className="italic text-honey-deep">·</span> de Serviço
+        </h1>
         <p className="text-sm text-muted-foreground mb-10">Última atualização: 10 de maio de 2026.</p>
 
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
