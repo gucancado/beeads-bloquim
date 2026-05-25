@@ -9,7 +9,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from "@beeads/ui";
 import { cn } from "@/lib/utils";
 
 interface Country {
