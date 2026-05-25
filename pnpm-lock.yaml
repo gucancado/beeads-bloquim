@@ -162,6 +162,15 @@ importers:
 
   artifacts/mindtask-app:
     dependencies:
+      '@beeads/charts':
+        specifier: ^0.1.0
+        version: 0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@beeads/tokens':
+        specifier: ^0.1.0
+        version: 0.1.0
+      '@beeads/ui':
+        specifier: ^0.1.0
+        version: 0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -878,6 +887,10 @@ packages:
     resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
     engines: {node: '>=6.9.0'}
 
+  '@babel/runtime@7.29.2':
+    resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
+    engines: {node: '>=6.9.0'}
+
   '@babel/template@7.28.6':
     resolution: {integrity: sha512-YA6Ma2KsCdGb+WC6UpBVFJGXL58MDA6oyONbjyF/+5sBgxY/dwkhLogbMT2GXXyU84/IhRw/2D1Os1B/giz+BQ==}
     engines: {node: '>=6.9.0'}
@@ -889,6 +902,48 @@ packages:
   '@babel/types@7.29.0':
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
+
+  '@base-ui/react@1.5.0':
+    resolution: {integrity: sha512-z1gSAlced1yY+iM+mHDEtIkD8UI3Ebs52MuBPxvV6f5hRutk+xvCH/wuB7hDqDzK9JG5FoMz5nhrqtSs1wjt1A==}
+    engines: {node: '>=14.0.0'}
+    peerDependencies:
+      '@date-fns/tz': ^1.2.0
+      '@types/react': ^17 || ^18 || ^19
+      date-fns: ^4.0.0
+      react: 19.2.5
+      react-dom: 19.2.5
+    peerDependenciesMeta:
+      '@date-fns/tz':
+        optional: true
+      '@types/react':
+        optional: true
+      date-fns:
+        optional: true
+
+  '@base-ui/utils@0.2.9':
+    resolution: {integrity: sha512-x/PDDCYzoqPpjrdyb3VcyylTI2IjUXEtYDGi5foh7KsnmNJIIaVwA2GLgDH1dps1GgXiJbA60hM+AyuTfQzIvw==}
+    peerDependencies:
+      '@types/react': ^17 || ^18 || ^19
+      react: 19.2.5
+      react-dom: 19.2.5
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@beeads/charts@0.1.0':
+    resolution: {integrity: sha512-VXP5rUyZwJc9P3ikl4/166o4oGDXgoEFTfTL733lHfOBMjSLq9z7vWrsUvfZnSMoj0HIktXeVb7F4LZ4YPnrCg==}
+    peerDependencies:
+      react: 19.2.5
+      react-dom: 19.2.5
+
+  '@beeads/tokens@0.1.0':
+    resolution: {integrity: sha512-piuN4G0Kat7LGQ6z/nEBLWewDCpiX6b2u4ysa2xCcDa9azPfqlnoprUbnuCrFLzCNVmEES9Ldpd1h3VST8My5A==}
+
+  '@beeads/ui@0.1.0':
+    resolution: {integrity: sha512-99ebk3fs5CWIdOiTsgWb0ECZNxuTFGu/jO2s6/oEN7drgKsr680UA2Y0RaiEafTDO/uMCYiJN+MUxqM6LK/lLA==}
+    peerDependencies:
+      react: 19.2.5
+      react-dom: 19.2.5
 
   '@commander-js/extra-typings@14.0.0':
     resolution: {integrity: sha512-hIn0ncNaJRLkZrxBIp5AsW/eXEHNKYQBh0aPdoUqNgD+Io3NIykQqpKFyKcuasZhicGaEZJX/JBSIkZ4e5x8Dg==}
@@ -3673,6 +3728,9 @@ packages:
   date-fns@4.1.0:
     resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
 
+  date-fns@4.3.0:
+    resolution: {integrity: sha512-OYcL+3N/jyWbYdFGqoMAhytDgxP9pbYPUUiRCOgn4Fewaadk9l/Wam4Avciiyp2BgkpfQyBV9B+ehnVJych+eQ==}
+
   dateformat@4.6.3:
     resolution: {integrity: sha512-2P0p0pFGzHS5EMnhdxQi7aJN+iMheud0UhG4dlE1DLAlvL8JHjJJTX/CSm4JXwV0Ka5nGk3zC5mcb5bUQUxxMA==}
 
@@ -4367,6 +4425,11 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
+  lucide-react@0.469.0:
+    resolution: {integrity: sha512-28vvUnnKQ/dBwiCQtwJw7QauYnE7yd2Cyp4tTTJpvglX4EMpbflcdBgrgToX2j71B3YvugK/NH3BGUk+E/p/Fw==}
+    peerDependencies:
+      react: 19.2.5
+
   lucide-react@0.545.0:
     resolution: {integrity: sha512-7r1/yUuflQDSt4f1bpn5ZAocyIxcTyVyBBChSVtBKn5M+392cPmI5YJMWOJKk/HUWGm5wg83chlAZtCcGbEZtw==}
     peerDependencies:
@@ -4745,6 +4808,16 @@ packages:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
 
+  react-day-picker@10.0.1:
+    resolution: {integrity: sha512-eNh6BlwcYInWaJtRv18mXQ06Ys/H6rdTZAnTaSdOYJuTpwP1JMCHNd1FDRadA+gbeinq+psdULN5Xnowy9mV8w==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/react': '>=16.8.0'
+      react: 19.2.5
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
   react-day-picker@9.14.0:
     resolution: {integrity: sha512-tBaoDWjPwe0M5pGrum4H0SR6Lyk+BO9oHnp9JbKpGKW2mlraNPgP9BMfsg5pWpwrssARmeqk7YBl2oXutZTaHA==}
     engines: {node: '>=18'}
@@ -4853,6 +4926,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: 19.2.5
       react-dom: 19.2.5
@@ -4871,6 +4945,9 @@ packages:
   require-in-the-middle@8.0.1:
     resolution: {integrity: sha512-QT7FVMXfWOYFbeRBF6nu+I6tr2Tf3u0q8RIEjNob/heKY/nh7drD/k7eeMFmSQgnTtCzLDcCu/XEnpW2wk4xCQ==}
     engines: {node: '>=9.3.0 || >=8.10.0 <9.0.0'}
+
+  reselect@5.2.0:
+    resolution: {integrity: sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==}
 
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
@@ -4968,6 +5045,12 @@ packages:
   sonic-boom@4.2.1:
     resolution: {integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==}
 
+  sonner@1.7.4:
+    resolution: {integrity: sha512-DIS8z4PfJRbIyfVFDVnK9rO3eYDtse4Omcm6bt0oEr5/jtLgysmjuBl1frJ9E/EQZrFmKx2A8m/s5s9CRXIzhw==}
+    peerDependencies:
+      react: 19.2.5
+      react-dom: 19.2.5
+
   sonner@2.0.7:
     resolution: {integrity: sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==}
     peerDependencies:
@@ -5025,6 +5108,9 @@ packages:
   supertest@7.2.2:
     resolution: {integrity: sha512-oK8WG9diS3DlhdUkcFn4tkNIiIbBx9lI2ClF8K+b2/m8Eyv47LSawxUzZQSNKUrVb2KsqeTDCcjAAVPYaSLVTA==}
     engines: {node: '>=14.18.0'}
+
+  tailwind-merge@2.6.1:
+    resolution: {integrity: sha512-Oo6tHdpZsGpkKG88HJ8RR1rg/RdnEkQEfMoEk2x1XRI3F1AxeU+ijRXpiVUF4UbLfcxxRGw6TbUINKYdWVsQTQ==}
 
   tailwind-merge@3.5.0:
     resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
@@ -5923,6 +6009,8 @@ snapshots:
 
   '@babel/runtime@7.28.6': {}
 
+  '@babel/runtime@7.29.2': {}
+
   '@babel/template@7.28.6':
     dependencies:
       '@babel/code-frame': 7.29.0
@@ -5945,6 +6033,68 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
+
+  '@base-ui/react@1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@babel/runtime': 7.29.2
+      '@base-ui/utils': 0.2.9(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@floating-ui/react-dom': 2.1.8(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@floating-ui/utils': 0.2.11
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
+      use-sync-external-store: 1.6.0(react@19.2.5)
+    optionalDependencies:
+      '@date-fns/tz': 1.4.1
+      '@types/react': 19.2.14
+      date-fns: 4.3.0
+
+  '@base-ui/utils@0.2.9(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@babel/runtime': 7.29.2
+      '@floating-ui/utils': 0.2.11
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
+      reselect: 5.2.0
+      use-sync-external-store: 1.6.0(react@19.2.5)
+    optionalDependencies:
+      '@types/react': 19.2.14
+
+  '@beeads/charts@0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@beeads/tokens': 0.1.0
+      '@beeads/ui': 0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      date-fns: 4.1.0
+      lucide-react: 0.469.0(react@19.2.5)
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
+      recharts: 2.15.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+    transitivePeerDependencies:
+      - '@date-fns/tz'
+      - '@types/react'
+      - '@types/react-dom'
+
+  '@beeads/tokens@0.1.0': {}
+
+  '@beeads/ui@0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@beeads/tokens': 0.1.0
+      '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.5)
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      cmdk: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      date-fns: 4.3.0
+      lucide-react: 0.469.0(react@19.2.5)
+      next-themes: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react: 19.2.5
+      react-day-picker: 10.0.1(@types/react@19.2.14)(react@19.2.5)
+      react-dom: 19.2.5(react@19.2.5)
+      sonner: 1.7.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tailwind-merge: 2.6.1
+    transitivePeerDependencies:
+      - '@date-fns/tz'
+      - '@types/react'
+      - '@types/react-dom'
 
   '@commander-js/extra-typings@14.0.0(commander@14.0.3)':
     dependencies:
@@ -8835,6 +8985,8 @@ snapshots:
 
   date-fns@4.1.0: {}
 
+  date-fns@4.3.0: {}
+
   dateformat@4.6.3: {}
 
   debug@4.4.3:
@@ -9513,6 +9665,10 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
+  lucide-react@0.469.0(react@19.2.5):
+    dependencies:
+      react: 19.2.5
+
   lucide-react@0.545.0(react@19.2.5):
     dependencies:
       react: 19.2.5
@@ -9935,6 +10091,14 @@ snapshots:
       iconv-lite: 0.7.2
       unpipe: 1.0.0
 
+  react-day-picker@10.0.1(@types/react@19.2.14)(react@19.2.5):
+    dependencies:
+      '@date-fns/tz': 1.4.1
+      date-fns: 4.3.0
+      react: 19.2.5
+    optionalDependencies:
+      '@types/react': 19.2.14
+
   react-day-picker@9.14.0(react@19.2.5):
     dependencies:
       '@date-fns/tz': 1.4.1
@@ -10062,6 +10226,8 @@ snapshots:
       module-details-from-path: 1.0.4
     transitivePeerDependencies:
       - supports-color
+
+  reselect@5.2.0: {}
 
   resolve-pkg-maps@1.0.0: {}
 
@@ -10199,6 +10365,11 @@ snapshots:
     dependencies:
       atomic-sleep: 1.0.0
 
+  sonner@1.7.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
+    dependencies:
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
+
   sonner@2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
       react: 19.2.5
@@ -10254,6 +10425,8 @@ snapshots:
       superagent: 10.3.0
     transitivePeerDependencies:
       - supports-color
+
+  tailwind-merge@2.6.1: {}
 
   tailwind-merge@3.5.0: {}
 
