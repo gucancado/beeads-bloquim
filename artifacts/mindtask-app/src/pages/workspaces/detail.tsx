@@ -552,8 +552,9 @@ export default function WorkspaceDetailPage() {
                       <PageBreadcrumb items={breadcrumbItems} />
                       {isAdmin ? (
                         <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-                          <PopoverTrigger asChild>
+                          <PopoverTrigger render={(props) => (
                             <button
+                              {...props}
                               title="escolher cor"
                               className="shrink-0 w-3 h-3 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                               style={
@@ -562,7 +563,7 @@ export default function WorkspaceDetailPage() {
                                   : { border: "2px dashed #cbd5e1", backgroundColor: "transparent" }
                               }
                             />
-                          </PopoverTrigger>
+                          )} />
                           <PopoverContent className="w-auto p-3" align="start">
                             <div className="grid grid-cols-8 gap-1.5">
                               {COLOR_PALETTE.map((entry) => {

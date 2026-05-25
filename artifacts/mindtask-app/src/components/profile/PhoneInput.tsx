@@ -161,8 +161,9 @@ export function PhoneInput({ value, onCommit, disabled, placeholder }: PhoneInpu
   return (
     <div className="flex items-stretch gap-2">
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+        <PopoverTrigger render={(props) => (
           <button
+            {...props}
             type="button"
             disabled={disabled}
             className={cn(
@@ -174,7 +175,7 @@ export function PhoneInput({ value, onCommit, disabled, placeholder }: PhoneInpu
             <span>+{country.dial}</span>
             <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
-        </PopoverTrigger>
+        )} />
         <PopoverContent className="p-0 w-72" align="start">
           <Command>
             <CommandInput placeholder="Buscar país..." />

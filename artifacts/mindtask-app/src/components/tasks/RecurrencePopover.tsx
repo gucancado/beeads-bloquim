@@ -29,8 +29,9 @@ export function RecurrencePopover({
 }) {
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger render={(props) => (
         <button
+          {...props}
           type="button"
           disabled={disabled}
           className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all shrink-0 ${
@@ -50,7 +51,7 @@ export function RecurrencePopover({
         >
           <Repeat className="w-4 h-4" />
         </button>
-      </PopoverTrigger>
+      )} />
       <PopoverContent
         align="end"
         className="w-auto p-0 rounded-xl"

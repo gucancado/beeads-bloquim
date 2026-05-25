@@ -1,7 +1,7 @@
 // Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
 // always-leading "title" cell) are rendered in the order defined by the
 // user's saved column preferences — passed in via `columnOrder`.
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, cloneElement, isValidElement } from "react";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate, addOneDayYmd } from "@/lib/utils";
 import { DatePickerPopover } from "@/components/ui/date-picker-popover";
@@ -389,7 +389,7 @@ export function TaskListItem({
    */
   const wrapModalityPopover = (trigger: React.ReactNode) => (
     <Popover>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverTrigger render={(props) => isValidElement(trigger) ? cloneElement(trigger, props) : <>{trigger}</>} />
       <PopoverContent
         align="start"
         className="p-1 rounded-xl min-w-[140px]"
@@ -453,8 +453,9 @@ export function TaskListItem({
             if (open) setAssigneeOpen(false);
           }}
         >
-          <PopoverTrigger asChild>
+          <PopoverTrigger render={(props) => (
             <Badge
+              {...props}
               variant="outline"
               className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
               title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
@@ -462,7 +463,7 @@ export function TaskListItem({
             >
               {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
             </Badge>
-          </PopoverTrigger>
+          )} />
           <PopoverContent
             align="start"
             className="p-1 rounded-xl min-w-[180px]"
@@ -518,7 +519,7 @@ export function TaskListItem({
         {members.length === 0 ? (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipTrigger render={(props) => cloneElement(trigger, props)} />
               <TooltipContent>{localTask.assigneeName ?? "sem responsável"}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -532,17 +533,21 @@ export function TaskListItem({
           >
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={localTask.assigneeName ?? "atribuir responsável"}
-                      className="appearance-none bg-transparent border-0 p-0 m-0"
-                    >
-                      {trigger}
-                    </button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
+                <TooltipTrigger render={(tooltipProps) => (
+                  <PopoverTrigger
+                    {...tooltipProps}
+                    render={(popoverProps) => (
+                      <button
+                        {...popoverProps}
+                        type="button"
+                        aria-label={localTask.assigneeName ?? "atribuir responsável"}
+                        className="appearance-none bg-transparent border-0 p-0 m-0"
+                      >
+                        {trigger}
+                      </button>
+                    )}
+                  />
+                )} />
                 <TooltipContent>{localTask.assigneeName ?? "sem responsável"}</TooltipContent>
               </Tooltip>
             </TooltipProvider>

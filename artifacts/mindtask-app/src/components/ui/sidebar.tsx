@@ -535,7 +535,7 @@ function SidebarMenuButton({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipTrigger render={(props) => React.cloneElement(button, props)} />
       <TooltipContent
         side="right"
         align="center"

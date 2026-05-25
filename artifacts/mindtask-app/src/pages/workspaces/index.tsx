@@ -155,9 +155,9 @@ function WorkspaceCard({ ws, showHidden }: {
                       {detail.overdue > 0 && (
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-[11px] font-semibold text-red-600 dark:text-red-400 cursor-default">{detail.overdue}</span>
-                            </TooltipTrigger>
+                            <TooltipTrigger render={(props) => (
+                              <span {...props} className="text-[11px] font-semibold text-red-600 dark:text-red-400 cursor-default">{detail.overdue}</span>
+                            )} />
                             <TooltipContent side="top"><p>atrasadas</p></TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -165,9 +165,9 @@ function WorkspaceCard({ ws, showHidden }: {
                       {detail.noDue > 0 && (
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-[11px] font-medium text-muted-foreground cursor-default">{detail.noDue}</span>
-                            </TooltipTrigger>
+                            <TooltipTrigger render={(props) => (
+                              <span {...props} className="text-[11px] font-medium text-muted-foreground cursor-default">{detail.noDue}</span>
+                            )} />
                             <TooltipContent side="top"><p>sem prazo</p></TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -187,8 +187,9 @@ function WorkspaceCard({ ws, showHidden }: {
                   <div className="flex -space-x-2 isolate">
                     {ws.members.slice(0, MAX_VISIBLE_AVATARS).map((member, index) => (
                       <Tooltip key={member.id}>
-                        <TooltipTrigger asChild>
+                        <TooltipTrigger render={(props) => (
                           <Avatar
+                            {...props}
                             className="w-7 h-7 border-2 border-card ring-0 cursor-default hover:z-10 transition-transform hover:scale-110"
                             style={{ zIndex: MAX_VISIBLE_AVATARS - index }}
                           >
@@ -199,7 +200,7 @@ function WorkspaceCard({ ws, showHidden }: {
                               {getInitials(member.name)}
                             </AvatarFallback>
                           </Avatar>
-                        </TooltipTrigger>
+                        )} />
                         <TooltipContent side="top">
                           <p className="font-medium">{member.name}</p>
                           <p className="text-primary-foreground/70 text-[11px]">{translateRole(member.role)}</p>
@@ -221,14 +222,15 @@ function WorkspaceCard({ ws, showHidden }: {
 
       {isAdmin && (
         <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-          <PopoverTrigger asChild>
+          <PopoverTrigger render={(props) => (
             <button
+              {...props}
               type="button"
               title="Escolher cor"
               className="absolute top-6 left-6 w-5 h-5 rounded-sm transition-colors hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 z-10"
               style={{ backgroundColor: iconBg }}
             />
-          </PopoverTrigger>
+          )} />
           <PopoverContent className="w-auto p-3 z-50" align="start">
             <div className="grid grid-cols-8 gap-1.5">
               {COLOR_PALETTE.map((entry) => {
@@ -431,11 +433,11 @@ export default function WorkspacesPage() {
               )}
 
               <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogTrigger asChild>
-                  <Button title="novo espaço" className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
+                <DialogTrigger render={(props) => (
+                  <Button {...props} title="novo espaço" className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
                     <Plus className="w-5 h-5" />
                   </Button>
-                </DialogTrigger>
+                )} />
                 <DialogContent className="sm:max-w-md rounded-2xl">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-display font-medium tracking-tight lowercase">
@@ -475,8 +477,9 @@ export default function WorkspacesPage() {
                   const anySelected = selectedUserIds.length > 0;
                   return (
                     <Tooltip key={member.userId}>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger render={(props) => (
                         <button
+                          {...props}
                           onClick={() => toggleUser(member.userId)}
                           className={`transition-all duration-200 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                             anySelected && !isSelected ? "grayscale opacity-60 scale-100" : "scale-100"
@@ -491,7 +494,7 @@ export default function WorkspacesPage() {
                             </AvatarFallback>
                           </Avatar>
                         </button>
-                      </TooltipTrigger>
+                      )} />
                       <TooltipContent side="bottom">
                         <p className="font-medium">{member.name}</p>
                       </TooltipContent>

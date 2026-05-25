@@ -41,27 +41,31 @@ export function AssigneeAvatarPicker({
     <Popover open={open} onOpenChange={setOpen}>
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center justify-center w-10 h-10 rounded-xl bg-background hover:bg-muted/60 transition-colors focus:outline-none cursor-pointer"
-              >
-                {assigneeName ? (
-                  <Avatar key={`${assignedTo}|${assigneeAvatarUrl ?? ""}`} className="w-9 h-9 shrink-0">
-                    {assigneeAvatarUrl ? (
-                      <AvatarImage src={assigneeAvatarUrl} alt={assigneeName} className="object-cover" />
-                    ) : null}
-                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                      {getInitials(assigneeName)}
-                    </AvatarFallback>
-                  </Avatar>
-                ) : (
-                  <User className="w-5 h-5 text-muted-foreground shrink-0" />
-                )}
-              </button>
-            </PopoverTrigger>
-          </TooltipTrigger>
+          <TooltipTrigger render={(tooltipProps) => (
+            <PopoverTrigger
+              {...tooltipProps}
+              render={(popoverProps) => (
+                <button
+                  {...popoverProps}
+                  type="button"
+                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-background hover:bg-muted/60 transition-colors focus:outline-none cursor-pointer"
+                >
+                  {assigneeName ? (
+                    <Avatar key={`${assignedTo}|${assigneeAvatarUrl ?? ""}`} className="w-9 h-9 shrink-0">
+                      {assigneeAvatarUrl ? (
+                        <AvatarImage src={assigneeAvatarUrl} alt={assigneeName} className="object-cover" />
+                      ) : null}
+                      <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                        {getInitials(assigneeName)}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                  )}
+                </button>
+              )}
+            />
+          )} />
           <TooltipContent>
             {assigneeName ?? "Sem responsável"}
           </TooltipContent>

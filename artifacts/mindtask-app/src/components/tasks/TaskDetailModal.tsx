@@ -128,15 +128,16 @@ function ScheduleModeDropdown({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger render={(props) => (
         <button
+          {...props}
           type="button"
           className="flex items-center gap-1 text-xs font-medium text-foreground border border-border rounded-lg px-2.5 py-1 bg-background hover:border-primary/50 transition-colors"
         >
           <span className="lowercase">{current?.label ?? value}</span>
           <ChevronDown className="w-3 h-3 text-muted-foreground" />
         </button>
-      </PopoverTrigger>
+      )} />
       <PopoverContent
         align="start"
         className="p-1 rounded-xl min-w-[140px]"

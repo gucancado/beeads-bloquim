@@ -1,4 +1,4 @@
-import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback } from 'react';
+import { memo, useRef, useLayoutEffect, useState, useEffect, useCallback, cloneElement } from 'react';
 import { Handle, Position } from 'reactflow';
 import { getStatusColorHex, formatDueDate, addOneDayYmd } from '@/lib/utils';
 import { DatePickerPopover } from '@/components/ui/date-picker-popover';
@@ -1032,7 +1032,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               if (!hasTask) return badge;
               return (
                 <Popover open={editingStatus} onOpenChange={setEditingStatus}>
-                  <PopoverTrigger asChild>{badge}</PopoverTrigger>
+                  <PopoverTrigger render={(props) => cloneElement(badge, props)} />
                   <PopoverContent
                     align="start"
                     className="p-1 rounded-xl min-w-[180px]"
