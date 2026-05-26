@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@beeads/ui";
 import { cn } from "@/lib/utils";
 
 interface AutosaveIndicatorProps {

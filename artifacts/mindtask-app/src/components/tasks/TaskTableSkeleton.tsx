@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@beeads/ui";
 
 export function TaskTableSkeleton({ rows = 6 }: { rows?: number }) {
   return (

@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import type { ConsolidatedActivityResponse } from "@workspace/api-client-react";
 import { useComments, useCreateComment, useToggleCommentHidden, useTaskComments, useCreateTaskComment, useToggleTaskCommentHidden, useTaskActivities, useStandaloneTaskComments, useCreateStandaloneTaskComment, CommentItem, TaskActivityItem } from "@/hooks/useComments";
-import { Button } from "@/components/ui/button";
+import { Button } from "@beeads/ui";
 import { Loader2, Italic, List, EyeOff, Eye, MessageSquare, Send } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";

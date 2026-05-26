@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { ChevronDown, ChevronRight, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { useGoogleCalendarStatus, useTodayEvents, type TodayEvent } from "@/hooks/useGoogleCalendar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@beeads/ui";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function AgendaPanel() {

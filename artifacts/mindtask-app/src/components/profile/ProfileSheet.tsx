@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@beeads/ui";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@beeads/ui";
+import { Input } from "@beeads/ui";
+import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
 import { Loader2, Save, Building2, Pencil, EyeOff, Camera, Plug } from "lucide-react";
 import { Link } from "wouter";
 import { useMyWorkspaces, useUpdateMe } from "@/hooks/useProfile";
@@ -13,14 +13,14 @@ import {
   type UserPronouns,
   type UserResponse,
 } from "@workspace/api-client-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@beeads/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@beeads/ui";
 import { PhoneInput } from "./PhoneInput";
 import { useAvatarUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
@@ -173,7 +173,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
       >
         <SheetTitle className="sr-only">Perfil do usuário</SheetTitle>
         {/* Header */}
-        <div className="p-6 border-b bg-slate-50 dark:bg-slate-900">
+        <div className="p-6 border-b border-border bg-muted/40">
           <PageBreadcrumb items={[{ label: "perfil" }]} className="mb-4" />
           <div className="flex items-center gap-4">
             <div className="relative shrink-0 group">

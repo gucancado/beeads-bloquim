@@ -1,6 +1,6 @@
 import { UserX } from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beeads/ui";
 
 function getInitials(name: string) {
   return name
@@ -55,8 +55,9 @@ export function AssigneeFilterPills({
           const isActive = selected.includes(item.id);
           return (
             <Tooltip key={item.id}>
-              <TooltipTrigger asChild>
+              <TooltipTrigger render={(props) => (
                 <button
+                  {...props}
                   onClick={() => onToggle(item.id)}
                   className={`transition-all duration-200 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     anySelected && !isActive ? "grayscale opacity-60 scale-100" : "scale-100"
@@ -79,7 +80,7 @@ export function AssigneeFilterPills({
                     )}
                   </Avatar>
                 </button>
-              </TooltipTrigger>
+              )} />
               <TooltipContent side="bottom">
                 <p className="font-medium">{item.label}</p>
               </TooltipContent>

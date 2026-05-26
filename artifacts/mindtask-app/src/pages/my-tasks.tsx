@@ -9,8 +9,8 @@ import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItemMember, TaskListItemData } from "@/components/tasks/TaskListItem";
 import { TaskTable } from "@/components/tasks/TaskTable";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
+import { Button } from "@beeads/ui";
+import { Empty, EmptyIcon, EmptyTitle, EmptyDescription } from "@beeads/ui";
 import { TaskTableSkeleton } from "@/components/tasks/TaskTableSkeleton";
 import { groupTasksByDeadline, selectWindow, type TimeWindow } from "@/lib/groupTasksByDeadline";
 import { ateSextaLabel } from "@/lib/groupTasksByDeadline";
@@ -335,20 +335,18 @@ export default function MyTasksPage() {
               };
               return (
                 <Empty className="border border-dashed border-border/60 bg-card/30 my-8">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <Inbox />
-                    </EmptyMedia>
-                    <EmptyTitle className="lowercase">
-                      {hasNonDefaultFilters ? "nada por aqui" : "tudo limpo"}
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      {hasNonDefaultFilters
-                        ? "nenhuma tarefa bate com esses filtros."
-                        : "você não tem tarefas em andamento no momento."}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <EmptyContent>
+                  <EmptyIcon>
+                    <Inbox />
+                  </EmptyIcon>
+                  <EmptyTitle className="lowercase">
+                    {hasNonDefaultFilters ? "nada por aqui" : "tudo limpo"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {hasNonDefaultFilters
+                      ? "nenhuma tarefa bate com esses filtros."
+                      : "você não tem tarefas em andamento no momento."}
+                  </EmptyDescription>
+                  <div className="mt-4">
                     {hasNonDefaultFilters ? (
                       <Button variant="outline" size="sm" onClick={resetFilters}>
                         <RotateCcw className="w-4 h-4" />
@@ -360,7 +358,7 @@ export default function MyTasksPage() {
                         nova tarefa
                       </Button>
                     )}
-                  </EmptyContent>
+                  </div>
                 </Empty>
               );
             }

@@ -1,6 +1,5 @@
 import * as React from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger, Calendar } from "@beeads/ui";
 import { ptBR } from "date-fns/locale";
 
 function ymdToDate(ymd: string | null | undefined): Date | undefined {
@@ -52,9 +51,12 @@ export function DatePickerPopover({
 
   return (
     <Popover open={open} onOpenChange={(o) => { if (!disabled) setOpen(o); }}>
-      <PopoverTrigger asChild disabled={disabled}>
-        {children}
-      </PopoverTrigger>
+      <PopoverTrigger
+        disabled={disabled}
+        render={(props) =>
+          React.cloneElement(children as React.ReactElement, props)
+        }
+      />
       <PopoverContent
         align={align}
         className="w-auto p-0"

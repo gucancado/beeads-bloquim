@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@beeads/ui";
+import { Skeleton } from "@beeads/ui";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@beeads/ui";
 import { AlertCircle, Check, ChevronDown, Copy, Plug, RefreshCw, ShieldCheck, BookOpen, PencilLine } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -146,7 +146,7 @@ export default function SettingsMcpPage() {
                 <Plug className="w-6 h-6 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-display font-semibold lowercase">Conectar no claude</h2>
+                <h2 className="text-lg font-display font-medium tracking-tight lowercase">Conectar no claude</h2>
               </div>
               <ChevronDown className="w-5 h-5 text-muted-foreground transition-transform group-data-[state=open]/coll:rotate-180" />
             </CollapsibleTrigger>
@@ -213,7 +213,7 @@ export default function SettingsMcpPage() {
           <div className="rounded-3xl border border-border/60 overflow-hidden">
             <div className="p-6 flex items-start justify-between gap-4 border-b border-border/50">
               <div className="min-w-0">
-                <h2 className="text-lg font-display font-semibold lowercase">
+                <h2 className="text-lg font-display font-medium tracking-tight lowercase">
                   {loading || error
                     ? "Ferramentas disponíveis"
                     : `${totalTools} ${totalTools === 1 ? "ferramenta disponível" : "ferramentas disponíveis"}`}

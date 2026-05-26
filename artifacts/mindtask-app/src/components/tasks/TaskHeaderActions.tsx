@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Loader2, Copy, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@beeads/ui";
 import { TaskApplyTemplateButton } from "@/components/tasks/TaskApplyTemplateButton";
 
 export function TaskHeaderActions({

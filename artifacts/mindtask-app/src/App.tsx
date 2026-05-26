@@ -2,8 +2,7 @@ import { Component, ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider, MutationCache } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster, TooltipProvider } from "@beeads/ui";
 import { toast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 

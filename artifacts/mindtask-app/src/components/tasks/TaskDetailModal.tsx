@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@beeads/ui";
+import { Button } from "@beeads/ui";
+import { Input } from "@beeads/ui";
 import { DescriptionEditor } from "@/components/tasks/DescriptionEditor";
 import { Loader2, Flag, Calendar, User, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import type { RecurrenceConfig } from "@/components/tasks/RecurrencePanel";
@@ -30,7 +30,7 @@ import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { AutosaveIndicator } from "@/components/ui/autosave-indicator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@beeads/ui";
 import { SubtasksList } from "@/components/tasks/subtasks/SubtasksList";
 import { TaskAssociationChips } from "@/components/tasks/association/TaskAssociationChips";
 import { TaskHeaderActions } from "@/components/tasks/TaskHeaderActions";
@@ -39,7 +39,7 @@ import { useSubtasksState } from "@/components/tasks/subtasks/useSubtasksState";
 import { useAutoCreateTask } from "@/components/tasks/useAutoCreateTask";
 import { useTaskDetailForm } from "@/components/tasks/useTaskDetailForm";
 import { RecurrencePopover } from "@/components/tasks/RecurrencePopover";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { canPersistScheduleMode } from "@/lib/scheduleMode";
 
 interface TaskResponseExtended extends TaskResponse {
@@ -128,15 +128,16 @@ function ScheduleModeDropdown({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger render={(props) => (
         <button
+          {...props}
           type="button"
           className="flex items-center gap-1 text-xs font-medium text-foreground border border-border rounded-lg px-2.5 py-1 bg-background hover:border-primary/50 transition-colors"
         >
           <span className="lowercase">{current?.label ?? value}</span>
           <ChevronDown className="w-3 h-3 text-muted-foreground" />
         </button>
-      </PopoverTrigger>
+      )} />
       <PopoverContent
         align="start"
         className="p-1 rounded-xl min-w-[140px]"

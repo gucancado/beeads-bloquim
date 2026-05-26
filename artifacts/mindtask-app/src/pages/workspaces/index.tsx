@@ -6,16 +6,16 @@ import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { useCreateWorkspace, useGetMe } from "@workspace/api-client-react";
 import { FolderGit2, Plus, Loader2, EyeOff, Eye, Trash2 } from "lucide-react";
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@beeads/ui";
+import { Input } from "@beeads/ui";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@beeads/ui";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@beeads/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useListWorkspacesWithHidden, useToggleWorkspaceHidden, useDeleteWorkspace, useUpdateWorkspaceColor } from "@/hooks/useHidden";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beeads/ui";
 
 function translateRole(role: string) {
   switch (role) {
@@ -129,7 +129,7 @@ function WorkspaceCard({ ws, showHidden }: {
                   style={{ backgroundColor: iconBg }}
                 />
               </div>
-              <h3 className="text-xl font-bold font-display text-foreground group-hover/card:text-primary transition-colors truncate">{ws.name}</h3>
+              <h3 className="text-xl font-medium font-display text-foreground group-hover/card:text-primary transition-colors truncate">{ws.name}</h3>
             </div>
             {ws.hidden && (
               <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 lowercase">
@@ -155,9 +155,9 @@ function WorkspaceCard({ ws, showHidden }: {
                       {detail.overdue > 0 && (
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-[11px] font-semibold text-red-600 dark:text-red-400 cursor-default">{detail.overdue}</span>
-                            </TooltipTrigger>
+                            <TooltipTrigger render={(props) => (
+                              <span {...props} className="text-[11px] font-semibold text-red-600 dark:text-red-400 cursor-default">{detail.overdue}</span>
+                            )} />
                             <TooltipContent side="top"><p>atrasadas</p></TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -165,9 +165,9 @@ function WorkspaceCard({ ws, showHidden }: {
                       {detail.noDue > 0 && (
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-[11px] font-medium text-muted-foreground cursor-default">{detail.noDue}</span>
-                            </TooltipTrigger>
+                            <TooltipTrigger render={(props) => (
+                              <span {...props} className="text-[11px] font-medium text-muted-foreground cursor-default">{detail.noDue}</span>
+                            )} />
                             <TooltipContent side="top"><p>sem prazo</p></TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -187,8 +187,9 @@ function WorkspaceCard({ ws, showHidden }: {
                   <div className="flex -space-x-2 isolate">
                     {ws.members.slice(0, MAX_VISIBLE_AVATARS).map((member, index) => (
                       <Tooltip key={member.id}>
-                        <TooltipTrigger asChild>
+                        <TooltipTrigger render={(props) => (
                           <Avatar
+                            {...props}
                             className="w-7 h-7 border-2 border-card ring-0 cursor-default hover:z-10 transition-transform hover:scale-110"
                             style={{ zIndex: MAX_VISIBLE_AVATARS - index }}
                           >
@@ -199,7 +200,7 @@ function WorkspaceCard({ ws, showHidden }: {
                               {getInitials(member.name)}
                             </AvatarFallback>
                           </Avatar>
-                        </TooltipTrigger>
+                        )} />
                         <TooltipContent side="top">
                           <p className="font-medium">{member.name}</p>
                           <p className="text-primary-foreground/70 text-[11px]">{translateRole(member.role)}</p>
@@ -221,14 +222,15 @@ function WorkspaceCard({ ws, showHidden }: {
 
       {isAdmin && (
         <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-          <PopoverTrigger asChild>
+          <PopoverTrigger render={(props) => (
             <button
+              {...props}
               type="button"
               title="Escolher cor"
               className="absolute top-6 left-6 w-5 h-5 rounded-sm transition-colors hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 z-10"
               style={{ backgroundColor: iconBg }}
             />
-          </PopoverTrigger>
+          )} />
           <PopoverContent className="w-auto p-3 z-50" align="start">
             <div className="grid grid-cols-8 gap-1.5">
               {COLOR_PALETTE.map((entry) => {
@@ -431,14 +433,16 @@ export default function WorkspacesPage() {
               )}
 
               <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogTrigger asChild>
-                  <Button title="novo espaço" className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
+                <DialogTrigger render={(props) => (
+                  <Button {...props} title="novo espaço" className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all">
                     <Plus className="w-5 h-5" />
                   </Button>
-                </DialogTrigger>
+                )} />
                 <DialogContent className="sm:max-w-md rounded-2xl">
                   <DialogHeader>
-                    <DialogTitle className="text-2xl font-display lowercase">Criar Espaço de Trabalho</DialogTitle>
+                    <DialogTitle className="text-2xl font-display font-medium tracking-tight lowercase">
+                      Criar <span className="italic text-honey-deep">·</span> Espaço de Trabalho
+                    </DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleCreate} className="space-y-6 mt-4">
                     <div className="space-y-2">
@@ -473,8 +477,9 @@ export default function WorkspacesPage() {
                   const anySelected = selectedUserIds.length > 0;
                   return (
                     <Tooltip key={member.userId}>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger render={(props) => (
                         <button
+                          {...props}
                           onClick={() => toggleUser(member.userId)}
                           className={`transition-all duration-200 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                             anySelected && !isSelected ? "grayscale opacity-60 scale-100" : "scale-100"
@@ -489,7 +494,7 @@ export default function WorkspacesPage() {
                             </AvatarFallback>
                           </Avatar>
                         </button>
-                      </TooltipTrigger>
+                      )} />
                       <TooltipContent side="bottom">
                         <p className="font-medium">{member.name}</p>
                       </TooltipContent>
@@ -516,7 +521,7 @@ export default function WorkspacesPage() {
               <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
                 <FolderGit2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold font-display text-foreground lowercase">
+              <h3 className="text-2xl font-medium font-display text-foreground lowercase">
                 {selectedUserIds.length > 0 ? "Nenhum espaço com esses membros" : showHidden ? "Nenhum espaço oculto" : "Nenhum espaço ainda"}
               </h3>
               <p className="text-muted-foreground mt-2 mb-8 max-w-md mx-auto lowercase">

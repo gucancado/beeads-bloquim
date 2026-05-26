@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@beeads/ui";
 import { AlertCircle } from "lucide-react";
 import { ThemeToggleFloat } from "@/components/layout/ThemeToggleFloat";
 

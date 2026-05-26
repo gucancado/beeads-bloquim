@@ -2,10 +2,10 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { LogOut, CheckSquare, NotebookPen, Folders, Loader2, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@beeads/ui";
+import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@beeads/ui";
 import { User as UserIcon, FileText as FileTextIcon, Plug as PlugIcon, Zap as ZapIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SidebarWorkspaceList } from "@/components/layout/SidebarWorkspaceList";
@@ -14,14 +14,15 @@ import { GlobalTaskSearch } from "@/components/layout/GlobalTaskSearch";
 function SettingsDropdown({ onProfile, onNavigate }: { onProfile: () => void; onNavigate: (path: string) => void }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger render={(props) => (
         <button
+          {...props}
           title="configurações"
           className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all focus:outline-none"
         >
           <Settings className="w-4 h-4" />
         </button>
-      </DropdownMenuTrigger>
+      )} />
       <DropdownMenuContent align="end" side="top" className="w-56">
         <DropdownMenuItem onSelect={() => onProfile()} className="lowercase cursor-pointer">
           <UserIcon className="w-4 h-4 mr-2" /> perfil
@@ -152,7 +153,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {!collapsed && (
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <NotebookPen className="w-6 h-6 shrink-0 text-primary" />
-              <span className="font-display font-bold text-xl tracking-tight truncate lowercase">Bloquim</span>
+              <span className="font-display text-xl font-medium tracking-tight truncate lowercase text-sidebar-foreground">
+                blo<span className="italic text-honey-deep">·</span>quim
+              </span>
             </div>
           )}
           <div className={`flex items-center gap-1 ${collapsed ? 'flex-col w-full' : ''}`}>

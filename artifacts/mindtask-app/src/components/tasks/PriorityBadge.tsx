@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Badge } from "@beeads/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { getPriorityColor, getPriorityStars, translatePriority, PRIORITY_OPTIONS } from "./priorityUtils";
 
 interface PriorityBadgeProps {
@@ -21,8 +21,9 @@ export function PriorityBadge({ value, onChange, disabled, portalContainer, allo
 
   return (
     <Popover open={open} onOpenChange={(o) => { if (!disabled) setOpen(o); }}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger render={(props) => (
         <Badge
+          {...props}
           variant="outline"
           className={`px-1 py-0 text-sm border-0 bg-transparent shadow-none cursor-pointer select-none transition-opacity leading-none ${value ? getPriorityColor(value) : "text-muted-foreground/40"} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
           title={value ? `prioridade ${translatePriority(value)}` : "prioridade vazia"}
@@ -30,7 +31,7 @@ export function PriorityBadge({ value, onChange, disabled, portalContainer, allo
         >
           {value ? "★".repeat(getPriorityStars(value)) : "☆☆☆☆"}
         </Badge>
-      </PopoverTrigger>
+      )} />
       <PopoverContent
         align="start"
         container={portalContainer}

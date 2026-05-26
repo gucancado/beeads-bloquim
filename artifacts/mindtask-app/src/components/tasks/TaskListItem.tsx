@@ -1,13 +1,13 @@
 // Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
 // always-leading "title" cell) are rendered in the order defined by the
 // user's saved column preferences — passed in via `columnOrder`.
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, cloneElement, isValidElement } from "react";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate, addOneDayYmd } from "@/lib/utils";
 import { DatePickerPopover } from "@/components/ui/date-picker-popover";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@beeads/ui";
+import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,7 +18,7 @@ import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle"
 import { useToast } from "@/hooks/use-toast";
 import { TaskColumnKey, TASK_COLUMN_WIDTH_CLASS } from "@/lib/taskColumnConstants";
 import { EditableTitle } from "@/components/ui/editable-title";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { MemberSelectList } from "@/components/tasks/MemberSelectList";
 
 function getInitials(name: string) {
@@ -101,18 +101,6 @@ const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em" | "sem_prazo" | "ur
 const SCHEDULE_MODE_LABELS: Record<string, string> = Object.fromEntries(
   SCHEDULE_MODE_OPTIONS.map(o => [o.value, o.label]),
 );
-
-const STATUS_ROW_BG: Record<string, string> = {
-  draft: "bg-purple-100 dark:bg-purple-950/50",
-  pending: "bg-blue-100 dark:bg-blue-950/50",
-  in_progress: "bg-amber-100 dark:bg-amber-950/50",
-  completed: "bg-emerald-100 dark:bg-emerald-950/50",
-  blocked: "bg-slate-200 dark:bg-slate-800/60",
-};
-
-function getStatusRowBg(status: string): string {
-  return STATUS_ROW_BG[status] ?? "";
-}
 
 function getStatusEntry(s: string) {
   return getStatusOrderEntry(s);
@@ -389,7 +377,7 @@ export function TaskListItem({
    */
   const wrapModalityPopover = (trigger: React.ReactNode) => (
     <Popover>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverTrigger render={(props) => isValidElement(trigger) ? cloneElement(trigger, props) : <>{trigger}</>} />
       <PopoverContent
         align="start"
         className="p-1 rounded-xl min-w-[140px]"
@@ -453,8 +441,9 @@ export function TaskListItem({
             if (open) setAssigneeOpen(false);
           }}
         >
-          <PopoverTrigger asChild>
+          <PopoverTrigger render={(props) => (
             <Badge
+              {...props}
               variant="outline"
               className={`rounded-full w-6 h-6 p-0 inline-flex items-center justify-center cursor-pointer select-none no-default-active-elevate transition-opacity border ${getStatusActiveClass(localTask.status)} ${savingField === "status" ? "opacity-60" : ""}`}
               title={`status: ${entry?.label ?? localTask.status}. Clique para alterar.`}
@@ -462,7 +451,7 @@ export function TaskListItem({
             >
               {StatusIcon ? <StatusIcon className="w-3.5 h-3.5" /> : null}
             </Badge>
-          </PopoverTrigger>
+          )} />
           <PopoverContent
             align="start"
             className="p-1 rounded-xl min-w-[180px]"
@@ -518,7 +507,7 @@ export function TaskListItem({
         {members.length === 0 ? (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipTrigger render={(props) => cloneElement(trigger, props)} />
               <TooltipContent>{localTask.assigneeName ?? "sem responsável"}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -532,17 +521,21 @@ export function TaskListItem({
           >
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={localTask.assigneeName ?? "atribuir responsável"}
-                      className="appearance-none bg-transparent border-0 p-0 m-0"
-                    >
-                      {trigger}
-                    </button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
+                <TooltipTrigger render={(tooltipProps) => (
+                  <PopoverTrigger
+                    {...tooltipProps}
+                    render={(popoverProps) => (
+                      <button
+                        {...popoverProps}
+                        type="button"
+                        aria-label={localTask.assigneeName ?? "atribuir responsável"}
+                        className="appearance-none bg-transparent border-0 p-0 m-0"
+                      >
+                        {trigger}
+                      </button>
+                    )}
+                  />
+                )} />
                 <TooltipContent>{localTask.assigneeName ?? "sem responsável"}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -845,7 +838,7 @@ export function TaskListItem({
 
   return (
     <tr
-      className={`transition-all group cursor-pointer hover:brightness-95 dark:hover:brightness-110 ${getStatusRowBg(localTask.status)}`}
+      className="transition-colors group cursor-pointer bg-card border-b border-border/60 hover:bg-muted/50"
       onClick={handleRowClick}
     >
       {columnOrder.map(key => (
