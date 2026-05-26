@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useLogin } from "@workspace/api-client-react";
+import { useLogin, useGetMe } from "@workspace/api-client-react";
 import { NotebookPen, Loader2, Mail, Lock } from "lucide-react";
 import { Button } from "@beeads/ui";
 import { Input } from "@beeads/ui";
@@ -15,6 +15,21 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // SSO: se já tem sessão válida, redireciona pro return_url (caso outro app
+  // tenha mandado o user pra cá pra autenticar). Sem return_url, vai pra home.
+  const { data: existingUser, isLoading: isCheckingSession } = useGetMe({
+    query: { retry: false, staleTime: 0 },
+  });
+  useEffect(() => {
+    if (isCheckingSession || !existingUser) return;
+    const ret = readReturnUrl();
+    if (ret) {
+      window.location.href = ret;
+    } else {
+      setLocation("/my-tasks");
+    }
+  }, [existingUser, isCheckingSession, setLocation]);
 
   const loginMutation = useLogin({
     mutation: {
