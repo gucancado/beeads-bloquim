@@ -10,3 +10,4 @@ export * from "./taskAttachments";
 export * from "./shapes";
 export * from "./integrations";
 export * from "./preferences";
+export * from "./workspaceAgents";

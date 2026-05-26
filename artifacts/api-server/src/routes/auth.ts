@@ -18,6 +18,9 @@ import {
   AUTH_COOKIE_NAME,
   authCookieOptions,
   clearAuthCookieOptions,
+  SSO_COOKIE_NAME,
+  ssoCookieOptions,
+  clearSsoCookieOptions,
 } from "../lib/cookies";
 
 const log = logger.child({ module: "auth" });
@@ -55,6 +58,9 @@ router.post("/register", registerLimiter, async (req, res) => {
 
   const token = signToken({ userId: user.id, email: user.email });
 
+  // SSO cookie: shared across *.beeads.com.br in production
+  res.cookie(SSO_COOKIE_NAME, token, ssoCookieOptions);
+  // Legacy cookie: kept for ~2 weeks grace period
   res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
 
   res.status(201).json({
@@ -85,6 +91,9 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   const token = signToken({ userId: user.id, email: user.email });
 
+  // SSO cookie: shared across *.beeads.com.br in production
+  res.cookie(SSO_COOKIE_NAME, token, ssoCookieOptions);
+  // Legacy cookie: kept for ~2 weeks grace period
   res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
 
   res.json({
@@ -93,6 +102,9 @@ router.post("/login", loginLimiter, async (req, res) => {
 });
 
 router.post("/logout", (_req, res) => {
+  // Clear SSO cookie (domain must match the one set at login)
+  res.clearCookie(SSO_COOKIE_NAME, clearSsoCookieOptions);
+  // Clear legacy cookie (grace period)
   res.clearCookie(AUTH_COOKIE_NAME, clearAuthCookieOptions);
   res.json({ success: true, message: "Logged out" });
 });
