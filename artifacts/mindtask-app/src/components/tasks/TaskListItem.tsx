@@ -102,18 +102,6 @@ const SCHEDULE_MODE_LABELS: Record<string, string> = Object.fromEntries(
   SCHEDULE_MODE_OPTIONS.map(o => [o.value, o.label]),
 );
 
-const STATUS_ROW_BG: Record<string, string> = {
-  draft: "bg-purple-100 dark:bg-purple-950/50",
-  pending: "bg-blue-100 dark:bg-blue-950/50",
-  in_progress: "bg-amber-100 dark:bg-amber-950/50",
-  completed: "bg-emerald-100 dark:bg-emerald-950/50",
-  blocked: "bg-slate-200 dark:bg-slate-800/60",
-};
-
-function getStatusRowBg(status: string): string {
-  return STATUS_ROW_BG[status] ?? "";
-}
-
 function getStatusEntry(s: string) {
   return getStatusOrderEntry(s);
 }
@@ -850,7 +838,7 @@ export function TaskListItem({
 
   return (
     <tr
-      className={`transition-all group cursor-pointer hover:brightness-95 dark:hover:brightness-110 ${getStatusRowBg(localTask.status)}`}
+      className="transition-colors group cursor-pointer hover:bg-muted/50"
       onClick={handleRowClick}
     >
       {columnOrder.map(key => (
