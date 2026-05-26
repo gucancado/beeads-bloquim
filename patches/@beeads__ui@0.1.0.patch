@@ -1,0 +1,38 @@
+diff --git a/dist/index.js b/dist/index.js
+index c622613a423ffb72fbba4673077348671189aa08..789e927df49b1dae756eda480dfa4118c67eae33 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -823,12 +823,12 @@ function PopoverContent({
+   children,
+   ...props
+ }) {
+-  return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(import_popover.Popover.Portal, { children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(import_popover.Popover.Positioner, { sideOffset, align, children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
++  return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(import_popover.Popover.Portal, { children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(import_popover.Popover.Positioner, { sideOffset, align, className: "z-50", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+     import_popover.Popover.Popup,
+     {
+       "data-slot": "popover-content",
+       className: cn(
+-        "z-50 w-72 rounded-md border border-border bg-card p-4 text-card-fg shadow-md outline-none",
++        "w-72 rounded-md border border-border bg-card p-4 text-card-fg shadow-md outline-none",
+         className
+       ),
+       ...props,
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 5b74d3797d58f3924ca2a64863934b27ebe12249..c6135787c7c5bc4544530c5ff6cfe1af2b8c8b32 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -670,12 +670,12 @@ function PopoverContent({
+   children,
+   ...props
+ }) {
+-  return /* @__PURE__ */ jsx15(BasePopover.Portal, { children: /* @__PURE__ */ jsx15(BasePopover.Positioner, { sideOffset, align, children: /* @__PURE__ */ jsx15(
++  return /* @__PURE__ */ jsx15(BasePopover.Portal, { children: /* @__PURE__ */ jsx15(BasePopover.Positioner, { sideOffset, align, className: "z-50", children: /* @__PURE__ */ jsx15(
+     BasePopover.Popup,
+     {
+       "data-slot": "popover-content",
+       className: cn(
+-        "z-50 w-72 rounded-md border border-border bg-card p-4 text-card-fg shadow-md outline-none",
++        "w-72 rounded-md border border-border bg-card p-4 text-card-fg shadow-md outline-none",
+         className
+       ),
+       ...props,
