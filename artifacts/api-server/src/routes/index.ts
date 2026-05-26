@@ -20,11 +20,14 @@ import shapesRouter from "./shapes";
 import taskTemplatesRouter from "./taskTemplates";
 import taskLinksRouter from "./taskLinks";
 import googleCalendarRouter from "./integrations/google-calendar";
+import { meRouter as ssoMeRouter, publicRouter as ssoPublicRouter } from "./sso";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+router.use("/auth/me", ssoMeRouter);
+router.use("/public", ssoPublicRouter);
 router.use("/users", usersRouter);
 router.use("/workspaces", workspacesRouter);
 router.use("/workspaces/:workspaceId/maps", mapsRouter);
