@@ -838,7 +838,7 @@ export function TaskListItem({
 
   return (
     <tr
-      className="transition-colors group cursor-pointer hover:bg-muted/50"
+      className="transition-colors group cursor-pointer bg-card border-b border-border/60 hover:bg-muted/50"
       onClick={handleRowClick}
     >
       {columnOrder.map(key => (
