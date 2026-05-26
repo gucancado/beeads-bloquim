@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { SSO_COOKIE_NAME, AUTH_COOKIE_NAME } from "../lib/cookies";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -20,7 +21,8 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
-    : req.cookies?.token;
+    // Accept SSO cookie first, fall back to legacy cookie for grace period
+    : (req.cookies?.[SSO_COOKIE_NAME] ?? req.cookies?.[AUTH_COOKIE_NAME]);
 
   if (!token) {
     res.status(401).json({ error: "Unauthorized", message: "No token provided" });
@@ -44,7 +46,8 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
-    : req.cookies?.token;
+    // Accept SSO cookie first, fall back to legacy cookie for grace period
+    : (req.cookies?.[SSO_COOKIE_NAME] ?? req.cookies?.[AUTH_COOKIE_NAME]);
 
   if (token) {
     try {

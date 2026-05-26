@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import type { IncomingMessage } from "node:http";
-import { AUTH_COOKIE_NAME } from "./cookies";
+import { AUTH_COOKIE_NAME, SSO_COOKIE_NAME } from "./cookies";
 import type { AuthPayload } from "../middlewares/auth";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -31,7 +31,8 @@ export function verifyAuthCookie(req: IncomingMessage): AuthPayload | null {
   const header = req.headers.cookie;
   if (!header) return null;
   const cookies = parseCookieHeader(header);
-  const token = cookies[AUTH_COOKIE_NAME];
+  // Accept SSO cookie first, fall back to legacy cookie for grace period
+  const token = cookies[SSO_COOKIE_NAME] ?? cookies[AUTH_COOKIE_NAME];
   if (!token) return null;
   try {
     return jwt.verify(token, JWT_SECRET as string) as unknown as AuthPayload;
