@@ -63,7 +63,7 @@ overrides:
 
 patchedDependencies:
   '@beeads/ui@0.1.0':
-    hash: e1a3d8014b40cea28772c305a65cc7010c1cccd47ea8e8446504d76c8714bbcc
+    hash: ng3g5443dfxdsvc2tehzq3jvye
     path: patches/@beeads__ui@0.1.0.patch
 
 importers:
@@ -175,7 +175,7 @@ importers:
         version: 0.1.0
       '@beeads/ui':
         specifier: ^0.1.0
-        version: 0.1.0(patch_hash=e1a3d8014b40cea28772c305a65cc7010c1cccd47ea8e8446504d76c8714bbcc)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 0.1.0(patch_hash=ng3g5443dfxdsvc2tehzq3jvye)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -6067,7 +6067,7 @@ snapshots:
   '@beeads/charts@0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@beeads/tokens': 0.1.0
-      '@beeads/ui': 0.1.0(patch_hash=e1a3d8014b40cea28772c305a65cc7010c1cccd47ea8e8446504d76c8714bbcc)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@beeads/ui': 0.1.0(patch_hash=ng3g5443dfxdsvc2tehzq3jvye)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       date-fns: 4.1.0
       lucide-react: 0.469.0(react@19.2.5)
       react: 19.2.5
@@ -6080,7 +6080,7 @@ snapshots:
 
   '@beeads/tokens@0.1.0': {}
 
-  '@beeads/ui@0.1.0(patch_hash=e1a3d8014b40cea28772c305a65cc7010c1cccd47ea8e8446504d76c8714bbcc)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/ui@0.1.0(patch_hash=ng3g5443dfxdsvc2tehzq3jvye)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@beeads/tokens': 0.1.0
