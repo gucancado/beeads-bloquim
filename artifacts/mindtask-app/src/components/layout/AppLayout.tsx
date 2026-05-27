@@ -24,16 +24,16 @@ function SettingsDropdown({ onProfile, onNavigate }: { onProfile: () => void; on
         </button>
       )} />
       <DropdownMenuContent align="end" side="top" className="w-56">
-        <DropdownMenuItem onSelect={() => onProfile()} className="lowercase cursor-pointer">
+        <DropdownMenuItem onClick={() => onProfile()} className="lowercase cursor-pointer">
           <UserIcon className="w-4 h-4 mr-2" /> perfil
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onNavigate("/my-templates")} className="lowercase cursor-pointer">
+        <DropdownMenuItem onClick={() => onNavigate("/my-templates")} className="lowercase cursor-pointer">
           <FileTextIcon className="w-4 h-4 mr-2" /> modelos de tarefas
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onNavigate("/settings/integrations")} className="lowercase cursor-pointer">
+        <DropdownMenuItem onClick={() => onNavigate("/settings/integrations")} className="lowercase cursor-pointer">
           <PlugIcon className="w-4 h-4 mr-2" /> integrações
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onNavigate("/settings/mcp")} className="lowercase cursor-pointer">
+        <DropdownMenuItem onClick={() => onNavigate("/settings/mcp")} className="lowercase cursor-pointer">
           <ZapIcon className="w-4 h-4 mr-2" /> mcp
         </DropdownMenuItem>
       </DropdownMenuContent>
