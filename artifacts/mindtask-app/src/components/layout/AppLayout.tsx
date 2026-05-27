@@ -146,7 +146,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside
-        className={`bg-sidebar text-sidebar-foreground flex flex-col shadow-xl z-20 shrink-0 transition-all duration-300 ease-in-out ${collapsed ? 'w-16' : 'w-72'}`}
+        className={`bg-sidebar text-sidebar-foreground flex flex-col shadow-xl shrink-0 transition-all duration-300 ease-in-out ${collapsed ? 'w-16' : 'w-72'}`}
       >
         {/* Logo + toggle */}
         <div className="flex items-center gap-2 p-4 pr-3 border-b border-sidebar-border/50 min-h-[65px]">

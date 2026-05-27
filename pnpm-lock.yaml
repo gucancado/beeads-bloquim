@@ -61,11 +61,6 @@ overrides:
   path-to-regexp: ^8.4.1
   lodash: ^4.18.0
 
-patchedDependencies:
-  '@beeads/ui@0.1.0':
-    hash: ng3g5443dfxdsvc2tehzq3jvye
-    path: patches/@beeads__ui@0.1.0.patch
-
 importers:
 
   .:
@@ -168,14 +163,14 @@ importers:
   artifacts/mindtask-app:
     dependencies:
       '@beeads/charts':
-        specifier: ^0.1.0
-        version: 0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.1.2
+        version: 0.1.2(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@beeads/tokens':
         specifier: ^0.1.0
         version: 0.1.0
       '@beeads/ui':
-        specifier: ^0.1.0
-        version: 0.1.0(patch_hash=ng3g5443dfxdsvc2tehzq3jvye)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.2.1
+        version: 0.2.1(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -935,8 +930,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@beeads/charts@0.1.0':
-    resolution: {integrity: sha512-VXP5rUyZwJc9P3ikl4/166o4oGDXgoEFTfTL733lHfOBMjSLq9z7vWrsUvfZnSMoj0HIktXeVb7F4LZ4YPnrCg==}
+  '@beeads/charts@0.1.2':
+    resolution: {integrity: sha512-OTUjLt0wRuYovyDBxFJ9hmgu7dhQYsQAWAI6EmC+/wV3TOZLYFY9DR3eA2MB52YvTpXmKRMMi7H3N3ryn34A4A==}
     peerDependencies:
       react: 19.2.5
       react-dom: 19.2.5
@@ -944,8 +939,8 @@ packages:
   '@beeads/tokens@0.1.0':
     resolution: {integrity: sha512-piuN4G0Kat7LGQ6z/nEBLWewDCpiX6b2u4ysa2xCcDa9azPfqlnoprUbnuCrFLzCNVmEES9Ldpd1h3VST8My5A==}
 
-  '@beeads/ui@0.1.0':
-    resolution: {integrity: sha512-99ebk3fs5CWIdOiTsgWb0ECZNxuTFGu/jO2s6/oEN7drgKsr680UA2Y0RaiEafTDO/uMCYiJN+MUxqM6LK/lLA==}
+  '@beeads/ui@0.2.1':
+    resolution: {integrity: sha512-kGRQ4P/dP69JBJhlBVHfwuDS/6/7DSuXPW8Mhb1sOcLIRIYz4vKuqtCPnbZHArRpybhzHnAeSjR1rq/6+r/VTw==}
     peerDependencies:
       react: 19.2.5
       react-dom: 19.2.5
@@ -6064,11 +6059,11 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@beeads/charts@0.1.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/charts@0.1.2(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@beeads/tokens': 0.1.0
-      '@beeads/ui': 0.1.0(patch_hash=ng3g5443dfxdsvc2tehzq3jvye)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      date-fns: 4.1.0
+      '@beeads/ui': 0.2.1(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      date-fns: 4.3.0
       lucide-react: 0.469.0(react@19.2.5)
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
@@ -6080,7 +6075,7 @@ snapshots:
 
   '@beeads/tokens@0.1.0': {}
 
-  '@beeads/ui@0.1.0(patch_hash=ng3g5443dfxdsvc2tehzq3jvye)(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/ui@0.2.1(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@beeads/tokens': 0.1.0
