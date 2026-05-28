@@ -5,6 +5,9 @@
 @import "@beeads/charts/styles.css";
 @import "tailwindcss";
 
+@source "../node_modules/@beeads/ui/dist";
+@source "../node_modules/@beeads/charts/dist";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Bind beeads token --font-* placeholders to actual Google Fonts loaded above */
