@@ -28,6 +28,11 @@ catalog:
 
 minimumReleaseAge: 1440
 
+# First-party @beeads/* packages are trusted and frequently released; exempt
+# them from the release-age gate so fresh design-system versions can be adopted.
+minimumReleaseAgeExclude:
+  - '@beeads/*'
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
