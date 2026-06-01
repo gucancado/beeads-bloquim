@@ -30,7 +30,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as AuthPayload;
     req.user = payload;
     next();
   } catch {
@@ -51,7 +51,7 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
 
   if (token) {
     try {
-      const payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
+      const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as AuthPayload;
       req.user = payload;
     } catch {
     }

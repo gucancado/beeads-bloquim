@@ -109,6 +109,16 @@ router.post("/logout", (_req, res) => {
   res.json({ success: true, message: "Logged out" });
 });
 
+router.get("/logout", (req, res) => {
+  res.clearCookie(SSO_COOKIE_NAME, clearSsoCookieOptions);
+  res.clearCookie(AUTH_COOKIE_NAME, clearAuthCookieOptions);
+  const ret = typeof req.query.return_url === "string" ? req.query.return_url : "/login";
+  const safe =
+    /^https:\/\/([a-z0-9-]+\.)*beeads\.com\.br(\/|$)/.test(ret) ||
+    /^\/(?![/\\])/.test(ret);
+  res.redirect(safe ? ret : "/login");
+});
+
 function avatarUrlFor(user: { id: string; avatarStoragePath: string | null }): string | null {
   return user.avatarStoragePath ? `/api/users/${user.id}/avatar` : null;
 }
