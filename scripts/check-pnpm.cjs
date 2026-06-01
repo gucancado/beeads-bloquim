@@ -12,10 +12,13 @@ for (const stale of ["package-lock.json", "yarn.lock"]) {
   if (fs.existsSync(p)) fs.rmSync(p, { force: true });
 }
 
+// Only refuse install when a NON-pnpm package manager is positively detected.
+// (Don't hard-require a specific pnpm prefix/version — corepack/CI contexts may
+// not surface `npm_config_user_agent` as `pnpm/...`, and the repo runs on pnpm 11.)
 const ua = process.env.npm_config_user_agent ?? "";
-if (!ua.startsWith("pnpm/")) {
+if (ua.startsWith("npm/") || ua.startsWith("yarn/") || ua.startsWith("bun/")) {
   process.stderr.write(
-    "This monorepo requires pnpm. Install with `npm install -g pnpm@9` and re-run.\n",
+    "This monorepo requires pnpm. Install with `corepack enable && pnpm install`.\n",
   );
   process.exit(1);
 }
