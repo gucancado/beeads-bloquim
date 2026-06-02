@@ -25,7 +25,7 @@ RUN pnpm --filter @workspace/api-server build
 # Materialize a production-only standalone deploy directory at /out.
 # pnpm copies workspace:* packages (db, api-zod) into node_modules so we don't
 # need to ship the whole monorepo.
-RUN pnpm --filter @workspace/api-server deploy --prod /out
+RUN pnpm --filter @workspace/api-server deploy --prod --legacy /out
 
 # Copy the built bundle into the deploy dir.
 RUN cp -R /repo/artifacts/api-server/dist /out/dist
