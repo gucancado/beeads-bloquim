@@ -242,14 +242,14 @@ importers:
   artifacts/mindtask-app:
     dependencies:
       '@beeads/charts':
-        specifier: ^0.1.3
-        version: 0.1.3(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.2.0
+        version: 0.2.0(@beeads/tokens@0.3.0)(@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@beeads/tokens':
-        specifier: ^0.1.0
-        version: 0.1.0
-      '@beeads/ui':
         specifier: ^0.3.0
-        version: 0.3.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 0.3.0
+      '@beeads/ui':
+        specifier: ^0.5.0
+        version: 0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -962,10 +962,6 @@ packages:
     peerDependencies:
       '@babel/core': ^7.0.0-0
 
-  '@babel/runtime@7.28.6':
-    resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
-    engines: {node: '>=6.9.0'}
-
   '@babel/runtime@7.29.2':
     resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
@@ -1009,26 +1005,19 @@ packages:
       '@types/react':
         optional: true
 
-  '@beeads/charts@0.1.3':
-    resolution: {integrity: sha512-kz9D+El77AunpWU4rjd+dZlur+TVA2ho8ajl7WCcDTc2+bbYxwdABIvfi9X8kS41JBJn1V6qpGqX1xSxcamzfw==}
+  '@beeads/charts@0.2.0':
+    resolution: {integrity: sha512-9VtRGN23Jbi2ebn2boOnmqD2HCtZ8b9Xx9dN3Xiut8JhhzCXLc10NcFbcIgfc9j01ciyIYPCDiqZ9PrXH4QtKQ==}
     peerDependencies:
+      '@beeads/tokens': '>=0.2.0 <1.0.0'
+      '@beeads/ui': '>=0.4.0 <1.0.0'
       react: '>=18'
       react-dom: '>=18'
 
-  '@beeads/tokens@0.1.0':
-    resolution: {integrity: sha512-piuN4G0Kat7LGQ6z/nEBLWewDCpiX6b2u4ysa2xCcDa9azPfqlnoprUbnuCrFLzCNVmEES9Ldpd1h3VST8My5A==}
+  '@beeads/tokens@0.3.0':
+    resolution: {integrity: sha512-JVKjWfDqBqOd8ujalOBerZ3UrqqhDwxPnshJ1WK+We1d1d7hlCUp/Q3gLZKg6t18JcrlDMk5/Hmgq3iptgzuuw==}
 
-  '@beeads/tokens@0.2.0':
-    resolution: {integrity: sha512-A+oT+8WyyeLhqKikZ+Rb6lp4H1s6vEJjkzi5pYfW3+Eb0oSGvJU1iOdXpFaF13VGdbN+Qx9iNUSX0p7OsmLYmQ==}
-
-  '@beeads/ui@0.2.2':
-    resolution: {integrity: sha512-UEEqP7yfKEmValU8Vp3X4VTpLH/w9+OgpxZ3+IIOBI5aVpu05j08RKbzDWc+p4RF8MlpL5Zcw/5y/5T0GfTUag==}
-    peerDependencies:
-      react: '>=18'
-      react-dom: '>=18'
-
-  '@beeads/ui@0.3.0':
-    resolution: {integrity: sha512-qPZYwwYIxi/lKSsXKsXmEislAV4cWmTcuCAbjpDxVL34YD8CN3py2d/V2xGWJPR9VVUneZtGe7TLwuZ3V0Yeiw==}
+  '@beeads/ui@0.5.0':
+    resolution: {integrity: sha512-3kFG9KtDy6GZa0oSh4SB/TgRv00eZ/xYGRaHbVwuR7fOAYPNEiO3NZbG5BxVGXxrPirumZd7Az9JCptyTcN+/Q==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -5420,8 +5409,6 @@ snapshots:
       '@babel/core': 7.29.0
       '@babel/helper-plugin-utils': 7.28.6
 
-  '@babel/runtime@7.28.6': {}
-
   '@babel/runtime@7.29.2': {}
 
   '@babel/template@7.28.6':
@@ -5472,49 +5459,22 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@beeads/charts@0.1.3(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/charts@0.2.0(@beeads/tokens@0.3.0)(@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@beeads/tokens': 0.1.0
-      '@beeads/ui': 0.2.2(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@beeads/tokens': 0.3.0
+      '@beeads/ui': 0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       date-fns: 4.3.0
       lucide-react: 0.469.0(react@19.2.5)
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
       recharts: 2.15.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-    transitivePeerDependencies:
-      - '@date-fns/tz'
-      - '@types/react'
-      - '@types/react-dom'
 
-  '@beeads/tokens@0.1.0': {}
+  '@beeads/tokens@0.3.0': {}
 
-  '@beeads/tokens@0.2.0': {}
-
-  '@beeads/ui@0.2.2(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@beeads/tokens': 0.1.0
-      '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.5)
-      class-variance-authority: 0.7.1
-      clsx: 2.1.1
-      cmdk: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      date-fns: 4.3.0
-      lucide-react: 0.469.0(react@19.2.5)
-      next-themes: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      react: 19.2.5
-      react-day-picker: 10.0.1(@types/react@19.2.14)(react@19.2.5)
-      react-dom: 19.2.5(react@19.2.5)
-      sonner: 1.7.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      tailwind-merge: 2.6.1
-    transitivePeerDependencies:
-      - '@date-fns/tz'
-      - '@types/react'
-      - '@types/react-dom'
-
-  '@beeads/ui@0.3.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
-    dependencies:
-      '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@beeads/tokens': 0.2.0
+      '@beeads/tokens': 0.3.0
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.5)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -9157,7 +9117,7 @@ snapshots:
 
   react-transition-group@4.4.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       dom-helpers: 5.2.1
       loose-envify: 1.4.0
       prop-types: 15.8.1

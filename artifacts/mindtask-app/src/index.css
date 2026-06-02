@@ -37,11 +37,9 @@
   --color-card-foreground: hsl(var(--card-foreground));
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-sidebar: hsl(var(--sidebar));
-  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
-  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  /* Sidebar tokens now provided by @beeads/tokens@>=0.3.0 (theme.css), which
+     exposes raw HSL channels + derived -full vars (alpha-capable, v3 + v4).
+     Local duplicates removed — values were identical to the DS defaults. */
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -80,12 +78,7 @@
   --input: 214.3 31.8% 91.4%;
   --ring: 36 100% 50%;
 
-  /* Sidebar follows theme — light variant uses muted/card tones */
-  --sidebar: 210 20% 96.5%;
-  --sidebar-foreground: 222 47% 11%;
-  --sidebar-border: 214.3 31.8% 88%;
-  --sidebar-accent: 0 0% 100%;
-  --sidebar-accent-foreground: 222 47% 11%;
+  /* Sidebar tokens removed — see @beeads/tokens theme.css (light defaults). */
 
   --radius: 0.75rem;
 
@@ -126,11 +119,7 @@
   --input: 215 28% 17%;
   --ring: 36 100% 50%;
 
-  --sidebar: 0 0% 7.8%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 215 28% 15%;
-  --sidebar-accent: 0 0% 13.7%;
-  --sidebar-accent-foreground: 210 40% 98%;
+  /* Sidebar dark tokens removed — see @beeads/tokens theme.css (.dark). */
 }
 
 @layer base {
