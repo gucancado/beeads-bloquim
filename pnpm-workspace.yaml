@@ -33,6 +33,20 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@beeads/*'
 
+# pnpm 11 requires an explicit per-package build approval via `allowBuilds`.
+# `onlyBuiltDependencies` alone is NOT honored on a fresh install (empty store /
+# no node_modules, e.g. the Docker/Coolify build): pnpm emits a stub
+# `allowBuilds: { <pkg>: "set this to true or false" }` and fails with
+# ERR_PNPM_IGNORED_BUILDS until each entry is set to true/false. The api-server
+# Docker build bundles with esbuild, so its postinstall must be allowed to run.
+# Keep both keys: `onlyBuiltDependencies` (legacy allowlist) + `allowBuilds`
+# (the pnpm 11 explicit approval that actually gates fresh installs).
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  msw: true
+  unrs-resolver: true
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
