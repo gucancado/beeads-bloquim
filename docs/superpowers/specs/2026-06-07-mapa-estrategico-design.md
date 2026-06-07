@@ -99,6 +99,10 @@ Padrão: `strategy_nodes` cuida do canvas (posição, mapa); satélites tipados 
 |---|---|---|
 | `kind` | enum `action` \| `strategy`, default `action` | filtro de listagem; 1 linha `strategy` por workspace |
 
+**Constraints:**
+- **Índice único parcial** `UNIQUE (workspace_id) WHERE kind = 'strategy'` — garante no máximo uma linha `strategy` por workspace, mesmo sob criação concorrente (resolve a corrida da criação lazy).
+- A criação lazy usa `INSERT ... ON CONFLICT DO NOTHING` por `workspace_id` (idempotente) seguido de `SELECT`.
+
 ### 6.2 `strategy_nodes`
 
 | Coluna | Tipo | Nota |
@@ -116,7 +120,7 @@ Padrão: `strategy_nodes` cuida do canvas (posição, mapa); satélites tipados 
 
 **`strategy_objectives`** — `node_id` PK/FK, `title`, `description`, `status` (`provisorio`·`validado`·`arquivado`). *Saúde derivada da agregação dos KRs ligados; não bindeia métrica direto.*
 
-**`strategy_krs`** — `node_id` PK/FK, `title`, `unit`, `target_value` numeric, `current_value` numeric, `baseline_value` numeric null, `direction` (`subir`·`descer`), `source_kind` (`manual` default · `metrica`), `source_config` jsonb null *(estrutura definida no v2; vazio no v1)*, `last_synced_at` timestamptz null, `health` (`no_prazo`·`risco`·`fora`, computado). No v1, `current_value` é manual.
+**`strategy_krs`** — `node_id` PK/FK, `title`, `unit`, `target_value` numeric, `current_value` numeric, `baseline_value` numeric null, `direction` (`subir`·`descer`), `source_kind` (`manual` default · `metrica`), `source_config` jsonb null, `last_synced_at` timestamptz null, `health` (`no_prazo`·`risco`·`fora`, computado). No v1, `current_value` é manual e `source_kind` é sempre `manual`. **Colunas v2-inertes** (`source_config`, `last_synced_at`, e o valor `metrica` de `source_kind`) existem desde o v1 — nuláveis, sem comportamento — por decisão de produto: a integração viva com a central-de-dados deve ser puramente aditiva (sem migration de schema no v2). Mantidas conscientemente apesar do custo de superfície de migration/codegen.
 
 **`strategy_themes`** — `node_id` PK/FK, `title`, `description`.
 
@@ -124,7 +128,7 @@ Padrão: `strategy_nodes` cuida do canvas (posição, mapa); satélites tipados 
 
 **`strategy_resources`** — `node_id` PK/FK, `resource_kind` (`meta_ads`·`google_ads`·`site`·`instagram`·`outro`), `label`, `binding` jsonb null *(ex.: `{client_platform_id}` p/ Meta; `{url}` p/ site; `{handle}` p/ instagram — preenchido no v1, consumido no v2)*.
 
-**`strategy_plans`** — `node_id` PK/FK, `map_id` uuid → maps.id *(o `map` operacional, kind=`action`, que materializa o plano)*, `hypothesis` text (a hipótese "X→Y porque Z"). Nota: este `map_id` aponta para **outro** map (o plano de ação), distinto do `strategy_nodes.map_id` (o canvas estratégico).
+**`strategy_plans`** — `node_id` PK/FK, `action_map_id` uuid → maps.id *(o `map` operacional, `kind='action'`, que materializa o plano)*, `hypothesis` text (a hipótese "X→Y porque Z"). Nome `action_map_id` (não `map_id`) para desambiguar do `strategy_nodes.map_id` (o canvas estratégico). CHECK/validação na app de que o map referenciado tem `kind='action'`. `ON DELETE`: se o `map` operacional for apagado, o nó Plano perde o vínculo — `action_map_id` vira `NULL` (`SET NULL`); o nó permanece no mapa estratégico com a hipótese, sinalizado como "sem plano de ação vinculado".
 
 ### 6.4 `strategy_edges`
 
@@ -139,11 +143,23 @@ Padrão: `strategy_nodes` cuida do canvas (posição, mapa); satélites tipados 
 | `created_by` | uuid → users.id | |
 | `created_at` | timestamptz | |
 
+**Constraints:** ambos os nós da aresta devem pertencer ao mesmo canvas — validação `source_node.map_id = target_node.map_id = edges.map_id` (CHECK via trigger ou na camada de aplicação). `ON DELETE CASCADE` de `strategy_nodes` → arestas que tocam um nó apagado somem.
+
 **Decisões embutidas:**
 - Objetivo não bindeia métrica; saúde = agregação dos KRs ligados.
 - KR é o nó vivo de verdade. v1 manual; v2 plugga `source_kind=metrica` sem migration (colunas já existem).
-- Recurso é a âncora externa via `binding`.
+- Recurso é a âncora externa via `binding` (v1: preenchido/editável, **inerte** — sem pull).
 - Plano = `map` operacional + hipótese.
+
+### 6.5 Integridade, consistência e deleção
+
+- **kind ↔ satélite:** cada `strategy_nodes` tem exatamente um satélite, da tabela que casa com seu `kind` (nó `kr` ⇒ linha em `strategy_krs`, e só nela). Garantido na criação transacional (§10.2) e por validação na app.
+- **workspace consistente:** `strategy_nodes.workspace_id` deve igualar `maps.workspace_id` do `map_id`. Trigger/validação impede drift que burlaria a autorização por workspace.
+- **Deleção em cascata:**
+  - apagar um `strategy_nodes` ⇒ cascade no satélite + nas `strategy_edges` que o tocam.
+  - apagar a linha `maps` `strategy` (raro; só com o workspace) ⇒ cascade em `strategy_nodes`, `strategy_edges`, e nas formas/textos/imagens daquele `map_id` (comportamento já existente de `maps`).
+  - apagar o `map` operacional referenciado por um Plano ⇒ `strategy_plans.action_map_id` vira `NULL` (não apaga o nó Plano).
+- **Satélites:** PK = FK = `node_id`, `ON DELETE CASCADE` a partir de `strategy_nodes`.
 
 ---
 
@@ -165,7 +181,7 @@ Clicar numa aresta abre edição de `label` livre + escolha opcional de `relatio
 
 ### 7.4 Sugestões inteligentes (não-trava)
 
-O sistema **oferece**, nunca bloqueia:
+Regras de UI **determinísticas** (não usam IA): disparam por padrão de tipos ligados. O sistema **oferece**, nunca bloqueia:
 - Ligar 2 cards SWOT → botão flutuante na aresta: "criar Tema a partir deste cruzamento?" (cria nó Tema pré-ligado aos dois SWOT).
 - Ligar KR a Objetivo → sugerir `relation_type = mede`.
 - Ligar Plano a KR → sugerir `move`; Tema a Objetivo → `serve`; Tema a Plano → `contem`.
@@ -175,6 +191,17 @@ Sugestões são dispensáveis e nunca impedem uma ligação livre.
 ### 7.5 Edição / autosave
 
 Segue a convenção de autosave do Bloquim: edição inline, salva no `onBlur`/`onChange`, sem botões Salvar/Cancelar. (Ver memória `bloquim_autosave_convention`.)
+
+### 7.6 Sincronização em tempo real
+
+A camada de presença (`presenceServer`) é **só cursores/usuários** — não sincroniza dados. Decisão de co-edição dos nós/arestas no v1:
+
+- **v1 = paridade com o plano de ação.** O canvas estratégico usa o **mesmo mecanismo de sincronização de dados que os `cards`/conexões do plano de ação já usam hoje** (a verificar no plano de implementação: se há broadcast WebSocket de mutações ou só invalidação de query/optimistic update via TanStack Query). Não inventar mecanismo novo — espelhar o existente garante consistência e não-regressão.
+- Se o plano de ação hoje **não** tem co-edição ao vivo de dados (só presença de cursor), então o mapa estratégico também não terá no v1: mutações via REST otimista + invalidação; co-edição simultânea de dados fica fora do v1. Cursores multiplayer **continuam** ao vivo (camada de presença, compartilhada).
+
+### 7.7 Undo/redo
+
+Espelhar o comportamento do plano de ação: se o canvas atual tem undo/redo, o componente base compartilhado o herda para os dois mapas; se não tem, fica **fora do v1** (mutações são autosave + deleção explícita). Decisão final no plano, após inspecionar o canvas atual.
 
 ---
 
@@ -223,6 +250,27 @@ Formas/texto/imagem reusam as rotas existentes de `map_shapes`/`map_text_element
 - O `GET .../strategy` já deixa o grafo alcançável no v1.
 - Wrappers MCP (`get_strategy_map`, etc.) no `bloquim-mcp` entram quando um agente precisar — mesmo padrão dos `plan tools` (que hoje envolvem `/maps`).
 
+### 10.2 Permissões
+
+Reusa os papéis de `workspace_members` (`admin` · `editor` · `executor`) com o middleware de permissão existente. Mapeamento v1:
+
+| Ação | admin | editor | executor |
+|---|---|---|---|
+| Ver o mapa estratégico | ✓ | ✓ | ✓ |
+| Criar/editar/mover nós e arestas | ✓ | ✓ | ✗ (só leitura) |
+| Editar valor de KR / status de Objetivo | ✓ | ✓ | ✗ |
+| Vincular Plano a um `map` operacional | ✓ | ✓ | ✗ |
+| Apagar nós/arestas | ✓ | ✓ | ✗ |
+
+(Alinhar com a política de permissão já aplicada aos `maps`/cards; se a do plano de ação diferir, seguir a dela para consistência — verificar no plano.)
+
+### 10.3 Semântica transacional
+
+- **Criação de nó:** `INSERT strategy_nodes` + `INSERT` no satélite tipado numa **única transação** (nó sem satélite, ou vice-versa, é estado inválido).
+- **Criação lazy do mapa `strategy`:** `INSERT ... ON CONFLICT (workspace_id) WHERE kind='strategy' DO NOTHING` + `SELECT`, idempotente, protegido pelo índice único parcial (§6.1).
+- **Aresta entre nós:** valida (na mesma transação) que ambos os nós existem e pertencem ao `map_id`.
+- **Deleção de nó:** transação que remove satélite + arestas incidentes + o nó (ou via `ON DELETE CASCADE`).
+
 ---
 
 ## 11. Escopo
@@ -235,7 +283,8 @@ Formas/texto/imagem reusam as rotas existentes de `map_shapes`/`map_text_element
 - Grafo livre · arestas flutuantes · rótulo/tipo opcional.
 - Sugestões inteligentes (cruzamento SWOT → tema; rotulagem da gramática).
 - Saúde do KR (manual) e do Objetivo (agregação).
-- Endpoints de leitura/escrita do grafo.
+- Endpoints de leitura/escrita do grafo, com permissões por papel (`admin`/`editor` editam; `executor` lê).
+- Sincronização de dados espelhando o plano de ação (§7.6).
 
 ### Fora (depois)
 - Pull vivo da central-de-dados (KR `source_kind=metrica`) — aditivo.
@@ -252,14 +301,34 @@ Formas/texto/imagem reusam as rotas existentes de `map_shapes`/`map_text_element
 - Extrair o canvas base é refactor **comportamento-preservante**: a UI do plano de ação atual deve funcionar idêntica.
 - **Gate:** suíte de regressão do plano de ação (cards, conexões, formas, texto, imagem, presença, zoom) verde antes de qualquer merge que toque o canvas compartilhado.
 
+### 12.1 Checklist de pontos de integração em risco
+
+Cada item deve ser verificado e tratado explicitamente no plano de implementação:
+
+1. **Queries/rotas de listagem de `maps`** — todas precisam filtrar `kind='action'` (ou default) para não vazar o canvas `strategy` na lista de Mapas, busca, sidebar, recent maps, dashboard.
+2. **Rotas de `map_shapes` / `map_text_elements` / storage** — confirmar que nenhuma assume `cards`/`tasks` no map; devem operar por `map_id` agnóstico ao `kind`.
+3. **Payload da presença WebSocket** — garantir que é agnóstico ao `mode` (não pressupõe IDs de card); cursores funcionam nos dois mapas.
+4. **Guards da toolbar** — ações específicas de `action` (criar card/conexão fixa) não disparam em `strategy` e vice-versa.
+5. **Isolamento do render de nó** — comportamento card↔task fica 100% atrás do `mode='action'`; nenhum código de estratégia toca a renderização de cards.
+6. **MCP `plan tools`** — continuam envolvendo só `/maps` `kind='action'`; não devem enxergar o map `strategy`.
+
+### 12.2 Ordem de migration (produção)
+
+1. Migration DB: adicionar `maps.kind` com default `action` (backfill implícito) + tabelas `strategy_*` + índices/constraints.
+2. Server: aplicar filtros `kind='action'` nas queries existentes de `maps` (item 1 do checklist) **antes** de qualquer linha `strategy` existir.
+3. Server: novas rotas `/strategy/*` + criação lazy.
+4. Codegen (`openapi.yaml` → Orval → Zod) + release da UI (aba Estratégia).
+
+Passos 1–2 protegem os maps de produção; a aba só aparece após 3–4.
+
 ---
 
 ## 13. Riscos e questões abertas
 
 - **Polimorfismo de nó:** `strategy_nodes` + satélites 1:1 vs colunas inline. Optado por satélites (dado tipado limpo p/ agentes); custo = joins na leitura. Mitigado pelo endpoint que monta o grafo de uma vez.
-- **Floating edges em ReactFlow 11:** exige `EdgeType` custom + cálculo de interseção borda-nó; viável (exemplo oficial), mas é o ponto técnico mais novo.
-- **Limiares de saúde** (faixas `no_prazo`/`risco`/`fora`) e **regra de agregação** do Objetivo: definir no plano de implementação.
-- **Criação lazy do mapa `strategy`:** concorrência (2 usuários abrindo a aba ao mesmo tempo) — usar upsert idempotente por `workspace_id`.
+- **Floating edges em ReactFlow 11 (ponto técnico mais novo):** exige edge type custom + cálculo de interseção linha↔borda do nó (exemplo oficial "Floating Edges" do RF11 é a base). Pontos a resolver no plano: hit-testing/seleção da aresta, edição da aresta selecionada (rótulo/tipo), reconexão, e performance do recálculo durante o drag (memoizar interseção, recalcular só nos nós movidos).
+- **Limiares de saúde** (faixas `no_prazo`/`risco`/`fora`) e **regra de agregação** do Objetivo (pior-caso vs média ponderada): definir no plano de implementação.
+- **Mecanismo de sincronização de dados** (§7.6) e **undo/redo** (§7.7): decisão final depende de inspecionar o que o plano de ação já faz — espelhar, não inventar.
 - **Conjunto inicial de `relation_type`** e vocabulário de sugestões: validar com uso real.
 
 ---
