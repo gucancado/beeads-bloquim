@@ -69,5 +69,16 @@ describe("maps kind scope guard (action-only listings)", () => {
     expect(wsEntry).toBeTruthy();
     expect(hasStrategy(wsEntry.maps)).toBe(false);
     expect(hasAction(wsEntry.maps)).toBe(true);
+
+    // 6) GET /workspaces/:id (detalhe) → .maps exclui strategy
+    const detail = await agent.get(`/api/workspaces/${ws.id}`);
+    expect(detail.status).toBe(200);
+    expect(hasStrategy(detail.body.maps)).toBe(false);
+    expect(hasAction(detail.body.maps)).toBe(true);
+
+    // 7) GET /workspaces/:id/dashboard → totalMaps não conta strategy (só o action)
+    const dash = await agent.get(`/api/workspaces/${ws.id}/dashboard`);
+    expect(dash.status).toBe(200);
+    expect(dash.body.totalMaps).toBe(1);
   });
 });
