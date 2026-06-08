@@ -36,13 +36,12 @@ export function makeAgent(): Agent {
  * register endpoint) and logs them in via the real auth flow. Used by tests
  * that need many fresh users without hitting the per-IP register quota.
  */
-export async function registerAndLogin(): Promise<{
+export async function registerAndLogin(name = "Smoke Tester"): Promise<{
   agent: Agent;
   user: TestUser;
 }> {
   const email = `smoke_${randomUUID()}@test.local`;
   const password = "Smoke12345!";
-  const name = "Smoke Tester";
 
   const passwordHash = await bcrypt.hash(password, 12);
   const [created] = await db

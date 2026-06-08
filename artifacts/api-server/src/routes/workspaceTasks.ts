@@ -209,7 +209,6 @@ const createTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
-  ownerId: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   startAt: z.string().nullable().optional(),
   scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
@@ -218,7 +217,9 @@ const createTaskSchema = z.object({
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
-const updateTaskSchema = createTaskSchema.partial();
+const updateTaskSchema = createTaskSchema.partial().extend({
+  ownerId: z.string().uuid().nullable().optional(),
+});
 
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
