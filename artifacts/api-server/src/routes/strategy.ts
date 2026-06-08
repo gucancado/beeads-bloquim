@@ -292,13 +292,16 @@ router.post("/nodes", requireAuth, requireWorkspaceRole(["admin", "editor"]), as
       return;
     }
     const direction = data.direction ?? "subir";
-    const baseline = typeof data.baselineValue === "number" ? data.baselineValue : null;
-    if (baseline !== null && data.targetValue !== baseline) {
-      if (direction === "subir" && !(data.targetValue > baseline)) {
+    // Validar contra o MESMO baseline efetivo que a saúde usa (strategyHealth.ts
+    // faz `baseline ?? 0`). Senão um KR `descer` sem baseline escapa a checagem e
+    // a fórmula auto-normaliza como `subir` (target > 0) → saúde invertida.
+    const effBaseline = typeof data.baselineValue === "number" ? data.baselineValue : 0;
+    if (data.targetValue !== effBaseline) {
+      if (direction === "subir" && !(data.targetValue > effBaseline)) {
         res.status(400).json({ error: "Validation error", message: "direction 'subir' exige target > baseline" });
         return;
       }
-      if (direction === "descer" && !(data.targetValue < baseline)) {
+      if (direction === "descer" && !(data.targetValue < effBaseline)) {
         res.status(400).json({ error: "Validation error", message: "direction 'descer' exige target < baseline" });
         return;
       }
@@ -457,12 +460,15 @@ router.patch("/nodes/:nodeId", requireAuth, requireWorkspaceRole(["admin", "edit
     const target = "targetValue" in data ? data.targetValue : kr?.targetValue;
     const baseline = "baselineValue" in data ? data.baselineValue : kr?.baselineValue;
     const direction = "direction" in data ? data.direction : kr?.direction;
-    if (baseline != null && target != null && target !== baseline) {
-      if (direction === "subir" && !(target > baseline)) {
+    // Mesmo baseline efetivo da saúde (`baseline ?? 0`) — cobre o caso `descer`
+    // sem baseline que escaparia a validação e inverteria a saúde.
+    const effBaseline = baseline != null ? Number(baseline) : 0;
+    if (target != null && Number(target) !== effBaseline) {
+      if (direction === "subir" && !(Number(target) > effBaseline)) {
         res.status(400).json({ error: "Validation error", message: "direction 'subir' exige target > baseline" });
         return;
       }
-      if (direction === "descer" && !(target < baseline)) {
+      if (direction === "descer" && !(Number(target) < effBaseline)) {
         res.status(400).json({ error: "Validation error", message: "direction 'descer' exige target < baseline" });
         return;
       }

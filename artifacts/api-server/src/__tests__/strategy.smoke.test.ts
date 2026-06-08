@@ -239,4 +239,54 @@ describe("strategy graph smoke", () => {
     expect(n2(kr.id).readOnly).toBe(true);
     expect(n2(swot.id).readOnly).toBe(false); // sem ciclo → segue ativo
   });
+
+  // Regressão (revisão codex pré-merge): KR `descer` SEM baseline escapava a
+  // validação de coerência (só rodava com baseline != null) e a saúde usava
+  // `baseline ?? 0`, auto-normalizando como `subir` → saúde invertida.
+  describe("KR direction × baseline efetivo (baseline ?? 0)", () => {
+    it("rejeita descer sem baseline com target > 0 (escaparia → saúde invertida)", async () => {
+      const { agent, wsId } = await setup();
+      await agent.get(base(wsId));
+      const res = await agent.post(`${base(wsId)}/nodes`).send({
+        kind: "kr",
+        positionX: 0,
+        positionY: 0,
+        data: { title: "Reduzir churn", targetValue: 100, direction: "descer" },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/descer/);
+    });
+
+    it("aceita descer com baseline coerente (target < baseline)", async () => {
+      const { agent, wsId } = await setup();
+      await agent.get(base(wsId));
+      const node = await createNode(agent, wsId, "kr", {
+        title: "Reduzir churn",
+        targetValue: 2,
+        baselineValue: 10,
+        direction: "descer",
+      });
+      expect(node.kind).toBe("kr");
+    });
+
+    it("aceita subir sem baseline com target > 0", async () => {
+      const { agent, wsId } = await setup();
+      await agent.get(base(wsId));
+      const node = await createNode(agent, wsId, "kr", {
+        title: "Crescer MRR",
+        targetValue: 100,
+        direction: "subir",
+      });
+      expect(node.kind).toBe("kr");
+    });
+
+    it("PATCH para descer sem baseline com target > 0 é rejeitado", async () => {
+      const { agent, wsId } = await setup();
+      await agent.get(base(wsId));
+      const node = await createNode(agent, wsId, "kr", { title: "KR", targetValue: 100, direction: "subir" });
+      const res = await agent.patch(`${base(wsId)}/nodes/${node.id}`).send({ data: { direction: "descer" } });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/descer/);
+    });
+  });
 });

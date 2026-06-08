@@ -1,0 +1,352 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRoute } from "wouter";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  BackgroundVariant,
+  SelectionMode,
+  ConnectionMode,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  type Node,
+  type Edge,
+  type NodeChange,
+} from "reactflow";
+import "reactflow/dist/style.css";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { Button } from "@beeads/ui";
+import { Loader2, Plus } from "lucide-react";
+import { CanvasToolbar } from "@/components/canvas-base/CanvasToolbar";
+import { CanvasControls } from "@/components/canvas-base/CanvasControls";
+import { StrategyNodeView } from "@/components/strategy/StrategyNodeView";
+import { FloatingEdge } from "@/components/strategy/FloatingEdge";
+import {
+  useStrategyGraph,
+  useCreateStrategyNode,
+  useUpdateStrategyNode,
+  useCreateStrategyEdge,
+  useDeleteStrategyNode,
+  useOpenStrategyCycle,
+  type StrategyNodeKind,
+} from "@/hooks/useStrategy";
+import type { Connection } from "reactflow";
+
+const nodeTypes = { strategy: StrategyNodeView };
+const edgeTypes = { floating: FloatingEdge };
+
+const NODE_BUTTONS: { kind: StrategyNodeKind; label: string }[] = [
+  { kind: "objetivo", label: "Objetivo" },
+  { kind: "kr", label: "KR" },
+  { kind: "tema", label: "Tema" },
+  { kind: "swot", label: "SWOT" },
+  { kind: "plano", label: "Plano" },
+  { kind: "recurso", label: "Recurso" },
+];
+
+function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
+  const { data: graph, isLoading } = useStrategyGraph(workspaceId);
+  const createNode = useCreateStrategyNode(workspaceId);
+  const updateNode = useUpdateStrategyNode(workspaceId);
+  const createEdge = useCreateStrategyEdge(workspaceId);
+  const deleteNode = useDeleteStrategyNode(workspaceId);
+  const openCycle = useOpenStrategyCycle(workspaceId);
+  const { screenToFlowPosition, getViewport, setViewport } = useReactFlow();
+  const getViewportRef = useRef(getViewport);
+  getViewportRef.current = getViewport;
+  const setViewportRef = useRef(setViewport);
+  setViewportRef.current = setViewport;
+
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges] = useEdgesState([]);
+  const [cycleFormOpen, setCycleFormOpen] = useState(false);
+  const [cycleLabelInput, setCycleLabelInput] = useState("");
+  const editingRef = useRef(false);
+  const updateNodeRef = useRef(updateNode);
+  updateNodeRef.current = updateNode;
+  const createNodeRef = useRef(createNode);
+  createNodeRef.current = createNode;
+  const createEdgeRef = useRef(createEdge);
+  createEdgeRef.current = createEdge;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+
+  // Sugestão TOWS (§7.4): ao cruzar 2 SWOT, cria um Tema pré-ligado aos dois.
+  const suggestTema = useCallback((aId: string, bId: string) => {
+    const g = graphRef.current;
+    const a = g?.nodes.find((n) => n.id === aId);
+    const b = g?.nodes.find((n) => n.id === bId);
+    if (!a || !b) return;
+    const mx = (a.positionX + b.positionX) / 2;
+    const my = (a.positionY + b.positionY) / 2 - 120;
+    createNodeRef.current.mutate(
+      { kind: "tema", positionX: mx, positionY: my, data: { title: "Tema (TOWS)" } },
+      {
+        onSuccess: (tema) => {
+          createEdgeRef.current.mutate({ sourceNodeId: tema.id, targetNodeId: aId });
+          createEdgeRef.current.mutate({ sourceNodeId: tema.id, targetNodeId: bId });
+        },
+      },
+    );
+  }, []);
+
+  // Hidrata nós/arestas do grafo (sem pisar numa edição/drag em andamento).
+  useEffect(() => {
+    if (!graph || editingRef.current) return;
+    const kindById = new Map(graph.nodes.map((n) => [n.id, n.kind]));
+    // Detector de órfãos (§7.8): sinal dispensável p/ padrões incompletos.
+    const orphanOf = (n: (typeof graph.nodes)[number]): string | null => {
+      if (n.readOnly) return null;
+      if (n.kind === "objetivo") {
+        const hasMede = graph.edges.some((e) => e.relationType === "mede" && e.targetNodeId === n.id);
+        return hasMede ? null : "sem KR";
+      }
+      if (n.kind === "kr") {
+        const hasPlano = graph.edges.some(
+          (e) => e.relationType === "move" && e.targetNodeId === n.id && kindById.get(e.sourceNodeId) === "plano",
+        );
+        return hasPlano ? null : "sem plano";
+      }
+      if (n.kind === "plano") {
+        return n.data.actionMapId ? null : "sem mapa";
+      }
+      return null;
+    };
+    setNodes(
+      graph.nodes.map<Node>((n) => ({
+        id: n.id,
+        type: "strategy",
+        position: { x: n.positionX, y: n.positionY },
+        data: {
+          kind: n.kind,
+          readOnly: n.readOnly,
+          orphan: orphanOf(n),
+          ...n.data,
+          // autosave inline (§7.5): o nó chama isto no blur de um campo editado.
+          onPatchData: (patch: Record<string, any>) =>
+            updateNodeRef.current.mutate({ nodeId: n.id, data: patch }),
+        },
+        draggable: !n.readOnly,
+      })),
+    );
+    setEdges(
+      graph.edges.map<Edge>((e) => {
+        // Cruzamento SWOT×SWOT sem tipo → oferece criar Tema (§7.4).
+        const isSwotCross =
+          e.relationType == null &&
+          kindById.get(e.sourceNodeId) === "swot" &&
+          kindById.get(e.targetNodeId) === "swot";
+        return {
+          id: e.id,
+          source: e.sourceNodeId,
+          target: e.targetNodeId,
+          type: "floating",
+          data: {
+            label: e.relationType ?? e.label ?? undefined,
+            onSuggestTema: isSwotCross ? () => suggestTema(e.sourceNodeId, e.targetNodeId) : undefined,
+          },
+        };
+      }),
+    );
+  }, [graph, setNodes, setEdges, suggestTema]);
+
+  const onNodesChangeWrapped = useCallback(
+    (changes: NodeChange[]) => {
+      if (changes.some((c) => c.type === "position" && c.dragging)) editingRef.current = true;
+      onNodesChange(changes);
+    },
+    [onNodesChange],
+  );
+
+  const onNodeDragStop = useCallback(
+    (_e: unknown, node: Node) => {
+      editingRef.current = false;
+      updateNode.mutate({ nodeId: node.id, positionX: node.position.x, positionY: node.position.y });
+    },
+    [updateNode],
+  );
+
+  // Liga 2 nós — relation_type é pré-preenchido pela gramática no backend (§6.5).
+  const onConnect = useCallback(
+    (c: Connection) => {
+      if (!c.source || !c.target || c.source === c.target) return;
+      createEdge.mutate({ sourceNodeId: c.source, targetNodeId: c.target });
+    },
+    [createEdge],
+  );
+
+  const onNodesDelete = useCallback(
+    (deleted: Node[]) => {
+      for (const n of deleted) deleteNode.mutate(n.id);
+    },
+    [deleteNode],
+  );
+
+  // Pan com botão direito mesmo começando sobre um nó/aresta (universal com o
+  // plano de ação): panOnDrag={[2]} já cobre o pane vazio; isto estende p/ nós.
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 2) return;
+      const target = event.target as Element | null;
+      const onElement = target?.closest(".react-flow__node, .react-flow__edge");
+      if (!onElement) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      let lastX = event.clientX;
+      let lastY = event.clientY;
+      let moved = false;
+      const prevCursor = document.body.style.cursor;
+      document.body.style.cursor = "grabbing";
+
+      const handleMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - lastX;
+        const dy = ev.clientY - lastY;
+        lastX = ev.clientX;
+        lastY = ev.clientY;
+        if (dx !== 0 || dy !== 0) moved = true;
+        const vp = getViewportRef.current();
+        setViewportRef.current({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom });
+      };
+      const handleUp = () => {
+        document.removeEventListener("mousemove", handleMove, true);
+        document.removeEventListener("mouseup", handleUp, true);
+        document.body.style.cursor = prevCursor;
+        if (moved) {
+          const swallow = (e: Event) => {
+            e.preventDefault();
+            e.stopPropagation();
+            document.removeEventListener("contextmenu", swallow, true);
+          };
+          document.addEventListener("contextmenu", swallow, { capture: true, once: true });
+        }
+      };
+      document.addEventListener("mousemove", handleMove, true);
+      document.addEventListener("mouseup", handleUp, true);
+    };
+    document.addEventListener("mousedown", handleMouseDown, { capture: true });
+    return () => document.removeEventListener("mousedown", handleMouseDown, { capture: true });
+  }, []);
+
+  const addNode = useCallback(
+    (kind: StrategyNodeKind) => {
+      // cria no centro aproximado do viewport
+      const pos = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      const data: Record<string, any> =
+        kind === "kr"
+          ? { title: "Novo KR", targetValue: 100 }
+          : kind === "swot"
+            ? { swotType: "forca", text: "" }
+            : kind === "recurso"
+              ? { resourceKind: "outro", label: "" }
+              : kind === "plano"
+                ? { hypothesis: "" }
+                : { title: kind === "objetivo" ? "Novo objetivo" : "Novo tema" };
+      createNode.mutate({ kind, positionX: pos.x, positionY: pos.y, data });
+    },
+    [createNode, screenToFlowPosition],
+  );
+
+  const cycleLabel = graph?.cycle?.label;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+        <PageBreadcrumb items={[{ label: "estratégia" }]} />
+        {cycleLabel && (
+          <span className="rounded-full bg-honey/15 px-3 py-1 text-xs font-medium text-fg lowercase">{cycleLabel}</span>
+        )}
+        {!cycleFormOpen ? (
+          <Button variant="ghost" className="h-7 px-2 text-xs lowercase" onClick={() => { setCycleLabelInput(""); setCycleFormOpen(true); }}>
+            novo ciclo
+          </Button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              aria-label="rótulo do ciclo"
+              value={cycleLabelInput}
+              onChange={(e) => setCycleLabelInput(e.target.value)}
+              placeholder="ex: Q3 2026"
+              className="h-7 w-28 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-honey"
+            />
+            <Button
+              className="h-7 px-2 text-xs lowercase"
+              disabled={!cycleLabelInput.trim() || openCycle.isPending}
+              onClick={() => {
+                openCycle.mutate({ label: cycleLabelInput.trim() }, { onSuccess: () => setCycleFormOpen(false) });
+              }}
+            >
+              abrir
+            </Button>
+            <Button variant="ghost" className="h-7 px-2 text-xs lowercase" onClick={() => setCycleFormOpen(false)}>
+              cancelar
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <CanvasToolbar>
+        {NODE_BUTTONS.map((b) => (
+          <Button
+            key={b.kind}
+            onClick={() => addNode(b.kind)}
+            disabled={createNode.isPending}
+            variant="outline"
+            className="rounded-xl h-10 px-4 shadow-md bg-background border-border/60 select-none cursor-pointer"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            <span className="lowercase">{b.label}</span>
+          </Button>
+        ))}
+      </CanvasToolbar>
+
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChangeWrapped}
+        onNodeDragStop={onNodeDragStop}
+        onConnect={onConnect}
+        onNodesDelete={onNodesDelete}
+        deleteKeyCode="Delete"
+        connectionMode={ConnectionMode.Loose}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[2]}
+        onPaneContextMenu={(e) => e.preventDefault()}
+        fitView
+        fitViewOptions={{ padding: 0.3 }}
+        minZoom={0.2}
+        maxZoom={2.5}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="hsl(var(--muted-foreground) / 0.15)" />
+        <CanvasControls />
+      </ReactFlow>
+    </div>
+  );
+}
+
+export default function StrategyCanvasPage() {
+  const [, params] = useRoute("/workspaces/:wsId/strategy");
+  const workspaceId = params?.wsId ?? "";
+  return (
+    <AppLayout>
+      <ReactFlowProvider>
+        <StrategyCanvasInner workspaceId={workspaceId} />
+      </ReactFlowProvider>
+    </AppLayout>
+  );
+}

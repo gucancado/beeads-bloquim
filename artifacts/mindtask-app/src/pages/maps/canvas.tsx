@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { usePositionHistory, NodePositionSnapshot } from "@/hooks/usePositionHistory";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
+import { ReactFlow, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
@@ -29,6 +29,7 @@ import { PresenceCursorsOverlay } from "@/realtime/PresenceCursorsOverlay";
 import { sampleBezier, edgeIntersectsNodeBBox } from "@/components/canvas-base/geometry";
 import { CanvasToolbar } from "@/components/canvas-base/CanvasToolbar";
 import { CanvasDrawGhosts } from "@/components/canvas-base/CanvasDrawGhosts";
+import { CanvasControls } from "@/components/canvas-base/CanvasControls";
 
 interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   sourceHandle?: string;
@@ -309,7 +310,7 @@ function buildEdgeFromConn(
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView, setCenter } = useReactFlow();
+  const { getViewport, setViewport, screenToFlowPosition, setCenter } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const [cardGhost, setCardGhost] = useState<{ x: number; y: number } | null>(null);
@@ -2839,17 +2840,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             className="w-full h-full"
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="hsl(var(--muted-foreground) / 0.15)" />
-            <Controls className="bg-card border border-border shadow-md rounded-xl overflow-hidden" showZoom={false} showFitView={false} showInteractive={false}>
-              <ControlButton title="aproximar" onClick={() => zoomIn()}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M32 18.133H18.133V32h-4.266V18.133H0v-4.266h13.867V0h4.266v13.867H32z" /></svg>
-              </ControlButton>
-              <ControlButton title="afastar" onClick={() => zoomOut()}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M32 18.133H0v-4.266h32z" /></svg>
-              </ControlButton>
-              <ControlButton title="enquadrar" onClick={() => fitView()}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M5.333 16c0-5.891 4.776-10.667 10.667-10.667S26.667 10.109 26.667 16 21.891 26.667 16 26.667 5.333 21.891 5.333 16zM16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" /></svg>
-              </ControlButton>
-            </Controls>
+            <CanvasControls />
             <PresenceCursorsOverlay peers={presencePeers} />
           </ReactFlow>
           {isImageDragOver && (
