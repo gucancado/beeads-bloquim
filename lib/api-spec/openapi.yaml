@@ -1996,6 +1996,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
         dueDate:
           type: string
           format: date-time
@@ -2032,6 +2036,16 @@ components:
           nullable: true
         assignedUser:
           $ref: "#/components/schemas/UserResponse"
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
+        ownerName:
+          type: string
+          nullable: true
+        ownerAvatarUrl:
+          type: string
           nullable: true
         dueDate:
           type: string
@@ -2079,6 +2093,16 @@ components:
         assignedTo:
           type: string
           format: uuid
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
+        ownerName:
+          type: string
+          nullable: true
+        ownerAvatarUrl:
+          type: string
           nullable: true
         dueDate:
           type: string

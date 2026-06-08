@@ -314,6 +314,9 @@ export interface TaskResponse {
   description?: string | null;
   assignedTo?: string | null;
   assignedUser?: UserResponse | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
   dueDate?: string | null;
   startAt?: string | null;
   scheduleMode?: ScheduleMode;
@@ -361,6 +364,7 @@ export interface UpdateTaskDetailsRequest {
   title?: string;
   description?: string;
   assignedTo?: string | null;
+  ownerId?: string | null;
   dueDate?: string | null;
   startAt?: string | null;
   scheduleMode?: ScheduleMode;
@@ -374,6 +378,9 @@ export interface TaskWithContextResponse {
   title: string;
   description?: string | null;
   assignedTo?: string | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
   dueDate?: string | null;
   startAt?: string | null;
   scheduleMode?: ScheduleMode;

@@ -12,6 +12,7 @@ export interface UpdateTaskDetailsRequest {
   title?: string;
   description?: string;
   assignedTo?: string | null;
+  ownerId?: string | null;
   dueDate?: Date | null;
   startAt?: Date | null;
   scheduleMode?: ScheduleMode;
