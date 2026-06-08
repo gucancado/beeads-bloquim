@@ -185,4 +185,42 @@ describe("strategy graph smoke", () => {
     // objetivo segue a saúde do KR (pior-caso por mede)
     expect(await objHealth()).toBe("fora");
   });
+
+  it("agent read (5.1): payload tipado por kind, relation_type resolvido, ciclo arquivado read-only", async () => {
+    const { agent, wsId } = await setup();
+    await agent.get(base(wsId));
+    const obj = await createNode(agent, wsId, "objetivo", { title: "O" });
+    const kr = await createNode(agent, wsId, "kr", { title: "K", targetValue: 100, unit: "R$" });
+    const swot = await createNode(agent, wsId, "swot", { swotType: "forca", text: "marca forte" });
+    await agent.post(`${base(wsId)}/edges`).send({ sourceNodeId: kr.id, targetNodeId: obj.id });
+
+    const g1 = await agent.get(base(wsId));
+    const n = (id: string) => g1.body.nodes.find((x: any) => x.id === id);
+    // payload tipado embutido por kind (reconstruível sem heurística)
+    expect(n(obj.id).data.status).toBe("provisorio");
+    expect(n(kr.id).data.targetValue).toBe(100);
+    expect(n(kr.id).data.unit).toBe("R$");
+    expect("health" in n(kr.id).data).toBe(true);
+    expect("targetDate" in n(kr.id).data).toBe(true);
+    expect(n(swot.id).data.swotType).toBe("forca");
+    expect(n(swot.id).data.text).toBe("marca forte");
+    // cada aresta traz relation_type (resolvido pela gramática)
+    expect(g1.body.edges.every((e: any) => "relationType" in e)).toBe(true);
+    expect(g1.body.edges[0].relationType).toBe("mede");
+    // nós do ciclo ativo não são read-only
+    expect(n(obj.id).readOnly).toBe(false);
+    expect(n(kr.id).readOnly).toBe(false);
+    // swot (sem ciclo) nunca read-only
+    expect(n(swot.id).readOnly).toBe(false);
+
+    // abre novo ciclo → objetivo/kr do ciclo anterior viram histórico read-only
+    const nc = await agent.post(`${base(wsId)}/cycles`).send({ label: "Q2" });
+    expect(nc.status).toBe(201);
+    const g2 = await agent.get(base(wsId));
+    const n2 = (id: string) => g2.body.nodes.find((x: any) => x.id === id);
+    expect(g2.body.cycle.label).toBe("Q2");
+    expect(n2(obj.id).readOnly).toBe(true); // ciclo arquivado
+    expect(n2(kr.id).readOnly).toBe(true);
+    expect(n2(swot.id).readOnly).toBe(false); // sem ciclo → segue ativo
+  });
 });

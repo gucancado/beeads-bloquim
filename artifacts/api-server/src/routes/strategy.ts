@@ -108,7 +108,7 @@ async function ensureActiveCycle(mapId: string) {
 // ---------------------------------------------------------------------------
 // Serialização: monta nós com satélite por kind
 // ---------------------------------------------------------------------------
-async function loadGraph(mapId: string) {
+async function loadGraph(mapId: string, activeCycleId: string | null) {
   const nodes = await db.select().from(strategyNodes).where(eq(strategyNodes.mapId, mapId));
   const ids = nodes.map((n) => n.id);
 
@@ -140,6 +140,10 @@ async function loadGraph(mapId: string) {
 
   const serializedNodes = nodes.map((n) => {
     const { nodeId: _omit, ...data } = (sat[n.kind as NodeKind].get(n.id) ?? {}) as any;
+    // Objetivo/KR de ciclo arquivado → histórico read-only (§6.2). Nós sem
+    // cycle_id (swot/tema/recurso/plano) seguem sempre na view ativa.
+    const cycleId = (data as { cycleId?: string }).cycleId;
+    const readOnly = cycleId != null && activeCycleId != null && cycleId !== activeCycleId;
     return {
       id: n.id,
       kind: n.kind,
@@ -147,6 +151,7 @@ async function loadGraph(mapId: string) {
       positionY: n.positionY,
       width: n.width,
       color: n.color,
+      readOnly,
       data: data as Record<string, any>,
     };
   });
@@ -237,7 +242,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
 
   const map = await ensureStrategyMap(workspaceId, userId);
   const cycle = await ensureActiveCycle(map.id);
-  const graph = await loadGraph(map.id);
+  const graph = await loadGraph(map.id, cycle?.id ?? null);
 
   res.json({
     map: { id: map.id, kind: map.kind, name: map.name, workspaceId: map.workspaceId },
