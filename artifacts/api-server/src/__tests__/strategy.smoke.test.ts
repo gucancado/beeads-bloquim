@@ -1,4 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
+import { db } from "@workspace/db";
+import { strategyNodes, strategyCycles } from "@workspace/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { registerAndLogin, deleteUser, deleteWorkspaces } from "./helpers";
 
 /**
@@ -137,5 +140,49 @@ describe("strategy graph smoke", () => {
     const g = await admin.get(base(wsId));
     const krNode = g.body.nodes.find((n: any) => n.id === kr.id);
     expect(krNode.data.currentValue).toBe(42);
+  });
+
+  it("health wiring: PATCH anexa snapshot+trima(N); 1 ruim não vira, N viram; GET suaviza; objetivo agrega (§8.1)", async () => {
+    const { agent, wsId } = await setup();
+    await agent.get(base(wsId));
+    const obj = await createNode(agent, wsId, "objetivo", { title: "Obj" });
+    const kr = await createNode(agent, wsId, "kr", { title: "KR", targetValue: 100, currentValue: 0 });
+    // liga KR→Objetivo (mede) p/ testar agregação
+    await agent.post(`${base(wsId)}/edges`).send({ sourceNodeId: kr.id, targetNodeId: obj.id });
+
+    const krHealth = async () => {
+      const g = await agent.get(base(wsId));
+      return g.body.nodes.find((n: any) => n.id === kr.id).data;
+    };
+    const objHealth = async () => {
+      const g = await agent.get(base(wsId));
+      return g.body.nodes.find((n: any) => n.id === obj.id).data.health;
+    };
+
+    // 1ª medição (ciclo recém-criado começa hoje → cedo → no_prazo)
+    await agent.patch(`${base(wsId)}/nodes/${kr.id}`).send({ data: { currentValue: 10 } });
+    expect((await krHealth()).health).toBe("no_prazo");
+    // objetivo agrega o KR ligado por mede
+    expect(await objHealth()).toBe("no_prazo");
+
+    // força "atrasado": joga início do ciclo + criação do nó + alvo p/ o passado
+    const mapId = (await agent.get(base(wsId))).body.map.id as string;
+    await db.update(strategyCycles)
+      .set({ startsOn: sql`CURRENT_DATE - interval '60 days'`, endsOn: sql`CURRENT_DATE - interval '30 days'` })
+      .where(eq(strategyCycles.mapId, mapId));
+    await db.update(strategyNodes).set({ createdAt: sql`now() - interval '60 days'` }).where(eq(strategyNodes.id, kr.id));
+
+    // agora cada PATCH gera leitura "fora" (real 0.1, esperado 1.0)
+    await agent.patch(`${base(wsId)}/nodes/${kr.id}`).send({ data: { currentValue: 10 } }); // 1 ruim
+    expect((await krHealth()).health).toBe("no_prazo"); // suavização: 1 ruim não vira
+    await agent.patch(`${base(wsId)}/nodes/${kr.id}`).send({ data: { currentValue: 10 } }); // 2 ruins
+    expect((await krHealth()).health).toBe("no_prazo");
+    await agent.patch(`${base(wsId)}/nodes/${kr.id}`).send({ data: { currentValue: 10 } }); // 3 ruins (N=3)
+    const after = await krHealth();
+    expect(after.health).toBe("fora"); // N consecutivos viram
+    expect(after.healthReadings.length).toBeLessThanOrEqual(3); // trim a N
+
+    // objetivo segue a saúde do KR (pior-caso por mede)
+    expect(await objHealth()).toBe("fora");
   });
 });

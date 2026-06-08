@@ -15,6 +15,15 @@ import {
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, getMemberRole } from "../middlewares/permissions";
+import {
+  computeKrHealthInstant,
+  pushReading,
+  smoothHealth,
+  aggregateObjectiveHealth,
+  DEFAULT_HEALTH_CONFIG,
+  type HealthReading,
+  type KrHealth,
+} from "../services/strategyHealth";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -138,7 +147,7 @@ async function loadGraph(mapId: string) {
       positionY: n.positionY,
       width: n.width,
       color: n.color,
-      data,
+      data: data as Record<string, any>,
     };
   });
 
@@ -151,6 +160,21 @@ async function loadGraph(mapId: string) {
     label: e.label,
     metadata: e.metadata,
   }));
+
+  // Saúde do Objetivo: agregação pior-caso dos KRs ligados por aresta `mede`
+  // (§8.1). KR traz a saúde suavizada já armazenada. (gap #2)
+  const krHealthById = new Map<string, KrHealth | null>();
+  for (const n of serializedNodes) {
+    if (n.kind === "kr") krHealthById.set(n.id, (n.data.health ?? null) as KrHealth | null);
+  }
+  for (const n of serializedNodes) {
+    if (n.kind !== "objetivo") continue;
+    const measuringKrIds = serializedEdges
+      .filter((e) => e.relationType === "mede" && e.targetNodeId === n.id)
+      .map((e) => e.sourceNodeId)
+      .filter((id) => krHealthById.has(id));
+    n.data.health = aggregateObjectiveHealth(measuringKrIds.map((id) => krHealthById.get(id) ?? null));
+  }
 
   return { nodes: serializedNodes, edges: serializedEdges };
 }
@@ -169,6 +193,39 @@ async function getStrategyNodeInWorkspace(nodeId: string, workspaceId: string) {
     )
     .limit(1);
   return row?.node ?? null;
+}
+
+/**
+ * Recalcula a saúde do KR (§8.1, step 5/5b): saúde instantânea com `hoje`,
+ * empurra snapshot em health_readings (trim a N), e armazena a saúde suavizada.
+ * Chamado em toda mudança de campo que afeta saúde (current/target/baseline/
+ * direction/target_date).
+ */
+async function recomputeKrHealth(nodeId: string): Promise<void> {
+  const [kr] = await db.select().from(strategyKrs).where(eq(strategyKrs.nodeId, nodeId)).limit(1);
+  if (!kr) return;
+  const [cycle] = await db.select().from(strategyCycles).where(eq(strategyCycles.id, kr.cycleId)).limit(1);
+  const [node] = await db.select({ createdAt: strategyNodes.createdAt }).from(strategyNodes).where(eq(strategyNodes.id, nodeId)).limit(1);
+  if (!cycle || !node) return;
+
+  const instant = computeKrHealthInstant({
+    targetValue: kr.targetValue,
+    currentValue: kr.currentValue,
+    baselineValue: kr.baselineValue,
+    direction: kr.direction,
+    createdAt: node.createdAt,
+    targetDate: kr.targetDate ?? cycle.endsOn,
+    cycleStartsOn: cycle.startsOn,
+    today: new Date(),
+  });
+  const reading: HealthReading = {
+    health: instant.health,
+    ratio: Number.isFinite(instant.ratio ?? NaN) ? (instant.ratio as number) : null,
+    at: new Date().toISOString(),
+  };
+  const readings = pushReading(kr.healthReadings ?? [], reading, DEFAULT_HEALTH_CONFIG.smoothingN);
+  const smoothed = smoothHealth(readings, DEFAULT_HEALTH_CONFIG);
+  await db.update(strategyKrs).set({ healthReadings: readings, health: smoothed }).where(eq(strategyKrs.nodeId, nodeId));
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +426,7 @@ router.patch("/nodes/:nodeId", requireAuth, requireWorkspaceRole(["admin", "edit
       return;
     }
     await db.update(strategyKrs).set({ currentValue: data.currentValue }).where(eq(strategyKrs.nodeId, nodeId));
+    await recomputeKrHealth(nodeId); // snapshot + suavização (§8.1)
     res.json({ ok: true });
     return;
   }
@@ -407,6 +465,14 @@ router.patch("/nodes/:nodeId", requireAuth, requireWorkspaceRole(["admin", "edit
       }
     }
   });
+
+  // Campos que afetam saúde do KR → recalcula snapshot + suavização (§8.1).
+  if (node.kind === "kr") {
+    const healthFields = ["currentValue", "targetValue", "baselineValue", "direction", "targetDate"];
+    if (healthFields.some((f) => f in data)) {
+      await recomputeKrHealth(nodeId);
+    }
+  }
 
   res.json({ ok: true });
 });
