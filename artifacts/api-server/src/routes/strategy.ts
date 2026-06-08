@@ -443,6 +443,43 @@ router.patch("/nodes/:nodeId", requireAuth, requireWorkspaceRole(["admin", "edit
   if (body.width !== undefined) nodePatch.width = body.width;
   if (body.color !== undefined) nodePatch.color = body.color;
 
+  // Revalida constraints cross-table TAMBÉM no PATCH (não só no POST) — senão
+  // um editor poderia mover target_date além do ciclo, quebrar direction, ou
+  // apontar action_map_id para um map inválido. (§6.6/§2.2-step4)
+  if (node.kind === "kr" && ("targetDate" in data || "direction" in data || "targetValue" in data || "baselineValue" in data)) {
+    const [kr] = await db.select().from(strategyKrs).where(eq(strategyKrs.nodeId, nodeId)).limit(1);
+    const [cyc] = kr ? await db.select().from(strategyCycles).where(eq(strategyCycles.id, kr.cycleId)).limit(1) : [];
+    const targetDate = "targetDate" in data ? data.targetDate : kr?.targetDate;
+    if (targetDate && cyc && targetDate > cyc.endsOn) {
+      res.status(400).json({ error: "Validation error", message: "target_date deve ser ≤ fim do ciclo" });
+      return;
+    }
+    const target = "targetValue" in data ? data.targetValue : kr?.targetValue;
+    const baseline = "baselineValue" in data ? data.baselineValue : kr?.baselineValue;
+    const direction = "direction" in data ? data.direction : kr?.direction;
+    if (baseline != null && target != null && target !== baseline) {
+      if (direction === "subir" && !(target > baseline)) {
+        res.status(400).json({ error: "Validation error", message: "direction 'subir' exige target > baseline" });
+        return;
+      }
+      if (direction === "descer" && !(target < baseline)) {
+        res.status(400).json({ error: "Validation error", message: "direction 'descer' exige target < baseline" });
+        return;
+      }
+    }
+  }
+  if (node.kind === "plano" && "actionMapId" in data && data.actionMapId) {
+    const [t] = await db
+      .select({ id: maps.id })
+      .from(maps)
+      .where(and(eq(maps.id, data.actionMapId), eq(maps.workspaceId, workspaceId), eq(maps.kind, "action")))
+      .limit(1);
+    if (!t) {
+      res.status(400).json({ error: "Validation error", message: "action_map_id deve referenciar um map kind='action' do workspace" });
+      return;
+    }
+  }
+
   await db.transaction(async (tx) => {
     if (Object.keys(nodePatch).length > 1) {
       await tx.update(strategyNodes).set(nodePatch).where(eq(strategyNodes.id, nodeId));

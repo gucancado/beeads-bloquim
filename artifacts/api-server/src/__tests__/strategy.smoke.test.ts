@@ -186,6 +186,22 @@ describe("strategy graph smoke", () => {
     expect(await objHealth()).toBe("fora");
   });
 
+  it("PATCH revalida cross-table (target_date ≤ ciclo; action_map kind=action)", async () => {
+    const { agent, wsId } = await setup();
+    const g0 = await agent.get(base(wsId));
+    const strategyMapId = g0.body.map.id as string; // map kind='strategy' (inválido p/ plano)
+
+    const kr = await createNode(agent, wsId, "kr", { title: "K", targetValue: 100 });
+    // target_date além do fim do ciclo (ciclo auto = +90d) → 400
+    const badDate = await agent.patch(`${base(wsId)}/nodes/${kr.id}`).send({ data: { targetDate: "2099-12-31" } });
+    expect(badDate.status).toBe(400);
+
+    const plano = await createNode(agent, wsId, "plano", { hypothesis: "h" });
+    // action_map_id apontando p/ um map kind='strategy' → 400
+    const badMap = await agent.patch(`${base(wsId)}/nodes/${plano.id}`).send({ data: { actionMapId: strategyMapId } });
+    expect(badMap.status).toBe(400);
+  });
+
   it("agent read (5.1): payload tipado por kind, relation_type resolvido, ciclo arquivado read-only", async () => {
     const { agent, wsId } = await setup();
     await agent.get(base(wsId));
