@@ -150,15 +150,18 @@ test("SWOT×SWOT suggestion creates a Tema linked to both (§7.4)", async ({ pag
   const suggest = page.getByRole("button", { name: "+ criar tema" });
   await expect(suggest).toBeVisible();
 
+  // contagem relativa (o workspace é compartilhado entre os testes do describe)
+  const before = await page.locator(".react-flow__node").count();
+  const temasBefore = await page.locator(".react-flow__node").filter({ hasText: "Tema" }).count();
   const created = page.waitForResponse(
     (r) => /\/strategy\/nodes$/.test(r.url()) && r.request().method() === "POST" && r.ok(),
   );
   await suggest.click();
   await created;
 
-  // 2 SWOT + 1 Tema novo; o rótulo de kind "Tema" é texto (≠ valor de input)
-  await expect(page.locator(".react-flow__node")).toHaveCount(3);
-  await expect(page.locator(".react-flow__node").filter({ hasText: "Tema" })).toHaveCount(1);
+  // um nó novo (o Tema) aparece, ligado aos 2 SWOT
+  await expect(page.locator(".react-flow__node")).toHaveCount(before + 1);
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Tema" })).toHaveCount(temasBefore + 1);
 });
 
 test("strategy maps never appear in the action-plan listings (scope guard, UI)", async ({ page }) => {
