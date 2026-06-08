@@ -62,6 +62,25 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   // Hidrata nós/arestas do grafo (sem pisar numa edição/drag em andamento).
   useEffect(() => {
     if (!graph || editingRef.current) return;
+    const kindById = new Map(graph.nodes.map((n) => [n.id, n.kind]));
+    // Detector de órfãos (§7.8): sinal dispensável p/ padrões incompletos.
+    const orphanOf = (n: (typeof graph.nodes)[number]): string | null => {
+      if (n.readOnly) return null;
+      if (n.kind === "objetivo") {
+        const hasMede = graph.edges.some((e) => e.relationType === "mede" && e.targetNodeId === n.id);
+        return hasMede ? null : "sem KR";
+      }
+      if (n.kind === "kr") {
+        const hasPlano = graph.edges.some(
+          (e) => e.relationType === "move" && e.targetNodeId === n.id && kindById.get(e.sourceNodeId) === "plano",
+        );
+        return hasPlano ? null : "sem plano";
+      }
+      if (n.kind === "plano") {
+        return n.data.actionMapId ? null : "sem mapa";
+      }
+      return null;
+    };
     setNodes(
       graph.nodes.map<Node>((n) => ({
         id: n.id,
@@ -70,6 +89,7 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         data: {
           kind: n.kind,
           readOnly: n.readOnly,
+          orphan: orphanOf(n),
           ...n.data,
           // autosave inline (§7.5): o nó chama isto no blur de um campo editado.
           onPatchData: (patch: Record<string, any>) =>

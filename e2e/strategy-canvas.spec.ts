@@ -121,6 +121,22 @@ test("opening a new cycle archives the previous (nodes become histórico read-on
   await expect(node.getByText("histórico")).toBeVisible();
 });
 
+test("orphan badge: objetivo sem KR mostra aviso; some ao ligar KR por mede (§7.8)", async ({ page }) => {
+  const b = `/api/workspaces/${wsId}/strategy`;
+  await api.get(b);
+  const obj = await (await api.post(`${b}/nodes`, { data: { kind: "objetivo", positionX: 600, positionY: 0, data: { title: "Obj órfão" } } })).json();
+
+  await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
+  const node = page.locator(`.react-flow__node[data-id="${obj.id}"]`);
+  await expect(node.getByText("sem KR")).toBeVisible();
+
+  // liga um KR por mede → badge some
+  const kr = await (await api.post(`${b}/nodes`, { data: { kind: "kr", positionX: 600, positionY: 200, data: { title: "KR", targetValue: 100 } } })).json();
+  await api.post(`${b}/edges`, { data: { sourceNodeId: kr.id, targetNodeId: obj.id } });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator(`.react-flow__node[data-id="${obj.id}"]`).getByText("sem KR")).toHaveCount(0);
+});
+
 test("strategy maps never appear in the action-plan listings (scope guard, UI)", async ({ page }) => {
   // a aba 'planos' do workspace não deve listar o map strategy
   await page.goto(`/workspaces/${wsId}`, { waitUntil: "domcontentloaded" });

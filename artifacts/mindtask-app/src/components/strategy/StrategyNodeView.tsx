@@ -88,7 +88,14 @@ export function StrategyNodeView({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} className="!h-2 !w-2 !bg-muted-foreground/50" />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{meta.label}</span>
-        {(kind === "kr" || kind === "objetivo") && <HealthPill health={data.health} />}
+        <div className="flex items-center gap-1">
+          {data.orphan && (
+            <span title="padrão incompleto" className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium lowercase text-amber-700 dark:text-amber-300">
+              ⚠ {data.orphan}
+            </span>
+          )}
+          {(kind === "kr" || kind === "objetivo") && <HealthPill health={data.health} />}
+        </div>
       </div>
 
       {/* Título / texto principal por kind */}
