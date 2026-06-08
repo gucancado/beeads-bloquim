@@ -98,6 +98,29 @@ test("renders edges from the graph with the prefilled relation_type label", asyn
   await expect(page.locator(".react-flow__edge").getByText("mede")).toBeVisible();
 });
 
+test("opening a new cycle archives the previous (nodes become histórico read-only)", async ({ page }) => {
+  const b = `/api/workspaces/${wsId}/strategy`;
+  await api.get(b);
+  const obj = await (await api.post(`${b}/nodes`, { data: { kind: "objetivo", positionX: -300, positionY: 300, data: { title: "Obj ciclo antigo" } } })).json();
+
+  await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
+  const node = page.locator(`.react-flow__node[data-id="${obj.id}"]`);
+  await expect(node).toBeVisible();
+  await expect(node.getByText("histórico")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "novo ciclo" }).click();
+  await page.getByLabel("rótulo do ciclo").fill("Q2 2026");
+  const opened = page.waitForResponse(
+    (r) => /\/strategy\/cycles$/.test(r.url()) && r.request().method() === "POST" && r.ok(),
+  );
+  await page.getByRole("button", { name: "abrir" }).click();
+  await opened;
+
+  // pílula do ciclo ativo mostra Q2; nó do ciclo anterior vira histórico
+  await expect(page.getByText("q2 2026", { exact: false })).toBeVisible();
+  await expect(node.getByText("histórico")).toBeVisible();
+});
+
 test("strategy maps never appear in the action-plan listings (scope guard, UI)", async ({ page }) => {
   // a aba 'planos' do workspace não deve listar o map strategy
   await page.goto(`/workspaces/${wsId}`, { waitUntil: "domcontentloaded" });

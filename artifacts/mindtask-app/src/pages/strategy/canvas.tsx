@@ -26,6 +26,7 @@ import {
   useUpdateStrategyNode,
   useCreateStrategyEdge,
   useDeleteStrategyNode,
+  useOpenStrategyCycle,
   type StrategyNodeKind,
 } from "@/hooks/useStrategy";
 import type { Connection } from "reactflow";
@@ -47,10 +48,13 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   const updateNode = useUpdateStrategyNode(workspaceId);
   const createEdge = useCreateStrategyEdge(workspaceId);
   const deleteNode = useDeleteStrategyNode(workspaceId);
+  const openCycle = useOpenStrategyCycle(workspaceId);
   const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges] = useEdgesState([]);
+  const [cycleFormOpen, setCycleFormOpen] = useState(false);
+  const [cycleLabelInput, setCycleLabelInput] = useState("");
   const editingRef = useRef(false);
   const updateNodeRef = useRef(updateNode);
   updateNodeRef.current = updateNode;
@@ -151,6 +155,34 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         <PageBreadcrumb items={[{ label: "estratégia" }]} />
         {cycleLabel && (
           <span className="rounded-full bg-honey/15 px-3 py-1 text-xs font-medium text-fg lowercase">{cycleLabel}</span>
+        )}
+        {!cycleFormOpen ? (
+          <Button variant="ghost" className="h-7 px-2 text-xs lowercase" onClick={() => { setCycleLabelInput(""); setCycleFormOpen(true); }}>
+            novo ciclo
+          </Button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              aria-label="rótulo do ciclo"
+              value={cycleLabelInput}
+              onChange={(e) => setCycleLabelInput(e.target.value)}
+              placeholder="ex: Q3 2026"
+              className="h-7 w-28 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-honey"
+            />
+            <Button
+              className="h-7 px-2 text-xs lowercase"
+              disabled={!cycleLabelInput.trim() || openCycle.isPending}
+              onClick={() => {
+                openCycle.mutate({ label: cycleLabelInput.trim() }, { onSuccess: () => setCycleFormOpen(false) });
+              }}
+            >
+              abrir
+            </Button>
+            <Button variant="ghost" className="h-7 px-2 text-xs lowercase" onClick={() => setCycleFormOpen(false)}>
+              cancelar
+            </Button>
+          </div>
         )}
       </div>
 
