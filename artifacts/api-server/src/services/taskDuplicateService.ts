@@ -107,6 +107,7 @@ export async function duplicateTask(
         title: original.title,
         description: effectiveDescription,
         assignedTo: original.assignedTo,
+        ownerId: original.ownerId,
         priority: original.priority ?? "medium",
         status: "draft",
         approvalMode: original.approvalMode,

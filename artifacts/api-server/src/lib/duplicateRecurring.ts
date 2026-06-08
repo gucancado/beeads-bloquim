@@ -12,6 +12,7 @@ interface RecurringTaskSource {
   title: string;
   description: string | null;
   assignedTo: string | null;
+  ownerId: string | null;
   priority: string | null;
   scheduleMode: ScheduleMode;
   startAt: Date | null;
@@ -122,6 +123,7 @@ export async function duplicateRecurringTask(
       title: original.title,
       description: original.description,
       assignedTo: original.assignedTo,
+      ownerId: original.ownerId,
       priority: toValidPriority(original.priority),
       status,
       overdue: false,
