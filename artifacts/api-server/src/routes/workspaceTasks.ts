@@ -295,9 +295,12 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     return;
   }
 
-  const [assignee, members, taskSubtasks] = await Promise.all([
+  const [assignee, owner, members, taskSubtasks] = await Promise.all([
     task.assignedTo
       ? db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, task.assignedTo)).limit(1)
+      : Promise.resolve([]),
+    task.ownerId
+      ? db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, task.ownerId)).limit(1)
       : Promise.resolve([]),
     db
       .select({ userId: workspaceMembers.userId, name: users.name, role: workspaceMembers.role })
@@ -390,6 +393,8 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     ...task,
     assigneeName: assignee[0]?.name ?? null,
     assigneeAvatarUrl: assignee[0]?.avatarUrl ?? null,
+    ownerName: (owner as { name: string; avatarUrl: string | null }[])[0]?.name ?? null,
+    ownerAvatarUrl: (owner as { name: string; avatarUrl: string | null }[])[0]?.avatarUrl ?? null,
     members,
     subtasks: taskSubtasks,
     parentTask,

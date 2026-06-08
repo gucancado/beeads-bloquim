@@ -69,6 +69,15 @@ describe("task owner smoke", () => {
     expect(ownerChanges.length).toBe(1);
     expect(ownerChanges[0].metadata.newOwnerId).toBe(other.id);
     expect(ownerChanges[0].metadata.oldOwnerName).toBe(adminUser.name);
+
+    // === Task detail hydrates ownerName / ownerAvatarUrl ===
+    const detail = await adminAgent.get(
+      `/api/workspaces/${workspaceId}/tasks/${taskId}`,
+    );
+    expect(detail.status).toBe(200);
+    expect(detail.body.ownerId).toBe(other.id);
+    expect(detail.body.ownerName).toBe(other.name);
+    expect("ownerAvatarUrl" in detail.body).toBe(true);
   });
 
   it("PATCH ownerId equal to current owner records no new owner_changed", async () => {
