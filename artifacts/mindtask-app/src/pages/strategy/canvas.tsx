@@ -24,8 +24,10 @@ import {
   useStrategyGraph,
   useCreateStrategyNode,
   useUpdateStrategyNode,
+  useCreateStrategyEdge,
   type StrategyNodeKind,
 } from "@/hooks/useStrategy";
+import type { Connection } from "reactflow";
 
 const nodeTypes = { strategy: StrategyNodeView };
 
@@ -42,6 +44,7 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   const { data: graph, isLoading } = useStrategyGraph(workspaceId);
   const createNode = useCreateStrategyNode(workspaceId);
   const updateNode = useUpdateStrategyNode(workspaceId);
+  const createEdge = useCreateStrategyEdge(workspaceId);
   const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -84,6 +87,15 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
       updateNode.mutate({ nodeId: node.id, positionX: node.position.x, positionY: node.position.y });
     },
     [updateNode],
+  );
+
+  // Liga 2 nós — relation_type é pré-preenchido pela gramática no backend (§6.5).
+  const onConnect = useCallback(
+    (c: Connection) => {
+      if (!c.source || !c.target || c.source === c.target) return;
+      createEdge.mutate({ sourceNodeId: c.source, targetNodeId: c.target });
+    },
+    [createEdge],
   );
 
   const addNode = useCallback(
@@ -145,6 +157,7 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChangeWrapped}
         onNodeDragStop={onNodeDragStop}
+        onConnect={onConnect}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.2}

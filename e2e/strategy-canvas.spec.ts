@@ -42,6 +42,19 @@ test("strategy canvas lazy-loads, toolbar creates a node that persists", async (
   await expect(page.locator(".react-flow__node")).toHaveCount(1);
 });
 
+test("renders edges from the graph with the prefilled relation_type label", async ({ page }) => {
+  const b = `/api/workspaces/${wsId}/strategy`;
+  await api.get(b); // lazy init
+  const obj = await (await api.post(`${b}/nodes`, { data: { kind: "objetivo", positionX: 0, positionY: -150, data: { title: "Obj" } } })).json();
+  const kr = await (await api.post(`${b}/nodes`, { data: { kind: "kr", positionX: 0, positionY: 150, data: { title: "KR", targetValue: 100 } } })).json();
+  const edge = await api.post(`${b}/edges`, { data: { sourceNodeId: kr.id, targetNodeId: obj.id } });
+  expect((await edge.json()).relationType).toBe("mede");
+
+  await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  await expect(page.locator(".react-flow__edge").getByText("mede")).toBeVisible();
+});
+
 test("strategy maps never appear in the action-plan listings (scope guard, UI)", async ({ page }) => {
   // a aba 'planos' do workspace não deve listar o map strategy
   await page.goto(`/workspaces/${wsId}`, { waitUntil: "domcontentloaded" });
