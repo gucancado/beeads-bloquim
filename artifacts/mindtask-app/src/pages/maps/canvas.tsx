@@ -27,6 +27,7 @@ import { toast } from "@/hooks/use-toast";
 import { usePresenceChannel } from "@/realtime/usePresenceChannel";
 import { PresenceCursorsOverlay } from "@/realtime/PresenceCursorsOverlay";
 import { sampleBezier, edgeIntersectsNodeBBox } from "@/components/canvas-base/geometry";
+import { CanvasToolbar } from "@/components/canvas-base/CanvasToolbar";
 
 interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   sourceHandle?: string;
@@ -2724,7 +2725,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           );
         })}
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+        <CanvasToolbar>
           <Button
             onMouseDown={handleCardButtonMouseDown}
             disabled={createCardMut.isPending}
@@ -2802,7 +2803,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               </div>
             )}
           </div>
-        </div>
+        </CanvasToolbar>
 
         {shapeTool && (
           <div
