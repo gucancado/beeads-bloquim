@@ -66,8 +66,8 @@ Marque `[x]` em PASS, deixe `[ ]` e anote no rodapé em FAIL.
 - [ ] **13. Deletar.** Com Card B selecionado, apertar **Delete**. Confirmar no diálogo ("excluir tarefa?").
   - **PASS:** o diálogo de confirmação aparece; ao confirmar, o card some junto com a aresta A→B; após F5, continua removido.
 
-- [ ] **14. Undo / Redo.** Após a deleção, apertar **Ctrl+Z** (desfazer) e depois **Ctrl+Y** (refazer).
-  - **PASS:** Ctrl+Z restaura o card deletado; Ctrl+Y o remove de novo. *(Confirma a preservação do undo/redo — ver `canvas-extraction-seam.md` §undo/redo.)*
+- [ ] **14. Undo / Redo de POSIÇÃO.** Arrastar Card A para uma posição nova. Apertar **Ctrl+Z** (desfazer) e depois **Ctrl+Shift+Z** ou **Ctrl+Y** (refazer).
+  - **PASS:** Ctrl+Z devolve o Card A à posição anterior; o redo o leva de volta à nova posição. **Atenção:** o undo/redo do canvas é **só de posição de nó** (não desfaz criação, deleção nem edição de texto). Não esperar que Ctrl+Z restaure um card deletado. *(Confirma a preservação do undo/redo de posição — ver `canvas-extraction-seam.md` §undo/redo.)*
 
 ## Rodapé de execução (preencher a cada rodada)
 
