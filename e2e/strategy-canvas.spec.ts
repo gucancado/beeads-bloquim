@@ -95,7 +95,8 @@ test("renders edges from the graph with the prefilled relation_type label", asyn
 
   await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
-  await expect(page.locator(".react-flow__edge").getByText("mede")).toBeVisible();
+  // label da floating edge é renderizado via EdgeLabelRenderer (fora do path)
+  await expect(page.getByText("mede", { exact: true })).toBeVisible();
 });
 
 test("opening a new cycle archives the previous (nodes become histórico read-only)", async ({ page }) => {

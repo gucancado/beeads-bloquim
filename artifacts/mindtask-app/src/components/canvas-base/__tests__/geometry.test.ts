@@ -1,5 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { sampleBezier, edgeIntersectsNodeBBox } from "../geometry";
+import { sampleBezier, edgeIntersectsNodeBBox, getEdgeAnchor } from "../geometry";
+
+describe("getEdgeAnchor — floating edge (§7.2)", () => {
+  const node = { x: 0, y: 0, width: 100, height: 60 }; // w2=50, h2=30
+
+  it("alvo à direita → âncora na borda direita", () => {
+    expect(getEdgeAnchor(node, 500, 0)).toEqual({ x: 50, y: 0 });
+  });
+  it("alvo abaixo → âncora na borda inferior", () => {
+    expect(getEdgeAnchor(node, 0, 500)).toEqual({ x: 0, y: 30 });
+  });
+  it("alvo à esquerda → âncora na borda esquerda", () => {
+    expect(getEdgeAnchor(node, -500, 0)).toEqual({ x: -50, y: 0 });
+  });
+  it("diagonal: cruza a borda mais próxima (top/bottom quando h2<dx-scaled)", () => {
+    // dx=100,dy=100 → scaleX=0.5, scaleY=0.3 → scale 0.3 → (30,30) borda inferior
+    expect(getEdgeAnchor(node, 100, 100)).toEqual({ x: 30, y: 30 });
+  });
+  it("self-loop / alvo no centro → devolve o centro", () => {
+    expect(getEdgeAnchor(node, 0, 0)).toEqual({ x: 0, y: 0 });
+  });
+  it("simetria: âncoras de A→B e B→A apontam uma para a outra (eixo horizontal)", () => {
+    const a = { x: 0, y: 0, width: 100, height: 60 };
+    const b = { x: 300, y: 0, width: 100, height: 60 };
+    const ab = getEdgeAnchor(a, b.x, b.y); // borda direita de A
+    const ba = getEdgeAnchor(b, a.x, a.y); // borda esquerda de B
+    expect(ab).toEqual({ x: 50, y: 0 });
+    expect(ba).toEqual({ x: 250, y: 0 });
+    expect(ab.x).toBeLessThan(ba.x); // não se cruzam
+  });
+  it("par grande/pequeno: escala pela meia-dimensão de cada nó", () => {
+    const big = { x: 0, y: 0, width: 400, height: 400 };
+    expect(getEdgeAnchor(big, 1000, 0)).toEqual({ x: 200, y: 0 });
+  });
+});
 
 describe("sampleBezier (characterization)", () => {
   it("returns samples+1 points", () => {

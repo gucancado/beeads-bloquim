@@ -20,6 +20,7 @@ import { Loader2, Plus } from "lucide-react";
 import { CanvasToolbar } from "@/components/canvas-base/CanvasToolbar";
 import { CanvasControls } from "@/components/canvas-base/CanvasControls";
 import { StrategyNodeView } from "@/components/strategy/StrategyNodeView";
+import { FloatingEdge } from "@/components/strategy/FloatingEdge";
 import {
   useStrategyGraph,
   useCreateStrategyNode,
@@ -32,6 +33,7 @@ import {
 import type { Connection } from "reactflow";
 
 const nodeTypes = { strategy: StrategyNodeView };
+const edgeTypes = { floating: FloatingEdge };
 
 const NODE_BUTTONS: { kind: StrategyNodeKind; label: string }[] = [
   { kind: "objetivo", label: "Objetivo" },
@@ -103,7 +105,8 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         id: e.id,
         source: e.sourceNodeId,
         target: e.targetNodeId,
-        label: e.relationType ?? e.label ?? undefined,
+        type: "floating",
+        data: { label: e.relationType ?? e.label ?? undefined },
       })),
     );
   }, [graph, setNodes, setEdges]);
@@ -225,6 +228,7 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChangeWrapped}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}

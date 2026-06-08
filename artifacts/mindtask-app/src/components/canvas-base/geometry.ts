@@ -6,6 +6,32 @@
  * without updating the characterization tests.
  */
 
+export interface AnchorRect {
+  /** centro do nó */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Floating edge (§7.2 do Mapa Estratégico): ponto na BORDA de `node` na direção
+ * do alvo (towardX, towardY). Raio do centro do nó até a borda mais próxima
+ * atravessada (interseção raio↔retângulo). Recalcula a cada movimento.
+ * Self-loop / alvo no centro → devolve o próprio centro.
+ */
+export function getEdgeAnchor(node: AnchorRect, towardX: number, towardY: number): { x: number; y: number } {
+  const dx = towardX - node.x;
+  const dy = towardY - node.y;
+  if (dx === 0 && dy === 0) return { x: node.x, y: node.y };
+  const w2 = node.width / 2;
+  const h2 = node.height / 2;
+  const scaleX = dx !== 0 ? w2 / Math.abs(dx) : Number.POSITIVE_INFINITY;
+  const scaleY = dy !== 0 ? h2 / Math.abs(dy) : Number.POSITIVE_INFINITY;
+  const scale = Math.min(scaleX, scaleY);
+  return { x: node.x + dx * scale, y: node.y + dy * scale };
+}
+
 /**
  * Sample N points along a cubic bezier curve.
  */
