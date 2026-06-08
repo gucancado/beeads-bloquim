@@ -32,18 +32,32 @@ export function FloatingEdge({ id, source, target, markerEnd, style, data }: Edg
     targetY: ta.y,
   });
 
-  const label = (data as { label?: string } | undefined)?.label;
+  const d = data as { label?: string; onSuggestTema?: () => void } | undefined;
+  const label = d?.label;
+  const onSuggestTema = d?.onSuggestTema;
 
   return (
     <>
       <path id={id} className="react-flow__edge-path" d={path} markerEnd={markerEnd} style={style} />
-      {label && (
+      {(label || onSuggestTema) && (
         <EdgeLabelRenderer>
           <div
-            className="nodrag nopan absolute rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium lowercase text-muted-foreground shadow-sm"
+            className="nodrag nopan absolute"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "all" }}
           >
-            {label}
+            {onSuggestTema ? (
+              <button
+                type="button"
+                onClick={onSuggestTema}
+                className="rounded-full border border-sky-500/40 bg-card px-2 py-0.5 text-[10px] font-medium lowercase text-sky-700 shadow-sm hover:bg-sky-500/10 dark:text-sky-300"
+              >
+                + criar tema
+              </button>
+            ) : (
+              <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium lowercase text-muted-foreground shadow-sm">
+                {label}
+              </span>
+            )}
           </div>
         </EdgeLabelRenderer>
       )}

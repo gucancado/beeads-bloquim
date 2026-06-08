@@ -138,6 +138,29 @@ test("orphan badge: objetivo sem KR mostra aviso; some ao ligar KR por mede (§7
   await expect(page.locator(`.react-flow__node[data-id="${obj.id}"]`).getByText("sem KR")).toHaveCount(0);
 });
 
+test("SWOT×SWOT suggestion creates a Tema linked to both (§7.4)", async ({ page }) => {
+  const b = `/api/workspaces/${wsId}/strategy`;
+  await api.get(b);
+  const s1 = await (await api.post(`${b}/nodes`, { data: { kind: "swot", positionX: -400, positionY: 400, data: { swotType: "forca", text: "força" } } })).json();
+  const s2 = await (await api.post(`${b}/nodes`, { data: { kind: "swot", positionX: -100, positionY: 400, data: { swotType: "oportunidade", text: "oport" } } })).json();
+  const edge = await (await api.post(`${b}/edges`, { data: { sourceNodeId: s1.id, targetNodeId: s2.id } })).json();
+  expect(edge.relationType).toBeNull(); // SWOT×SWOT não tipa
+
+  await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
+  const suggest = page.getByRole("button", { name: "+ criar tema" });
+  await expect(suggest).toBeVisible();
+
+  const created = page.waitForResponse(
+    (r) => /\/strategy\/nodes$/.test(r.url()) && r.request().method() === "POST" && r.ok(),
+  );
+  await suggest.click();
+  await created;
+
+  // 2 SWOT + 1 Tema novo; o rótulo de kind "Tema" é texto (≠ valor de input)
+  await expect(page.locator(".react-flow__node")).toHaveCount(3);
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Tema" })).toHaveCount(1);
+});
+
 test("strategy maps never appear in the action-plan listings (scope guard, UI)", async ({ page }) => {
   // a aba 'planos' do workspace não deve listar o map strategy
   await page.goto(`/workspaces/${wsId}`, { waitUntil: "domcontentloaded" });

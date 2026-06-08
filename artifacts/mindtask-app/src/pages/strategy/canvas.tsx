@@ -60,6 +60,31 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   const editingRef = useRef(false);
   const updateNodeRef = useRef(updateNode);
   updateNodeRef.current = updateNode;
+  const createNodeRef = useRef(createNode);
+  createNodeRef.current = createNode;
+  const createEdgeRef = useRef(createEdge);
+  createEdgeRef.current = createEdge;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+
+  // Sugestão TOWS (§7.4): ao cruzar 2 SWOT, cria um Tema pré-ligado aos dois.
+  const suggestTema = useCallback((aId: string, bId: string) => {
+    const g = graphRef.current;
+    const a = g?.nodes.find((n) => n.id === aId);
+    const b = g?.nodes.find((n) => n.id === bId);
+    if (!a || !b) return;
+    const mx = (a.positionX + b.positionX) / 2;
+    const my = (a.positionY + b.positionY) / 2 - 120;
+    createNodeRef.current.mutate(
+      { kind: "tema", positionX: mx, positionY: my, data: { title: "Tema (TOWS)" } },
+      {
+        onSuccess: (tema) => {
+          createEdgeRef.current.mutate({ sourceNodeId: tema.id, targetNodeId: aId });
+          createEdgeRef.current.mutate({ sourceNodeId: tema.id, targetNodeId: bId });
+        },
+      },
+    );
+  }, []);
 
   // Hidrata nós/arestas do grafo (sem pisar numa edição/drag em andamento).
   useEffect(() => {
@@ -101,15 +126,25 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
       })),
     );
     setEdges(
-      graph.edges.map<Edge>((e) => ({
-        id: e.id,
-        source: e.sourceNodeId,
-        target: e.targetNodeId,
-        type: "floating",
-        data: { label: e.relationType ?? e.label ?? undefined },
-      })),
+      graph.edges.map<Edge>((e) => {
+        // Cruzamento SWOT×SWOT sem tipo → oferece criar Tema (§7.4).
+        const isSwotCross =
+          e.relationType == null &&
+          kindById.get(e.sourceNodeId) === "swot" &&
+          kindById.get(e.targetNodeId) === "swot";
+        return {
+          id: e.id,
+          source: e.sourceNodeId,
+          target: e.targetNodeId,
+          type: "floating",
+          data: {
+            label: e.relationType ?? e.label ?? undefined,
+            onSuggestTema: isSwotCross ? () => suggestTema(e.sourceNodeId, e.targetNodeId) : undefined,
+          },
+        };
+      }),
     );
-  }, [graph, setNodes, setEdges]);
+  }, [graph, setNodes, setEdges, suggestTema]);
 
   const onNodesChangeWrapped = useCallback(
     (changes: NodeChange[]) => {
