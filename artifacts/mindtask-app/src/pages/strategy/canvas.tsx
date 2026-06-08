@@ -5,6 +5,8 @@ import {
   ReactFlowProvider,
   Background,
   BackgroundVariant,
+  SelectionMode,
+  ConnectionMode,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -51,7 +53,11 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   const createEdge = useCreateStrategyEdge(workspaceId);
   const deleteNode = useDeleteStrategyNode(workspaceId);
   const openCycle = useOpenStrategyCycle(workspaceId);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getViewport, setViewport } = useReactFlow();
+  const getViewportRef = useRef(getViewport);
+  getViewportRef.current = getViewport;
+  const setViewportRef = useRef(setViewport);
+  setViewportRef.current = setViewport;
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges] = useEdgesState([]);
@@ -178,6 +184,53 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
     [deleteNode],
   );
 
+  // Pan com botão direito mesmo começando sobre um nó/aresta (universal com o
+  // plano de ação): panOnDrag={[2]} já cobre o pane vazio; isto estende p/ nós.
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 2) return;
+      const target = event.target as Element | null;
+      const onElement = target?.closest(".react-flow__node, .react-flow__edge");
+      if (!onElement) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      let lastX = event.clientX;
+      let lastY = event.clientY;
+      let moved = false;
+      const prevCursor = document.body.style.cursor;
+      document.body.style.cursor = "grabbing";
+
+      const handleMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - lastX;
+        const dy = ev.clientY - lastY;
+        lastX = ev.clientX;
+        lastY = ev.clientY;
+        if (dx !== 0 || dy !== 0) moved = true;
+        const vp = getViewportRef.current();
+        setViewportRef.current({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom });
+      };
+      const handleUp = () => {
+        document.removeEventListener("mousemove", handleMove, true);
+        document.removeEventListener("mouseup", handleUp, true);
+        document.body.style.cursor = prevCursor;
+        if (moved) {
+          const swallow = (e: Event) => {
+            e.preventDefault();
+            e.stopPropagation();
+            document.removeEventListener("contextmenu", swallow, true);
+          };
+          document.addEventListener("contextmenu", swallow, { capture: true, once: true });
+        }
+      };
+      document.addEventListener("mousemove", handleMove, true);
+      document.addEventListener("mouseup", handleUp, true);
+    };
+    document.addEventListener("mousedown", handleMouseDown, { capture: true });
+    return () => document.removeEventListener("mousedown", handleMouseDown, { capture: true });
+  }, []);
+
   const addNode = useCallback(
     (kind: StrategyNodeKind) => {
       // cria no centro aproximado do viewport
@@ -269,6 +322,11 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         onConnect={onConnect}
         onNodesDelete={onNodesDelete}
         deleteKeyCode="Delete"
+        connectionMode={ConnectionMode.Loose}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[2]}
+        onPaneContextMenu={(e) => e.preventDefault()}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.2}
