@@ -107,14 +107,19 @@ test("dragging a node persists its new position after reload", async ({ page }) 
   }
   const node = page.locator(".react-flow__node-mindmap").first();
   const b1 = (await node.boundingBox())!;
+  // espera o PUT de posição (onNodeDragStop) persistir antes do reload
+  const posPut = page.waitForResponse(
+    (r) => /\/cards\/[^/]+$/.test(r.url()) && r.request().method() === "PUT" && r.ok(),
+  );
   await page.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
   await page.mouse.down();
-  await page.mouse.move(b1.x + b1.width / 2 + 120, b1.y + b1.height / 2 + 90, { steps: 10 });
+  await page.mouse.move(b1.x + b1.width / 2 + 120, b1.y + b1.height / 2 + 90, { steps: 12 });
   await page.mouse.up();
+  await posPut;
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  const moved = page.locator(".react-flow__node-mindmap").first();
-  const b2 = (await moved.boundingBox())!;
+  const movedNode = page.locator(".react-flow__node-mindmap").first();
+  const b2 = (await movedNode.boundingBox())!;
   // posição mudou de forma persistente (tolerância p/ zoom/render)
   expect(Math.abs(b2.x - b1.x) + Math.abs(b2.y - b1.y)).toBeGreaterThan(30);
 });
