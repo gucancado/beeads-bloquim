@@ -47,6 +47,7 @@ const updateTaskDetailsSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
+  ownerId: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
   scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
@@ -591,6 +592,34 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
         newAssigneeId,
         oldAssigneeName,
         newAssigneeName,
+      },
+      source: req.user?.source ?? null,
+    });
+  }
+
+  if (parsed.data.ownerId !== undefined && currentTask && currentTask.ownerId !== parsed.data.ownerId) {
+    const newOwnerId = parsed.data.ownerId ?? null;
+    let newOwnerName: string | null = null;
+    if (newOwnerId) {
+      const [newUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, newOwnerId)).limit(1);
+      newOwnerName = newUser?.name ?? null;
+    }
+    let oldOwnerName: string | null = null;
+    if (currentTask.ownerId) {
+      const [oldUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, currentTask.ownerId)).limit(1);
+      oldOwnerName = oldUser?.name ?? null;
+    }
+    await recordTaskActivity({
+      taskId: card.taskId,
+      actorId: userId,
+      type: "owner_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        actorId: userId,
+        oldOwnerId: currentTask.ownerId ?? null,
+        newOwnerId,
+        oldOwnerName,
+        newOwnerName,
       },
       source: req.user?.source ?? null,
     });
