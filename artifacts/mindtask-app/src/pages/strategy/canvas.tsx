@@ -25,6 +25,7 @@ import {
   useCreateStrategyNode,
   useUpdateStrategyNode,
   useCreateStrategyEdge,
+  useDeleteStrategyNode,
   type StrategyNodeKind,
 } from "@/hooks/useStrategy";
 import type { Connection } from "reactflow";
@@ -45,6 +46,7 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   const createNode = useCreateStrategyNode(workspaceId);
   const updateNode = useUpdateStrategyNode(workspaceId);
   const createEdge = useCreateStrategyEdge(workspaceId);
+  const deleteNode = useDeleteStrategyNode(workspaceId);
   const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -107,6 +109,13 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
     [createEdge],
   );
 
+  const onNodesDelete = useCallback(
+    (deleted: Node[]) => {
+      for (const n of deleted) deleteNode.mutate(n.id);
+    },
+    [deleteNode],
+  );
+
   const addNode = useCallback(
     (kind: StrategyNodeKind) => {
       // cria no centro aproximado do viewport
@@ -167,6 +176,8 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         onNodesChange={onNodesChangeWrapped}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
+        onNodesDelete={onNodesDelete}
+        deleteKeyCode="Delete"
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.2}

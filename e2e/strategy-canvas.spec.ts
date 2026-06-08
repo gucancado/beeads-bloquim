@@ -64,6 +64,27 @@ test("inline edit of a node title autosaves and persists after reload", async ({
   await expect(reloaded).toHaveValue("Novo Objetivo Editado");
 });
 
+test("deleting a node via Delete key removes it persistently", async ({ page }) => {
+  const b = `/api/workspaces/${wsId}/strategy`;
+  await api.get(b);
+  const tema = await (await api.post(`${b}/nodes`, { data: { kind: "tema", positionX: -250, positionY: -250, data: { title: "Tema p/ deletar" } } })).json();
+
+  await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
+  const node = page.locator(`.react-flow__node[data-id="${tema.id}"]`);
+  await expect(node).toBeVisible();
+  // seleciona clicando no topo (rótulo do kind, fora dos inputs)
+  await node.click({ position: { x: 20, y: 6 } });
+  const deleted = page.waitForResponse(
+    (r) => r.url().includes(`/strategy/nodes/${tema.id}`) && r.request().method() === "DELETE" && r.ok(),
+  );
+  await page.keyboard.press("Delete");
+  await deleted;
+  await expect(node).toHaveCount(0);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator(`.react-flow__node[data-id="${tema.id}"]`)).toHaveCount(0);
+});
+
 test("renders edges from the graph with the prefilled relation_type label", async ({ page }) => {
   const b = `/api/workspaces/${wsId}/strategy`;
   await api.get(b); // lazy init
