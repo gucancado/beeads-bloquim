@@ -18,6 +18,9 @@ export interface TaskResponse {
   description?: string | null;
   assignedTo?: string | null;
   assignedUser?: UserResponse | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
   dueDate?: Date | null;
   startAt?: Date | null;
   scheduleMode?: ScheduleMode;

@@ -606,6 +606,9 @@ export const GetCardResponse = zod.object({
           pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
         })
         .nullish(),
+      ownerId: zod.string().uuid().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerAvatarUrl: zod.string().nullish(),
       dueDate: zod.date().nullish(),
       startAt: zod.date().nullish(),
       scheduleMode: zod
@@ -813,6 +816,9 @@ export const UpdateTaskStatusResponse = zod.object({
       pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
     })
     .nullish(),
+  ownerId: zod.string().uuid().nullish(),
+  ownerName: zod.string().nullish(),
+  ownerAvatarUrl: zod.string().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
@@ -848,6 +854,7 @@ export const UpdateTaskDetailsBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().optional(),
   assignedTo: zod.string().uuid().nullish(),
+  ownerId: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
@@ -891,6 +898,9 @@ export const UpdateTaskDetailsResponse = zod.object({
       pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
     })
     .nullish(),
+  ownerId: zod.string().uuid().nullish(),
+  ownerName: zod.string().nullish(),
+  ownerAvatarUrl: zod.string().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
@@ -937,6 +947,9 @@ export const GetMyTasksResponseItem = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   assignedTo: zod.string().uuid().nullish(),
+  ownerId: zod.string().uuid().nullish(),
+  ownerName: zod.string().nullish(),
+  ownerAvatarUrl: zod.string().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
