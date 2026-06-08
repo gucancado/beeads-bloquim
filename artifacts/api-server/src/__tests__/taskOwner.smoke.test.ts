@@ -27,9 +27,9 @@ describe("task owner smoke", () => {
   });
 
   it("PATCH ownerId to another member changes owner and records owner_changed once", async () => {
-    const { agent: adminAgent, user: adminUser } = await registerAndLogin();
+    const { agent: adminAgent, user: adminUser } = await registerAndLogin("Owner Alice");
     createdUserIds.push(adminUser.id);
-    const { user: other } = await registerAndLogin();
+    const { user: other } = await registerAndLogin("Owner Bob");
     createdUserIds.push(other.id);
 
     const wsRes = await adminAgent
