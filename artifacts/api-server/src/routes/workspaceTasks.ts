@@ -255,6 +255,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       isRecurring: isRecurring ?? false,
       recurrenceConfig: recurrenceConfig ?? null,
       createdBy: actorId,
+      ownerId: actorId,
     })
     .returning();
 
