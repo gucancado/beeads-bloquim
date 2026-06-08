@@ -71,10 +71,15 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     if (assignees.length === 0) return undefined;
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "unassigned");
-    const parts = [];
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo) => {
+      const parts = [];
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
 
   const rows = await db
@@ -120,10 +125,15 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     if (assignees.length === 0) return undefined;
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "unassigned");
-    const parts = [];
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo) => {
+      const parts = [];
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
 
   const parentTasks = alias(tasks, "parent_tasks");

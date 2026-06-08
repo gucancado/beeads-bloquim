@@ -2,7 +2,7 @@ import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
-import { eq, and, or, asc, sql, inArray, isNull, count, not, gte, lt } from "drizzle-orm";
+import { eq, and, or, asc, sql, inArray, isNull, count, not, ne, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
@@ -90,12 +90,16 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
-
-    const parts = [];
-    if (hasMe) parts.push(eq(tasks.assignedTo, userId));
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo) => {
+      const parts = [];
+      if (hasMe) parts.push(eq(field, userId));
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
 
   const memberships = await db
@@ -184,12 +188,16 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
-
-    const parts = [];
-    if (hasMe) parts.push(eq(tasks.assignedTo, userId));
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo) => {
+      const parts = [];
+      if (hasMe) parts.push(eq(field, userId));
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
 
   const memberships = await db
