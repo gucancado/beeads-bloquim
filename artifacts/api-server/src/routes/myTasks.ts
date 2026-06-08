@@ -332,6 +332,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     isRecurring: isRecurring ?? false,
     recurrenceConfig: recurrenceConfig ?? null,
     createdBy: userId,
+    ownerId: userId,
   }).returning();
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);

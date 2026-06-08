@@ -87,7 +87,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), require
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId, scheduleMode: "sem_prazo" })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId, ownerId: userId, scheduleMode: "sem_prazo" })
     .returning();
 
   const [updated] = await db
@@ -222,6 +222,7 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     .values({
       ...rest,
       assignedTo,
+      ownerId: userId,
       mapId,
       workspaceId,
       dueDate: sched.value.dueDate,
