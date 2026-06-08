@@ -50,6 +50,8 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges] = useEdgesState([]);
   const editingRef = useRef(false);
+  const updateNodeRef = useRef(updateNode);
+  updateNodeRef.current = updateNode;
 
   // Hidrata nós/arestas do grafo (sem pisar numa edição/drag em andamento).
   useEffect(() => {
@@ -59,7 +61,14 @@ function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
         id: n.id,
         type: "strategy",
         position: { x: n.positionX, y: n.positionY },
-        data: { kind: n.kind, readOnly: n.readOnly, ...n.data },
+        data: {
+          kind: n.kind,
+          readOnly: n.readOnly,
+          ...n.data,
+          // autosave inline (§7.5): o nó chama isto no blur de um campo editado.
+          onPatchData: (patch: Record<string, any>) =>
+            updateNodeRef.current.mutate({ nodeId: n.id, data: patch }),
+        },
         draggable: !n.readOnly,
       })),
     );

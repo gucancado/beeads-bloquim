@@ -42,6 +42,28 @@ test("strategy canvas lazy-loads, toolbar creates a node that persists", async (
   await expect(page.locator(".react-flow__node")).toHaveCount(1);
 });
 
+test("inline edit of a node title autosaves and persists after reload", async ({ page }) => {
+  const b = `/api/workspaces/${wsId}/strategy`;
+  await api.get(b);
+  const obj = await (await api.post(`${b}/nodes`, { data: { kind: "objetivo", positionX: 300, positionY: 300, data: { title: "Antigo" } } })).json();
+
+  await page.goto(`/workspaces/${wsId}/strategy`, { waitUntil: "domcontentloaded" });
+  const node = page.locator(`.react-flow__node[data-id="${obj.id}"]`);
+  await expect(node).toBeVisible();
+  const titleInput = node.locator('input[type="text"], input:not([type])').first();
+
+  const patched = page.waitForResponse(
+    (r) => r.url().includes(`/strategy/nodes/${obj.id}`) && r.request().method() === "PATCH" && r.ok(),
+  );
+  await titleInput.fill("Novo Objetivo Editado");
+  await titleInput.press("Enter");
+  await patched;
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const reloaded = page.locator(`.react-flow__node[data-id="${obj.id}"] input`).first();
+  await expect(reloaded).toHaveValue("Novo Objetivo Editado");
+});
+
 test("renders edges from the graph with the prefilled relation_type label", async ({ page }) => {
   const b = `/api/workspaces/${wsId}/strategy`;
   await api.get(b); // lazy init

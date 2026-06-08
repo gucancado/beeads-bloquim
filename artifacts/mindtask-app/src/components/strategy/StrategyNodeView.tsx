@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import type { StrategyNodeKind } from "@/hooks/useStrategy";
 
 /**
- * Renderer base dos nós do mapa estratégico (Fase 4). Um card por kind, com
- * paleta @beeads/tokens. Será refinado em componentes dedicados por tipo
- * (ObjectiveNode/KrNode/…) + floating edges; por ora um switch por kind.
+ * Renderer dos nós do mapa estratégico (Fase 4). Um card por kind (paleta
+ * @beeads/tokens) com edição inline autosave (§7.5): o campo salva no blur via
+ * data.onPatchData. Nós de ciclo arquivado (readOnly) não editam.
  */
 
 const KIND_META: Record<StrategyNodeKind, { label: string; accent: string }> = {
@@ -34,27 +35,83 @@ function HealthPill({ health }: { health?: string }) {
   );
 }
 
+/** Campo de texto/número editável inline; autosave no blur (se mudou) ou Enter. */
+function EditableField({
+  value,
+  onCommit,
+  readOnly,
+  type = "text",
+  className = "",
+  placeholder,
+}: {
+  value: string | number;
+  onCommit: (v: string) => void;
+  readOnly?: boolean;
+  type?: "text" | "number";
+  className?: string;
+  placeholder?: string;
+}) {
+  const [v, setV] = useState(String(value ?? ""));
+  useEffect(() => setV(String(value ?? "")), [value]);
+
+  if (readOnly) {
+    return <span className={className}>{String(value ?? "")}</span>;
+  }
+  return (
+    <input
+      type={type}
+      value={v}
+      placeholder={placeholder}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => {
+        if (v !== String(value ?? "")) onCommit(v);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") setV(String(value ?? ""));
+      }}
+      className={`nodrag nopan w-full bg-transparent outline-none focus:ring-1 focus:ring-honey/50 rounded px-0.5 ${className}`}
+    />
+  );
+}
+
 export function StrategyNodeView({ data, selected }: NodeProps) {
   const kind = data.kind as StrategyNodeKind;
   const meta = KIND_META[kind] ?? KIND_META.tema;
-
-  const title =
-    data.title ?? data.label ?? data.text ?? (kind === "plano" ? (data.hypothesis || "Plano") : meta.label);
+  const ro = !!data.readOnly;
+  const patch = (p: Record<string, any>) => data.onPatchData?.(p);
 
   return (
     <div
-      className={`min-w-[180px] max-w-[260px] rounded-xl border border-l-4 bg-card px-3 py-2 shadow-md ${meta.accent} ${selected ? "ring-2 ring-honey" : ""} ${data.readOnly ? "opacity-60" : ""}`}
+      className={`min-w-[190px] max-w-[260px] rounded-xl border border-l-4 bg-card px-3 py-2 shadow-md ${meta.accent} ${selected ? "ring-2 ring-honey" : ""} ${ro ? "opacity-60" : ""}`}
     >
       <Handle type="target" position={Position.Top} className="!h-2 !w-2 !bg-muted-foreground/50" />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{meta.label}</span>
-        {kind === "kr" && <HealthPill health={data.health} />}
-        {kind === "objetivo" && <HealthPill health={data.health} />}
+        {(kind === "kr" || kind === "objetivo") && <HealthPill health={data.health} />}
       </div>
-      <div className="mt-0.5 text-sm font-medium text-fg break-words">{title}</div>
+
+      {/* Título / texto principal por kind */}
+      {kind === "swot" ? (
+        <EditableField value={data.text ?? ""} onCommit={(val) => patch({ text: val })} readOnly={ro} placeholder="texto SWOT" className="mt-0.5 text-sm font-medium text-fg" />
+      ) : kind === "plano" ? (
+        <EditableField value={data.hypothesis ?? ""} onCommit={(val) => patch({ hypothesis: val })} readOnly={ro} placeholder="hipótese X→Y" className="mt-0.5 text-sm font-medium text-fg" />
+      ) : kind === "recurso" ? (
+        <EditableField value={data.label ?? ""} onCommit={(val) => patch({ label: val })} readOnly={ro} placeholder="recurso" className="mt-0.5 text-sm font-medium text-fg" />
+      ) : (
+        <EditableField value={data.title ?? ""} onCommit={(val) => patch({ title: val })} readOnly={ro} placeholder="título" className="mt-0.5 text-sm font-medium text-fg" />
+      )}
+
       {kind === "kr" && (
-        <div className="mt-1 text-xs text-muted-foreground">
-          {Number(data.currentValue ?? 0)} / {Number(data.targetValue ?? 0)} {data.unit ?? ""}
+        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <EditableField
+            value={Number(data.currentValue ?? 0)}
+            onCommit={(val) => patch({ currentValue: Number(val) })}
+            readOnly={ro}
+            type="number"
+            className="w-14 text-fg"
+          />
+          <span>/ {Number(data.targetValue ?? 0)} {data.unit ?? ""}</span>
         </div>
       )}
       {kind === "swot" && data.swotType && (
@@ -63,7 +120,7 @@ export function StrategyNodeView({ data, selected }: NodeProps) {
       {kind === "objetivo" && data.status && (
         <div className="mt-1 text-[10px] uppercase text-muted-foreground">{String(data.status)}</div>
       )}
-      {data.readOnly && <div className="mt-1 text-[10px] italic text-muted-foreground">histórico</div>}
+      {ro && <div className="mt-1 text-[10px] italic text-muted-foreground">histórico</div>}
       <Handle type="source" position={Position.Bottom} className="!h-2 !w-2 !bg-muted-foreground/50" />
     </div>
   );
