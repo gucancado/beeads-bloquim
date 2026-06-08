@@ -209,6 +209,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
+  ownerId: z.string().uuid().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   startAt: z.string().nullable().optional(),
   scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
@@ -416,6 +417,8 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
 
   const assigneeChanging = "assignedTo" in parsed.data && parsed.data.assignedTo !== existing.assignedTo;
   const newAssigneeId = assigneeChanging ? (parsed.data.assignedTo ?? null) : null;
+  const ownerChanging = "ownerId" in parsed.data && (parsed.data.ownerId ?? null) !== existing.ownerId;
+  const newOwnerId = ownerChanging ? (parsed.data.ownerId ?? null) : null;
   const priorityChanging = parsed.data.priority !== undefined && parsed.data.priority !== existing.priority;
   const safeExistingDueDate = existing.dueDate && !isNaN(existing.dueDate.getTime()) ? existing.dueDate : null;
   const dueDateChanging = "dueDate" in parsed.data && (parsed.data.dueDate ?? null) !== (safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null);
@@ -424,6 +427,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
   if ("assignedTo" in parsed.data) updateData.assignedTo = parsed.data.assignedTo ?? null;
+  if ("ownerId" in parsed.data) updateData.ownerId = parsed.data.ownerId ?? null;
   const touchesSchedule = "dueDate" in parsed.data || "startAt" in parsed.data || "scheduleMode" in parsed.data;
   if (touchesSchedule) {
     const sched = resolveSchedule(parsed.data, {
@@ -489,6 +493,32 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
         newAssigneeId,
         oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
         newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
+      },
+      source: req.user?.source ?? null,
+    });
+  }
+
+  if (ownerChanging) {
+    const [oldOwner, newOwner] = await Promise.all([
+      existing.ownerId
+        ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.ownerId)).limit(1)
+        : Promise.resolve([]),
+      newOwnerId
+        ? db.select({ name: users.name }).from(users).where(eq(users.id, newOwnerId)).limit(1)
+        : Promise.resolve([]),
+    ]);
+
+    await recordTaskActivity({
+      taskId,
+      actorId,
+      type: "owner_changed",
+      metadata: {
+        actorName: actorUser[0]?.name ?? null,
+        actorId,
+        oldOwnerId: existing.ownerId ?? null,
+        newOwnerId,
+        oldOwnerName: (oldOwner as { name: string }[])[0]?.name ?? null,
+        newOwnerName: (newOwner as { name: string }[])[0]?.name ?? null,
       },
       source: req.user?.source ?? null,
     });
