@@ -81,4 +81,40 @@ describe("maps kind scope guard (action-only listings)", () => {
     expect(dash.status).toBe(200);
     expect(dash.body.totalMaps).toBe(1);
   });
+
+  // Regressão (revisão codex pré-merge): cards/connections só vivem em maps
+  // kind='action'. requireMapInWorkspace só validava workspace, deixando criar
+  // card num map strategy (invariante §5.2: `cards` vazia em strategy). shapes/
+  // text seguem compartilhados — guard só em cards+connections.
+  it("cards/connections recusam map kind='strategy' (404)", async () => {
+    const { agent, user } = await registerAndLogin();
+    userIds.push(user.id);
+
+    const ws = (await agent.post("/api/workspaces").send({ name: "GuardWS" })).body;
+    workspaceIds.push(ws.id);
+
+    const [strategyMap] = await db
+      .insert(maps)
+      .values({ workspaceId: ws.id, name: "GuardStrategyMap", kind: "strategy", createdBy: user.id })
+      .returning();
+
+    // POST card no map strategy → 404 (não deve persistir)
+    const card = await agent
+      .post(`/api/workspaces/${ws.id}/maps/${strategyMap.id}/cards`)
+      .send({ title: "x", positionX: 0, positionY: 0 });
+    expect(card.status).toBe(404);
+
+    // POST connection no map strategy → 404
+    const conn = await agent
+      .post(`/api/workspaces/${ws.id}/maps/${strategyMap.id}/connections`)
+      .send({ sourceCardId: "00000000-0000-0000-0000-000000000001", targetCardId: "00000000-0000-0000-0000-000000000002" });
+    expect(conn.status).toBe(404);
+
+    // sanity: action map ainda aceita card
+    const actionMap = (await agent.post(`/api/workspaces/${ws.id}/maps`).send({ name: "GuardActionMap" })).body;
+    const okCard = await agent
+      .post(`/api/workspaces/${ws.id}/maps/${actionMap.id}/cards`)
+      .send({ title: "ok", positionX: 0, positionY: 0 });
+    expect(okCard.status).toBe(201);
+  });
 });

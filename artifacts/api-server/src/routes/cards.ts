@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { cards, tasks, cardConnections, users } from "@workspace/db/schema";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
-import { requireWorkspaceRole, requireCardInMap, requireMapInWorkspace, getMemberRole } from "../middlewares/permissions";
+import { requireWorkspaceRole, requireCardInMap, requireMapInWorkspace, requireActionMap, getMemberRole } from "../middlewares/permissions";
 import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 import { toVisualStatus } from "../services/taskVisualSyncService";
@@ -70,7 +70,7 @@ function getApprovalTaskStatusForCards(parentStatus: string): TaskStatus {
   }
 }
 
-router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireMapInWorkspace, async (req: AuthRequest, res) => {
+router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), requireMapInWorkspace, requireActionMap, async (req: AuthRequest, res) => {
   const parsed = createCardSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation error", message: parsed.error.message });
