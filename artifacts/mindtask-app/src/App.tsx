@@ -11,6 +11,7 @@ import RegisterPage from "@/pages/register";
 import WorkspacesPage from "@/pages/workspaces/index";
 import WorkspaceDetailPage from "@/pages/workspaces/detail";
 import CanvasPage from "@/pages/maps/canvas";
+import StrategyCanvasPage from "@/pages/strategy/canvas";
 import MyTasksPage from "@/pages/my-tasks";
 import TemplatesPage from "@/pages/templates";
 import SettingsIntegrationsPage from "@/pages/settings/integrations";
@@ -108,6 +109,7 @@ function Router() {
       <Route path="/workspaces/:wsId/tasks/:taskId" component={WorkspaceDetailPage} />
       <Route path="/workspaces/:id" component={WorkspaceDetailPage} />
       <Route path="/workspaces/:wsId/maps/:mapId" component={CanvasPage} />
+      <Route path="/workspaces/:wsId/strategy" component={StrategyCanvasPage} />
       <Route path="/my-tasks/tasks/:taskId" component={MyTasksPage} />
       <Route path="/my-tasks" component={MyTasksPage} />
       <Route path="/my-templates" component={TemplatesPage} />

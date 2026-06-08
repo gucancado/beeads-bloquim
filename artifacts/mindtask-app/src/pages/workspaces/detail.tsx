@@ -609,6 +609,7 @@ export default function WorkspaceDetailPage() {
                       <TabsTrigger value="maps" className={tabTriggerClass}>planos</TabsTrigger>
                       <TabsTrigger value="dashboard" className={tabTriggerClass}>dashboard</TabsTrigger>
                       <TabsTrigger value="members" className={tabTriggerClass}>membros</TabsTrigger>
+                      <Link href={`/workspaces/${workspaceId}/strategy`} className={tabTriggerClass}>estratégia</Link>
                     </TabsList>
                   </div>
                 );

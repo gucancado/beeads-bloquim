@@ -1,0 +1,170 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRoute } from "wouter";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  BackgroundVariant,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  type Node,
+  type Edge,
+  type NodeChange,
+} from "reactflow";
+import "reactflow/dist/style.css";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
+import { Button } from "@beeads/ui";
+import { Loader2, Plus } from "lucide-react";
+import { CanvasToolbar } from "@/components/canvas-base/CanvasToolbar";
+import { CanvasControls } from "@/components/canvas-base/CanvasControls";
+import { StrategyNodeView } from "@/components/strategy/StrategyNodeView";
+import {
+  useStrategyGraph,
+  useCreateStrategyNode,
+  useUpdateStrategyNode,
+  type StrategyNodeKind,
+} from "@/hooks/useStrategy";
+
+const nodeTypes = { strategy: StrategyNodeView };
+
+const NODE_BUTTONS: { kind: StrategyNodeKind; label: string }[] = [
+  { kind: "objetivo", label: "Objetivo" },
+  { kind: "kr", label: "KR" },
+  { kind: "tema", label: "Tema" },
+  { kind: "swot", label: "SWOT" },
+  { kind: "plano", label: "Plano" },
+  { kind: "recurso", label: "Recurso" },
+];
+
+function StrategyCanvasInner({ workspaceId }: { workspaceId: string }) {
+  const { data: graph, isLoading } = useStrategyGraph(workspaceId);
+  const createNode = useCreateStrategyNode(workspaceId);
+  const updateNode = useUpdateStrategyNode(workspaceId);
+  const { screenToFlowPosition } = useReactFlow();
+
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges] = useEdgesState([]);
+  const editingRef = useRef(false);
+
+  // Hidrata nós/arestas do grafo (sem pisar numa edição/drag em andamento).
+  useEffect(() => {
+    if (!graph || editingRef.current) return;
+    setNodes(
+      graph.nodes.map<Node>((n) => ({
+        id: n.id,
+        type: "strategy",
+        position: { x: n.positionX, y: n.positionY },
+        data: { kind: n.kind, readOnly: n.readOnly, ...n.data },
+        draggable: !n.readOnly,
+      })),
+    );
+    setEdges(
+      graph.edges.map<Edge>((e) => ({
+        id: e.id,
+        source: e.sourceNodeId,
+        target: e.targetNodeId,
+        label: e.relationType ?? e.label ?? undefined,
+      })),
+    );
+  }, [graph, setNodes, setEdges]);
+
+  const onNodesChangeWrapped = useCallback(
+    (changes: NodeChange[]) => {
+      if (changes.some((c) => c.type === "position" && c.dragging)) editingRef.current = true;
+      onNodesChange(changes);
+    },
+    [onNodesChange],
+  );
+
+  const onNodeDragStop = useCallback(
+    (_e: unknown, node: Node) => {
+      editingRef.current = false;
+      updateNode.mutate({ nodeId: node.id, positionX: node.position.x, positionY: node.position.y });
+    },
+    [updateNode],
+  );
+
+  const addNode = useCallback(
+    (kind: StrategyNodeKind) => {
+      // cria no centro aproximado do viewport
+      const pos = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      const data: Record<string, any> =
+        kind === "kr"
+          ? { title: "Novo KR", targetValue: 100 }
+          : kind === "swot"
+            ? { swotType: "forca", text: "" }
+            : kind === "recurso"
+              ? { resourceKind: "outro", label: "" }
+              : kind === "plano"
+                ? { hypothesis: "" }
+                : { title: kind === "objetivo" ? "Novo objetivo" : "Novo tema" };
+      createNode.mutate({ kind, positionX: pos.x, positionY: pos.y, data });
+    },
+    [createNode, screenToFlowPosition],
+  );
+
+  const cycleLabel = graph?.cycle?.label;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+        <PageBreadcrumb items={[{ label: "estratégia" }]} />
+        {cycleLabel && (
+          <span className="rounded-full bg-honey/15 px-3 py-1 text-xs font-medium text-fg lowercase">{cycleLabel}</span>
+        )}
+      </div>
+
+      <CanvasToolbar>
+        {NODE_BUTTONS.map((b) => (
+          <Button
+            key={b.kind}
+            onClick={() => addNode(b.kind)}
+            disabled={createNode.isPending}
+            variant="outline"
+            className="rounded-xl h-10 px-4 shadow-md bg-background border-border/60 select-none cursor-pointer"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            <span className="lowercase">{b.label}</span>
+          </Button>
+        ))}
+      </CanvasToolbar>
+
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChangeWrapped}
+        onNodeDragStop={onNodeDragStop}
+        fitView
+        fitViewOptions={{ padding: 0.3 }}
+        minZoom={0.2}
+        maxZoom={2.5}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="hsl(var(--muted-foreground) / 0.15)" />
+        <CanvasControls />
+      </ReactFlow>
+    </div>
+  );
+}
+
+export default function StrategyCanvasPage() {
+  const [, params] = useRoute("/workspaces/:wsId/strategy");
+  const workspaceId = params?.wsId ?? "";
+  return (
+    <AppLayout>
+      <ReactFlowProvider>
+        <StrategyCanvasInner workspaceId={workspaceId} />
+      </ReactFlowProvider>
+    </AppLayout>
+  );
+}
