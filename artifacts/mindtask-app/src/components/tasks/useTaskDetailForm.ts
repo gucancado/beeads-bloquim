@@ -60,6 +60,7 @@ export function useTaskDetailForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState("unassigned");
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const [priority, setPriority] = useState<string>("medium");
   const [dueDate, setDueDate] = useState("");
   const [startAt, setStartAt] = useState("");
@@ -78,6 +79,7 @@ export function useTaskDetailForm({
         setPriority(card.task.priority);
         setStatus(card.task.status);
         setAssignedTo(card.task.assignedTo ?? "unassigned");
+        setOwnerId((card.task as { ownerId?: string | null } | undefined)?.ownerId ?? null);
         setDueDate(card.task.dueDate ? card.task.dueDate.slice(0, 10) : "");
         setStartAt(card.task.startAt ? card.task.startAt.slice(0, 10) : "");
         setScheduleMode((card.task.scheduleMode ?? "ate") as ScheduleMode);
@@ -103,6 +105,7 @@ export function useTaskDetailForm({
         setScheduleMode((task.scheduleMode ?? "ate") as ScheduleMode);
         setPriority(task.priority ?? "medium");
         setAssignedTo(task.assignedTo ?? "unassigned");
+        setOwnerId((task as { ownerId?: string | null } | undefined)?.ownerId ?? (card as { ownerId?: string | null } | undefined)?.ownerId ?? null);
         setStatus(task.status ?? "pending");
         setTaskWorkspaceId(task.workspaceId ?? null);
         setTaskMapId(task.mapId ?? null);
@@ -120,6 +123,7 @@ export function useTaskDetailForm({
         setTitle("");
         setDescription("");
         setAssignedTo("unassigned");
+        setOwnerId(null);
         setPriority("medium");
         setDueDate("");
         setStartAt("");
@@ -141,6 +145,7 @@ export function useTaskDetailForm({
     title, setTitle,
     description, setDescription,
     assignedTo, setAssignedTo,
+    ownerId, setOwnerId,
     priority, setPriority,
     dueDate, setDueDate,
     startAt, setStartAt,
