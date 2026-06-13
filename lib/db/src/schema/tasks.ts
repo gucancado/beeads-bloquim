@@ -209,6 +209,9 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   // Attachment unlinked from a task without deleting the underlying file.
   // metadata: { attachmentId, filename }
   "attachment_unlinked",
+  // Attachment added to / removed from a task. metadata: { attachmentId, filename }
+  "attachment_added",
+  "attachment_removed",
 ]);
 
 export const taskActivities = pgTable("task_activities", {
