@@ -1,10 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks, attachments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, or, asc, sql, inArray, isNull, count, not, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { requireStorage } from "../lib/featureFlags";
+import { sanitizeFilename, validateFileUpload } from "@workspace/storage";
 import { logger } from "../lib/logger";
 
 const log = logger.child({ module: "myTasks" });
@@ -21,6 +24,7 @@ import {
   listTaskAttachments,
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
+  createTaskAttachmentLink,
 } from "../services/taskAttachmentsService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
 import {
@@ -927,6 +931,105 @@ router.get("/:taskId/attachments", requireAuth, async (req: AuthRequest, res) =>
 // Note: POST /:taskId/attachments is removed in the new storage flow. The
 // client now calls POST /api/storage/uploads/request-url which both creates
 // the attachment row AND returns a presigned URL in a single call.
+
+const standaloneRequestUrlSchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive(),
+  kind: z.enum(["standard", "deliverable"]).optional(),
+});
+
+/**
+ * Standalone counterpart of POST /storage/uploads/request-url. Issues a
+ * presigned upload URL for a workspace-less task and pre-creates the paired
+ * attachments + task_attachments rows (workspace_id NULL) via the shared
+ * `createTaskAttachmentLink` helper. Same response shape as the storage route.
+ *
+ * bucket is always "attachments"; entityKind is always "task". The storage key
+ * uses a workspace-free scheme since standalone tasks have no workspace id.
+ */
+router.post(
+  "/:taskId/attachments/request-url",
+  requireAuth,
+  requireStorage,
+  async (req: AuthRequest, res) => {
+    const userId = req.user!.userId;
+    const { taskId } = req.params;
+
+    const denied = await authorizePersonalTaskAccess(taskId, userId);
+    if (denied) return res.status(denied.status).json(denied.body);
+
+    const parsed = standaloneRequestUrlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "validation_failed",
+        message: "Invalid upload request payload",
+        details: parsed.error.issues,
+      });
+    }
+
+    const { filename, contentType, sizeBytes, kind } = parsed.data;
+
+    const validation = validateFileUpload({
+      filename,
+      mimeType: contentType,
+      sizeBytes,
+    });
+    if (validation) {
+      return res.status(400).json({ error: validation.code, message: validation.message });
+    }
+
+    const bucket = "attachments" as const;
+    const attachmentId = randomUUID();
+    const safeName = sanitizeFilename(filename);
+    // Workspace-free storage key: standalone tasks have no workspace id.
+    const storagePath = `standalone/task/${taskId}/${attachmentId}-${safeName}`;
+
+    const storage = getStorage();
+    let signed;
+    try {
+      signed = await storage.createUploadUrl({ bucket, storagePath, contentType });
+    } catch (err) {
+      log.error({ err, storagePath, bucket }, "createUploadUrl failed");
+      return res.status(502).json({ error: "storage_error", message: "Failed to create upload URL" });
+    }
+
+    try {
+      await createTaskAttachmentLink({
+        attachmentId,
+        workspaceId: null,
+        bucket,
+        storagePath,
+        fileName: safeName,
+        mimeType: contentType,
+        fileSize: sizeBytes,
+        uploadedBy: userId,
+        taskId,
+        kind,
+      });
+    } catch (err) {
+      log.error({ err, attachmentId }, "failed to insert attachment row");
+      return res.status(500).json({ error: "db_error", message: "Failed to register attachment" });
+    }
+
+    await recordTaskActivity({
+      taskId,
+      actorId: userId,
+      type: "attachment_added",
+      metadata: { attachmentId, filename: safeName },
+    });
+
+    return res.status(201).json({
+      attachmentId,
+      bucket,
+      storagePath,
+      uploadUrl: signed.uploadUrl,
+      method: signed.method,
+      headers: signed.headers,
+      expiresAt: signed.expiresAt.toISOString(),
+    });
+  },
+);
 
 router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;

@@ -24,6 +24,11 @@ import { requireAuth, type AuthRequest } from "../middlewares/auth";
 import { requireStorage } from "../lib/featureFlags";
 import { getStorage } from "../lib/storage";
 import { logger } from "../lib/logger";
+import {
+  createTaskAttachmentLink,
+  getTaskOwnership,
+} from "../services/taskAttachmentsService";
+import { recordTaskActivity } from "../services/taskActivitiesService";
 
 const log = logger.child({ module: "storage" });
 
@@ -131,8 +136,9 @@ router.post(
 
     // Pre-create the attachment row. Entity anchoring lives in dedicated join
     // tables now — for task uploads, we insert a paired row in
-    // `task_attachments` so listings find it. card/comment/map/plan continue
-    // to use the per-entity columns on `attachments` itself.
+    // `task_attachments` so listings find it (via the shared
+    // `createTaskAttachmentLink` helper). card/comment/map/plan continue to use
+    // the per-entity columns on `attachments` itself.
     const insertValues = {
       id: attachmentId,
       workspaceId: ownership.workspaceId,
@@ -149,17 +155,22 @@ router.post(
     } as const;
 
     try {
-      await db.transaction(async (tx) => {
-        await tx.insert(attachments).values(insertValues);
-        if (entityKind === "task") {
-          await tx.insert(taskAttachments).values({
-            taskId: entityId,
-            attachmentId,
-            kind: kind ?? "standard",
-            createdBy: userId,
-          });
-        }
-      });
+      if (entityKind === "task") {
+        await createTaskAttachmentLink({
+          attachmentId,
+          workspaceId: ownership.workspaceId,
+          bucket,
+          storagePath,
+          fileName: safeName,
+          mimeType: contentType,
+          fileSize: sizeBytes,
+          uploadedBy: userId,
+          taskId: entityId,
+          kind,
+        });
+      } else {
+        await db.insert(attachments).values(insertValues);
+      }
     } catch (err) {
       log.error({ err, attachmentId }, "failed to insert attachment row");
       res.status(500).json({

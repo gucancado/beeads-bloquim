@@ -233,6 +233,52 @@ export async function listTaskDeliverableAttachments(
   }));
 }
 
+export interface CreateTaskAttachmentLinkInput {
+  /** Pre-generated attachment id (also used to build the storage path). */
+  attachmentId: string;
+  /** Null for standalone (workspace-less) tasks. */
+  workspaceId: string | null;
+  bucket: BucketName;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedBy: string;
+  taskId: string;
+  kind?: AttachmentKind;
+}
+
+/**
+ * Inserts the paired `attachments` + `task_attachments` rows for a task upload
+ * within a single transaction. Shared by the workspace storage request-url
+ * handler and the standalone `/my-tasks/:taskId/attachments/request-url` route
+ * so both follow the exact same insert contract. `workspaceId` may be null for
+ * standalone tasks (the column is nullable since migration making standalone
+ * attachments possible).
+ */
+export async function createTaskAttachmentLink(
+  input: CreateTaskAttachmentLinkInput,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(attachments).values({
+      id: input.attachmentId,
+      workspaceId: input.workspaceId,
+      bucket: input.bucket,
+      storagePath: input.storagePath,
+      originalFilename: input.fileName,
+      mimeType: input.mimeType,
+      fileSize: input.fileSize,
+      uploadedBy: input.uploadedBy,
+    });
+    await tx.insert(taskAttachments).values({
+      taskId: input.taskId,
+      attachmentId: input.attachmentId,
+      kind: input.kind ?? "standard",
+      createdBy: input.uploadedBy,
+    });
+  });
+}
+
 /**
  * Creates an attachment row scoped to a task. The actual file is uploaded
  * separately by the client to the presigned URL returned by the storage
