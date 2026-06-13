@@ -230,10 +230,22 @@ router.get(
       return;
     }
 
-    const isMember = await userIsWorkspaceMember(row.workspaceId, userId);
-    if (!isMember) {
-      res.status(403).json({ error: "forbidden" });
-      return;
+    if (row.workspaceId !== null) {
+      // Workspace-owned attachment → membership gates the download.
+      const isMember = await userIsWorkspaceMember(row.workspaceId, userId);
+      if (!isMember) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
+    } else {
+      // Standalone (workspace-less) attachment → resolve the linked task via
+      // task_attachments and authorize the standalone task owner. 403 when the
+      // attachment isn't linked to a task or the caller isn't its owner.
+      const authorized = await standaloneAttachmentOwner(attachmentId, userId);
+      if (!authorized) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
     }
 
     const storage = getStorage();
@@ -321,6 +333,28 @@ async function resolveEntityWorkspace(
       return null;
     }
   }
+}
+
+/**
+ * Authorizes a standalone (workspace-less) attachment download. Resolves the
+ * task linked via `task_attachments`, then checks the caller owns that
+ * standalone task (assignee + workspaceId IS NULL). Returns false when the
+ * attachment has no task link or the caller isn't the owner.
+ */
+async function standaloneAttachmentOwner(
+  attachmentId: string,
+  userId: string,
+): Promise<boolean> {
+  const [link] = await db
+    .select({ taskId: taskAttachments.taskId })
+    .from(taskAttachments)
+    .where(eq(taskAttachments.attachmentId, attachmentId))
+    .limit(1);
+  if (!link) return false;
+  const owner = await getTaskOwnership(link.taskId);
+  if (!owner) return false;
+  if (owner.workspaceId !== null) return false;
+  return owner.assignedTo === userId;
 }
 
 async function userIsWorkspaceMember(
