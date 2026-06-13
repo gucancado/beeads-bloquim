@@ -180,6 +180,15 @@ router.post(
       return;
     }
 
+    if (entityKind === "task") {
+      await recordTaskActivity({
+        taskId: entityId,
+        actorId: userId,
+        type: "attachment_added",
+        metadata: { attachmentId, filename: safeName },
+      });
+    }
+
     res.status(201).json({
       attachmentId,
       bucket,

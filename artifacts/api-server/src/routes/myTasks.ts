@@ -1038,8 +1038,23 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: Aut
   const denied = await authorizePersonalTaskAccess(taskId, userId);
   if (denied) return res.status(denied.status).json(denied.body);
 
+  // Capture the filename before the soft-delete so the activity event can
+  // record it (the row is still readable since soft-delete only sets deletedAt).
+  const [meta] = await db
+    .select({ filename: attachments.originalFilename })
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
+
   const deleted = await deleteTaskAttachment(taskId, attachmentId);
   if (!deleted) return res.status(404).json({ error: "Attachment not found" });
+
+  await recordTaskActivity({
+    taskId,
+    actorId: userId,
+    type: "attachment_removed",
+    metadata: { attachmentId, filename: meta?.filename ?? null },
+  });
 
   return res.json({ success: true });
 });

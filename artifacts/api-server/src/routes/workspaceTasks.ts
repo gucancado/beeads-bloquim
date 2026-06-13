@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, taskComments } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, taskComments, attachments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
 import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -1058,11 +1058,26 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspac
     return;
   }
 
+  // Capture the filename before the soft-delete so the activity event can
+  // record it (soft-delete only sets deletedAt, so the row stays readable).
+  const [meta] = await db
+    .select({ filename: attachments.originalFilename })
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
+
   const deleted = await deleteTaskAttachment(taskId, attachmentId);
   if (!deleted) {
     res.status(404).json({ error: "Attachment not found" });
     return;
   }
+
+  await recordTaskActivity({
+    taskId,
+    actorId: req.user!.userId,
+    type: "attachment_removed",
+    metadata: { attachmentId, filename: meta?.filename ?? null },
+  });
 
   res.json({ success: true });
 });
