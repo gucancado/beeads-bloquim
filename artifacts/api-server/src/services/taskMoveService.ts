@@ -3,8 +3,10 @@ import {
   tasks,
   users,
   workspaceMembers,
+  attachments,
+  taskAttachments,
 } from "@workspace/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { recordTaskActivity } from "./taskActivitiesService";
 
 /**
@@ -17,10 +19,10 @@ import { recordTaskActivity } from "./taskActivitiesService";
  *   - Encapsulates the cross-cutting validation (assignee resolution against
  *     the destination membership, parent/approval guards).
  *
- * About attachments: attachments.workspace_id is NOT NULL, so standalone
- * tasks (workspace_id IS NULL) cannot have attachments by construction —
- * the schema's CHECK constraint blocks inserts at the source. No attachment
- * fix-up is needed at move time.
+ * About attachments: attachments.workspace_id is now nullable, so standalone
+ * tasks (workspace_id IS NULL) can carry attachments. On move we re-home those
+ * workspace-less attachments to the destination workspace in the same
+ * transaction so they remain consistent with the task's new scope.
  */
 
 export interface MoveTaskInput {
@@ -170,6 +172,23 @@ export async function moveStandaloneTaskToWorkspace(
         updatedAt: new Date(),
       })
       .where(and(eq(tasks.id, taskId), isNull(tasks.workspaceId)));
+
+    // Re-home the task's workspace-less attachments to the destination
+    // workspace. They are linked via task_attachments; only rows still NULL
+    // get adopted (already-scoped rows are left untouched).
+    const linkedAttachmentIds = tx
+      .select({ attachmentId: taskAttachments.attachmentId })
+      .from(taskAttachments)
+      .where(eq(taskAttachments.taskId, taskId));
+    await tx
+      .update(attachments)
+      .set({ workspaceId: targetWorkspaceId })
+      .where(
+        and(
+          isNull(attachments.workspaceId),
+          inArray(attachments.id, linkedAttachmentIds),
+        ),
+      );
   });
 
   // Activity is recorded outside the transaction — recordTaskActivity does
