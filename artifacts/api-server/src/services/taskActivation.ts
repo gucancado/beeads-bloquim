@@ -4,14 +4,42 @@ import { eq, and } from "drizzle-orm";
 import { computeOverdue } from "../lib/overdue";
 import { toVisualStatus } from "./taskVisualSyncService";
 import { isWithinScheduleWindow } from "../lib/scheduleMode";
+import { logger } from "../lib/logger";
+
+const log = logger.child({ module: "taskActivation" });
 
 /**
  * Best-effort: if a task is currently `pending`, has all card prerequisites
  * resolved (or no prerequisites), and is inside its schedule window, advance
  * it to `in_progress` and sync the card visual state. Returns whether the
  * task was advanced. Safe to call after any schedule edit or status change.
+ *
+ * Defensive by contract: this runs as a side-effect of edits/status changes,
+ * so an unexpected state (race with a delete, missing card row, etc.) must
+ * never throw into the caller's request. Any failure is logged and treated as
+ * "not advanced" (returns false).
  */
 export async function tryActivateTask(taskId: string): Promise<boolean> {
+  try {
+    return await activate(taskId);
+  } catch (err) {
+    const cause =
+      err instanceof Error && err.cause !== undefined ? err.cause : undefined;
+    log.error(
+      {
+        taskId,
+        err:
+          err instanceof Error
+            ? { message: err.message, stack: err.stack, cause }
+            : { message: String(err) },
+      },
+      "tryActivateTask failed (best-effort, swallowed)",
+    );
+    return false;
+  }
+}
+
+async function activate(taskId: string): Promise<boolean> {
   const [t] = await db
     .select({
       id: tasks.id,
@@ -72,15 +100,19 @@ export async function tryActivateTask(taskId: string): Promise<boolean> {
 
   const overdue = computeOverdue(t.dueDate, "in_progress");
   const now = new Date();
-  await db
-    .update(tasks)
-    .set({ status: "in_progress", overdue, updatedAt: now })
-    .where(eq(tasks.id, taskId));
-  if (card) {
-    await db
-      .update(cards)
-      .set({ statusVisual: toVisualStatus("in_progress", overdue), updatedAt: now })
-      .where(eq(cards.id, card.id));
-  }
+  // Advance task + card visual atomically so we never leave a task
+  // `in_progress` with a stale card (or vice-versa) if one update fails.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(tasks)
+      .set({ status: "in_progress", overdue, updatedAt: now })
+      .where(eq(tasks.id, taskId));
+    if (card) {
+      await tx
+        .update(cards)
+        .set({ statusVisual: toVisualStatus("in_progress", overdue), updatedAt: now })
+        .where(eq(cards.id, card.id));
+    }
+  });
   return true;
 }
