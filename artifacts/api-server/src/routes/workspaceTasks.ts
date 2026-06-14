@@ -468,57 +468,79 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
     db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1),
   ]);
 
-  if (assigneeChanging) {
-    const [oldAssignee, newAssignee] = await Promise.all([
-      existing.assignedTo
-        ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.assignedTo)).limit(1)
-        : Promise.resolve([]),
-      newAssigneeId
-        ? db.select({ name: users.name }).from(users).where(eq(users.id, newAssigneeId)).limit(1)
-        : Promise.resolve([]),
-    ]);
+  // Activity logging is a best-effort audit side-effect. The task update above
+  // has already committed; a failure here (e.g. an FK violation because the
+  // task row was deleted concurrently) must NOT turn a successful mutation into
+  // a 500. Log the real cause and carry on. See bug task 7903bc06-….
+  try {
+    if (assigneeChanging) {
+      const [oldAssignee, newAssignee] = await Promise.all([
+        existing.assignedTo
+          ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.assignedTo)).limit(1)
+          : Promise.resolve([]),
+        newAssigneeId
+          ? db.select({ name: users.name }).from(users).where(eq(users.id, newAssigneeId)).limit(1)
+          : Promise.resolve([]),
+      ]);
 
-    await recordTaskActivity({
-      taskId,
-      actorId,
-      type: "assignee_changed",
-      metadata: {
-        actorName: actorUser[0]?.name ?? null,
+      await recordTaskActivity({
+        taskId,
         actorId,
-        newAssigneeId,
-        oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
-        newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
-      },
-      source: req.user?.source ?? null,
-    });
-  }
+        type: "assignee_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          actorId,
+          newAssigneeId,
+          oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
+          newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
 
-  if (priorityChanging) {
-    await recordTaskActivity({
-      taskId,
-      actorId,
-      type: "priority_changed",
-      metadata: {
-        actorName: actorUser[0]?.name ?? null,
-        oldPriority: existing.priority ?? null,
-        newPriority: parsed.data.priority ?? null,
-      },
-      source: req.user?.source ?? null,
-    });
-  }
+    if (priorityChanging) {
+      await recordTaskActivity({
+        taskId,
+        actorId,
+        type: "priority_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          oldPriority: existing.priority ?? null,
+          newPriority: parsed.data.priority ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
 
-  if (dueDateChanging) {
-    await recordTaskActivity({
-      taskId,
-      actorId,
-      type: "due_date_changed",
-      metadata: {
-        actorName: actorUser[0]?.name ?? null,
-        oldDueDate: safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null,
-        newDueDate: parsed.data.dueDate ?? null,
+    if (dueDateChanging) {
+      await recordTaskActivity({
+        taskId,
+        actorId,
+        type: "due_date_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          oldDueDate: safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null,
+          newDueDate: parsed.data.dueDate ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
+  } catch (activityErr) {
+    const cause =
+      activityErr instanceof Error && activityErr.cause !== undefined
+        ? activityErr.cause
+        : undefined;
+    log.error(
+      {
+        taskId,
+        workspaceId,
+        err:
+          activityErr instanceof Error
+            ? { message: activityErr.message, stack: activityErr.stack, cause }
+            : { message: String(activityErr) },
       },
-      source: req.user?.source ?? null,
-    });
+      "task PATCH succeeded but activity logging failed (best-effort, swallowed)",
+    );
   }
 
   res.json({ ...updated, assigneeName: (assignee as { name: string }[])[0]?.name ?? null });
