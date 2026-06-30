@@ -55,7 +55,22 @@ router.post(
 
       res.status(201).json(connection);
     } catch (err: unknown) {
-      if (typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === "23505") {
+      // O driver pg expõe o code direto OU embrulhado por Drizzle em `.cause`
+      // (ver errorHandler.ts). Checar os dois — senão a unique constraint
+      // card_connections_source_target_unique escapa e vira 500.
+      const pgCode =
+        (typeof err === "object" && err !== null && "code" in err
+          ? (err as { code?: unknown }).code
+          : undefined) ??
+        (typeof err === "object" &&
+        err !== null &&
+        "cause" in err &&
+        typeof (err as { cause?: unknown }).cause === "object" &&
+        (err as { cause?: unknown }).cause !== null &&
+        "code" in (err as { cause: object })
+          ? (err as { cause: { code?: unknown } }).cause.code
+          : undefined);
+      if (pgCode === "23505") {
         res.status(409).json({ error: "Conexão já existe entre esses nós." });
         return;
       }
