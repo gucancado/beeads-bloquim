@@ -71,7 +71,7 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     if (assignees.length === 0) return undefined;
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "unassigned");
-    const scope = (field: typeof tasks.assignedTo) => {
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
       const parts = [];
       if (hasUnassigned) parts.push(isNull(field));
       if (uuids.length > 0) parts.push(inArray(field, uuids));
@@ -125,7 +125,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     if (assignees.length === 0) return undefined;
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "unassigned");
-    const scope = (field: typeof tasks.assignedTo) => {
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
       const parts = [];
       if (hasUnassigned) parts.push(isNull(field));
       if (uuids.length > 0) parts.push(inArray(field, uuids));

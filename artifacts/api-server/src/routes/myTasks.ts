@@ -94,7 +94,7 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
-    const scope = (field: typeof tasks.assignedTo) => {
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
       const parts = [];
       if (hasMe) parts.push(eq(field, userId));
       if (hasUnassigned) parts.push(isNull(field));
@@ -192,7 +192,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
-    const scope = (field: typeof tasks.assignedTo) => {
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
       const parts = [];
       if (hasMe) parts.push(eq(field, userId));
       if (hasUnassigned) parts.push(isNull(field));
