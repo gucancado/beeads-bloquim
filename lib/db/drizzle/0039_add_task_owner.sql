@@ -1,3 +1,11 @@
+-- RENUMBERED 0038 -> 0039 ao rebasear task-owner em master: o 0038 já era
+-- 0038_attachments_nullable_workspace_and_activity (colisão de número).
+-- NOTA: o meta/_journal.json + snapshots do drizzle NÃO foram atualizados aqui
+-- (a cadeia de snapshots precisa de um `drizzle-kit generate` limpo na
+-- finalização da feature). Prod aplica via `drizzle-kit push` (schema-diff do TS
+-- schema, que já contém owner_id pós-rebase), então isto é artefato/documentação
+-- + o backfill manual abaixo — não um passo de migrate sequencial.
+--
 -- Add tasks.owner_id: a mutable "owner" of a task, distinct from created_by
 -- (immutable creator, used for delete-auth) and assigned_to (responsável).
 -- Default on INSERT = creator; transferable via the task PATCH endpoints, which
