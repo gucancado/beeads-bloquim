@@ -52,3 +52,10 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Playwright e2e
+/test-results/
+/playwright-report/
+/blob-report/
+/e2e/.auth/
+/playwright/.cache/

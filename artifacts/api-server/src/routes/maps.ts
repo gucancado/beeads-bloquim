@@ -7,6 +7,7 @@ import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, requireMapInWorkspace } from "../middlewares/permissions";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
+import { actionMapsScope } from "../services/mapsScope";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -19,7 +20,7 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
   const showHidden = req.query.showHidden === "true";
   const userRole = (req as any).memberRole as string | undefined;
 
-  const mapList = await db.select().from(maps).where(eq(maps.workspaceId, workspaceId));
+  const mapList = await db.select().from(maps).where(and(eq(maps.workspaceId, workspaceId), actionMapsScope));
 
   const filtered = mapList.filter((m) => {
     if (!m.hidden) return true;
@@ -64,7 +65,7 @@ router.get(
     const rows = await db
       .select()
       .from(maps)
-      .where(and(eq(maps.workspaceId, workspaceId), ilike(maps.name, `%${q}%`)))
+      .where(and(eq(maps.workspaceId, workspaceId), ilike(maps.name, `%${q}%`), actionMapsScope))
       .orderBy(desc(maps.updatedAt))
       .limit(50);
 

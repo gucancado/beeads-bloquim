@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { maps, workspaces, workspaceMembers, userMapAccess } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { actionMapsScope } from "../services/mapsScope";
 
 const router: IRouter = Router();
 
@@ -18,7 +19,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       lastAccessedAt: userMapAccess.lastAccessedAt,
     })
     .from(userMapAccess)
-    .innerJoin(maps, and(eq(maps.id, userMapAccess.mapId), eq(maps.hidden, false)))
+    .innerJoin(maps, and(eq(maps.id, userMapAccess.mapId), eq(maps.hidden, false), actionMapsScope))
     .innerJoin(workspaces, eq(workspaces.id, maps.workspaceId))
     .innerJoin(
       workspaceMembers,
