@@ -1,17 +1,14 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Geist+Mono:wght@400;500;600&display=swap");
+@import "@beeads/fonts/google.css";
 @import "reactflow/dist/style.css";
 @import "@beeads/tokens/theme.css";
 @import "@beeads/ui/styles.css";
-@import "@beeads/charts/styles.css";
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* Scan explícito das classes do DS (determinístico; a injeção via styles.css
+   também existe, mas explícito > depende-do-bundler) */
+@source "../node_modules/@beeads/ui/dist/classlist.txt";
 
-/* Bind beeads token --font-* placeholders to actual Google Fonts loaded above */
-:root {
-  --font-fraunces: 'Fraunces', Georgia, serif;
-  --font-geist-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --font-sans: 'Geist Mono', ui-monospace, monospace; /* body uses mono as per beeads signature */

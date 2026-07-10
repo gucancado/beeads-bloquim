@@ -18,6 +18,7 @@ import {
   SidebarBody,
   SidebarFooter,
   SidebarNavItem,
+  SidebarTrigger,
   useSidebar,
 } from "@beeads/ui";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
@@ -153,8 +154,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const avatarUrl = (user as { avatarUrl?: string | null }).avatarUrl ?? null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <SidebarProvider persist="localStorage" storageKey="sidebar_collapsed">
+    <SidebarProvider persist="localStorage" storageKey="sidebar_collapsed">
+      <div className="flex h-screen overflow-hidden bg-background">
         <Sidebar>
           <SidebarHeader
             logo={<NotebookPen />}
@@ -192,14 +193,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
             onProfileClick={() => setProfileOpen(true)}
           />
         </Sidebar>
-      </SidebarProvider>
 
-      <main className="flex-1 flex flex-col overflow-hidden relative min-w-0">
-        {children}
-        <GlobalTaskSearch />
-      </main>
+        <main className="flex-1 flex flex-col overflow-hidden relative min-w-0">
+          <header className="flex shrink-0 items-center gap-2 border-b border-border p-2 md:hidden">
+            <SidebarTrigger />
+            <span className="font-display text-sm">bloquim</span>
+          </header>
+          <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+          <GlobalTaskSearch />
+        </main>
 
-      <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
-    </div>
+        <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
+      </div>
+    </SidebarProvider>
   );
 }
