@@ -238,15 +238,15 @@ importers:
 
   artifacts/mindtask-app:
     dependencies:
-      '@beeads/charts':
+      '@beeads/fonts':
         specifier: ^0.2.0
-        version: 0.2.0(@beeads/tokens@0.3.0)(@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 0.2.0
       '@beeads/tokens':
-        specifier: ^0.3.0
-        version: 0.3.0
-      '@beeads/ui':
         specifier: ^0.5.0
-        version: 0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 0.5.0(tailwindcss@4.2.2)
+      '@beeads/ui':
+        specifier: ^0.7.0
+        version: 0.7.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(tailwindcss@4.2.2)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -1002,19 +1002,16 @@ packages:
       '@types/react':
         optional: true
 
-  '@beeads/charts@0.2.0':
-    resolution: {integrity: sha512-9VtRGN23Jbi2ebn2boOnmqD2HCtZ8b9Xx9dN3Xiut8JhhzCXLc10NcFbcIgfc9j01ciyIYPCDiqZ9PrXH4QtKQ==}
+  '@beeads/fonts@0.2.0':
+    resolution: {integrity: sha512-qDOH9ZgogYJ9c5x6OiaNItGoAeOuugCd6s41nPUmE7pLk7Qit0uAs0+m+MqGoRZ9SDK/4ikHolkUPYcA2sDeXA==}
     peerDependencies:
-      '@beeads/tokens': '>=0.2.0 <1.0.0'
-      '@beeads/ui': '>=0.4.0 <1.0.0'
-      react: '>=18'
-      react-dom: '>=18'
+      next: '>=14'
 
-  '@beeads/tokens@0.3.0':
-    resolution: {integrity: sha512-JVKjWfDqBqOd8ujalOBerZ3UrqqhDwxPnshJ1WK+We1d1d7hlCUp/Q3gLZKg6t18JcrlDMk5/Hmgq3iptgzuuw==}
+  '@beeads/tokens@0.5.0':
+    resolution: {integrity: sha512-rX2k9H0531x+Tx9LE6eT/o9tMYCzG3rQ+OtSavUiZU3KJsAiNMx/q/69OIsoa5LzVVUSIKTWUgIntAXxprJUXA==}
 
-  '@beeads/ui@0.5.0':
-    resolution: {integrity: sha512-3kFG9KtDy6GZa0oSh4SB/TgRv00eZ/xYGRaHbVwuR7fOAYPNEiO3NZbG5BxVGXxrPirumZd7Az9JCptyTcN+/Q==}
+  '@beeads/ui@0.7.0':
+    resolution: {integrity: sha512-7ajah6zVCBRnbLKEVuBcwhOTS1JY5ED69aoO65DfgX4wPp6ZKlaoKPmH6dzurxnw1bjnBiAw9tt7/34F+SI8hw==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -4579,6 +4576,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -5476,22 +5474,18 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@beeads/charts@0.2.0(@beeads/tokens@0.3.0)(@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/fonts@0.2.0': {}
+
+  '@beeads/tokens@0.5.0(tailwindcss@4.2.2)':
     dependencies:
-      '@beeads/tokens': 0.3.0
-      '@beeads/ui': 0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      date-fns: 4.3.0
-      lucide-react: 0.469.0(react@19.2.5)
-      react: 19.2.5
-      react-dom: 19.2.5(react@19.2.5)
-      recharts: 2.15.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tailwindcss-animate: 1.0.7(tailwindcss@4.2.2)
+    transitivePeerDependencies:
+      - tailwindcss
 
-  '@beeads/tokens@0.3.0': {}
-
-  '@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/ui@0.7.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(tailwindcss@4.2.2)':
     dependencies:
       '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@beeads/tokens': 0.3.0
+      '@beeads/tokens': 0.5.0(tailwindcss@4.2.2)
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.5)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -5508,6 +5502,7 @@ snapshots:
       - '@date-fns/tz'
       - '@types/react'
       - '@types/react-dom'
+      - tailwindcss
 
   '@commander-js/extra-typings@14.0.0(commander@14.0.3)':
     dependencies:
