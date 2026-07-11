@@ -2,7 +2,7 @@ import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, taskComments, attachments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
-import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
+import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
@@ -57,6 +57,7 @@ import {
 } from "../services/taskSubtasksService";
 import { duplicateTask } from "../services/taskDuplicateService";
 import { patchTaskStatus } from "../services/taskStatusService";
+import { parseSinceParam, parseUntilParam } from "../lib/queryDates";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -102,6 +103,133 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
   }
 
   res.json(result);
+});
+
+router.get("/stats", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const { since: sinceRaw, until: untilRaw } = req.query as { since?: string; until?: string };
+  const since = parseSinceParam(sinceRaw);
+  const until = parseUntilParam(untilRaw);
+  if (since === "invalid" || until === "invalid") {
+    res.status(400).json({ error: "Validation error", message: "since/until devem ser ISO 8601 ou YYYY-MM-DD" });
+    return;
+  }
+  if (since && until && since > until) {
+    res.status(400).json({ error: "Validation error", message: "since deve ser <= until" });
+    return;
+  }
+
+  const notApprovalDraft = not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft")));
+  const baseWhere = and(eq(tasks.workspaceId, workspaceId), notApprovalDraft);
+  const openOnly = inArray(tasks.status, ["pending", "in_progress", "blocked"]);
+  const activeOnly = not(inArray(tasks.status, ["completed", "blocked", "draft"]));
+  // Drafts contam pelo owner, o resto pelo assignee — mesma regra do buildAssigneeFilter.
+  const assigneeBucket = sql<string | null>`CASE WHEN ${tasks.status} = 'draft' THEN ${tasks.ownerId} ELSE ${tasks.assignedTo} END`;
+
+  const [statusRows, priorityRows, [overdueRow], assigneeRows, planRows, [agingRow]] = await Promise.all([
+    db.select({ status: tasks.status, cnt: count() }).from(tasks).where(baseWhere).groupBy(tasks.status),
+    db.select({ priority: tasks.priority, cnt: count() }).from(tasks).where(baseWhere).groupBy(tasks.priority),
+    db.select({ cnt: sql<number>`count(*)::int` }).from(tasks).where(and(baseWhere, eq(tasks.overdue, true), activeOnly)),
+    db
+      .select({
+        userId: assigneeBucket,
+        total: sql<number>`count(*)::int`,
+        open: sql<number>`count(*) filter (where ${tasks.status} in ('pending','in_progress','blocked'))::int`,
+        overdue: sql<number>`count(*) filter (where ${tasks.overdue} = true and ${tasks.status} not in ('completed','blocked','draft'))::int`,
+      })
+      .from(tasks)
+      .where(baseWhere)
+      .groupBy(assigneeBucket),
+    db
+      .select({
+        mapId: tasks.mapId,
+        mapName: maps.name,
+        total: sql<number>`count(*)::int`,
+        completed: sql<number>`count(*) filter (where ${tasks.status} = 'completed')::int`,
+      })
+      .from(tasks)
+      .leftJoin(maps, eq(maps.id, tasks.mapId))
+      .where(and(baseWhere, isNotNull(tasks.mapId)))
+      .groupBy(tasks.mapId, maps.name),
+    db
+      .select({
+        d0_7: sql<number>`count(*) filter (where ${tasks.createdAt} >= now() - interval '7 days')::int`,
+        d8_30: sql<number>`count(*) filter (where ${tasks.createdAt} < now() - interval '7 days' and ${tasks.createdAt} >= now() - interval '30 days')::int`,
+        d31_90: sql<number>`count(*) filter (where ${tasks.createdAt} < now() - interval '30 days' and ${tasks.createdAt} >= now() - interval '90 days')::int`,
+        d90_plus: sql<number>`count(*) filter (where ${tasks.createdAt} < now() - interval '90 days')::int`,
+      })
+      .from(tasks)
+      .where(and(baseWhere, openOnly)),
+  ]);
+
+  // Nomes/classes dos assignees em query separada (groupBy é por expressão).
+  const assigneeIds = assigneeRows.map((r) => r.userId).filter((v): v is string => !!v);
+  const userRows = assigneeIds.length > 0
+    ? await db.select({ id: users.id, name: users.name, classes: users.classes }).from(users).where(inArray(users.id, assigneeIds))
+    : [];
+  const userById = new Map(userRows.map((u) => [u.id, u]));
+
+  // window: created por tasks.created_at; completed por activity log
+  // (status_changed → newStatus=completed), DISTINCT por task — imune ao
+  // reset de completedAt e a re-conclusões.
+  let window: { since: string | null; until: string | null; created: number; completed: number } | null = null;
+  if (since || until) {
+    const [[createdRow], [completedRow]] = await Promise.all([
+      db.select({ cnt: sql<number>`count(*)::int` }).from(tasks).where(and(
+        baseWhere,
+        since ? gte(tasks.createdAt, since) : undefined,
+        until ? lt(tasks.createdAt, until) : undefined,
+      )),
+      db
+        .select({ cnt: sql<number>`count(distinct ${taskActivities.taskId})::int` })
+        .from(taskActivities)
+        .innerJoin(tasks, eq(tasks.id, taskActivities.taskId))
+        .where(and(
+          eq(tasks.workspaceId, workspaceId),
+          notApprovalDraft,
+          eq(taskActivities.type, "status_changed"),
+          sql`${taskActivities.metadata}->>'newStatus' = 'completed'`,
+          since ? gte(taskActivities.createdAt, since) : undefined,
+          until ? lt(taskActivities.createdAt, until) : undefined,
+        )),
+    ]);
+    window = {
+      since: since ? since.toISOString() : null,
+      until: until ? until.toISOString() : null,
+      created: createdRow?.cnt ?? 0,
+      completed: completedRow?.cnt ?? 0,
+    };
+  }
+
+  const byStatus = { pending: 0, in_progress: 0, completed: 0, blocked: 0, draft: 0 } as Record<string, number>;
+  let total = 0;
+  for (const row of statusRows) {
+    total += Number(row.cnt);
+    if (row.status && row.status in byStatus) byStatus[row.status] = Number(row.cnt);
+  }
+  const byPriority = { low: 0, medium: 0, high: 0, critical: 0 } as Record<string, number>;
+  for (const row of priorityRows) {
+    if (row.priority && row.priority in byPriority) byPriority[row.priority] = Number(row.cnt);
+  }
+
+  res.json({
+    workspaceId,
+    total,
+    byStatus,
+    overdue: overdueRow?.cnt ?? 0,
+    byPriority,
+    byAssignee: assigneeRows.map((r) => ({
+      userId: r.userId,
+      name: r.userId ? (userById.get(r.userId)?.name ?? null) : null,
+      classes: r.userId ? (userById.get(r.userId)?.classes ?? []) : [],
+      total: r.total,
+      open: r.open,
+      overdue: r.overdue,
+    })),
+    byPlan: planRows,
+    aging: agingRow ?? { d0_7: 0, d8_30: 0, d31_90: 0, d90_plus: 0 },
+    window,
+  });
 });
 
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
