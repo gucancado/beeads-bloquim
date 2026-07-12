@@ -58,6 +58,7 @@ import {
 import { duplicateTask } from "../services/taskDuplicateService";
 import { patchTaskStatus } from "../services/taskStatusService";
 import { parseSinceParam, parseUntilParam } from "../lib/queryDates";
+import { encodeCursor, decodeCursor } from "../lib/keysetCursor";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -264,6 +265,68 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     return or(assigneeBranch, ownerBranch);
   };
 
+  const q = req.query as Record<string, string | undefined>;
+  const VALID_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+  type ValidPriority = (typeof VALID_PRIORITIES)[number];
+  const priorities = (q.priority ? q.priority.split(",").filter(Boolean) : []) as string[];
+  if (priorities.some((p) => !VALID_PRIORITIES.includes(p as ValidPriority))) {
+    res.status(400).json({ error: "Validation error", message: `priority aceita: ${VALID_PRIORITIES.join(", ")}` });
+    return;
+  }
+  const dateParams = {
+    createdSince: parseSinceParam(q.createdSince),
+    createdUntil: parseUntilParam(q.createdUntil),
+    completedSince: parseSinceParam(q.completedSince),
+    completedUntil: parseUntilParam(q.completedUntil),
+    dueAfter: parseSinceParam(q.dueAfter),
+    dueBefore: parseUntilParam(q.dueBefore),
+  };
+  const invalidDate = Object.entries(dateParams).find(([, v]) => v === "invalid");
+  if (invalidDate) {
+    res.status(400).json({ error: "Validation error", message: `${invalidDate[0]} deve ser ISO 8601 ou YYYY-MM-DD` });
+    return;
+  }
+  const dp = dateParams as Record<keyof typeof dateParams, Date | null>;
+  if (q.mapId && !/^[0-9a-f-]{36}$/i.test(q.mapId)) {
+    res.status(400).json({ error: "Validation error", message: "mapId inválido" });
+    return;
+  }
+  const keysetMode = q.cursor !== undefined || q.limit !== undefined;
+  const limit = Math.min(Math.max(parseInt(q.limit ?? "100", 10) || 100, 1), 200);
+  const cursor = q.cursor ? decodeCursor(q.cursor) : null;
+  if (q.cursor && !cursor) {
+    res.status(400).json({ error: "Validation error", message: "cursor inválido" });
+    return;
+  }
+
+  // pg timestamp tem µs; o cursor viaja em ms — truncar no SQL para a
+  // igualdade do desempate casar (bug-trap TIMESTAMPTZ µs × JS ms, ver
+  // workspaceActivities.ts). tasks.created_at é `timestamp` SEM tz: um JS
+  // Date interpolado cru dentro de `sql` cairia no serializador padrão do
+  // node-postgres (fuso LOCAL do processo), desalinhando a comparação.
+  // Serializar com `.toISOString()` ANTES de interpolar replica o
+  // `mapToDriverValue` que os helpers (eq/lt/gte) usariam.
+  const cursorCreatedAtIso = cursor?.createdAt.toISOString();
+  const cursorCond = cursor
+    ? or(
+        sql`date_trunc('milliseconds', ${tasks.createdAt}) < ${cursorCreatedAtIso}::timestamp`,
+        and(
+          sql`date_trunc('milliseconds', ${tasks.createdAt}) = ${cursorCreatedAtIso}::timestamp`,
+          lt(tasks.id, cursor.id),
+        ),
+      )
+    : undefined;
+  const filterConds = [
+    priorities.length > 0 ? inArray(tasks.priority, priorities as ValidPriority[]) : undefined,
+    q.mapId ? eq(tasks.mapId, q.mapId) : undefined,
+    dp.createdSince ? gte(tasks.createdAt, dp.createdSince) : undefined,
+    dp.createdUntil ? lt(tasks.createdAt, dp.createdUntil) : undefined,
+    dp.completedSince ? gte(tasks.completedAt, dp.completedSince) : undefined,
+    dp.completedUntil ? lt(tasks.completedAt, dp.completedUntil) : undefined,
+    dp.dueAfter ? gte(tasks.dueDate, dp.dueAfter) : undefined,
+    dp.dueBefore ? lt(tasks.dueDate, dp.dueBefore) : undefined,
+  ];
+
   const parentTasks = alias(tasks, "parent_tasks");
   const taskList = await db
     .select({
@@ -313,20 +376,42 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
         statuses.length > 0 ? inArray(tasks.status, statuses) : undefined,
         buildAssigneeFilter(),
         not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))),
+        ...filterConds,
+        cursorCond,
       )
     )
     .orderBy(
-      // "urgente" pin (condicional — ver pinUrgente acima): aplicado só quando
-      // o filtro de status é subset de {draft, pending, in_progress}.
-      ...(pinUrgente
-        ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
-        : []),
-      sql`${tasks.dueDate} ASC NULLS LAST`,
-      sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
-      asc(tasks.createdAt)
+      ...(keysetMode
+        ? [
+            // Modo keyset: ORDER BY precisa usar a MESMA chave truncada em ms
+            // que o predicado do cursor acima (date_trunc('milliseconds', ...)).
+            // O cursor só carrega precisão de ms, então ordenar pela coluna µs
+            // crua poderia derrubar uma linha na borda da página quando duas
+            // linhas caem no mesmo ms (ver workspaceActivities.ts).
+            sql`date_trunc('milliseconds', ${tasks.createdAt}) DESC`,
+            desc(tasks.id),
+          ]
+        : [
+            // Modo legado (sem cursor/limit): ordenação rica intacta.
+            // "urgente" pin (condicional — ver pinUrgente acima): aplicado só
+            // quando o filtro de status é subset de {draft, pending, in_progress}.
+            ...(pinUrgente
+              ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
+              : []),
+            sql`${tasks.dueDate} ASC NULLS LAST`,
+            sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
+            asc(tasks.createdAt),
+          ]),
     )
-    .limit(500);
+    .limit(keysetMode ? limit + 1 : 500);
 
+  if (keysetMode) {
+    const hasMore = taskList.length > limit;
+    const items = hasMore ? taskList.slice(0, limit) : taskList;
+    const last = items[items.length - 1];
+    res.json({ items, nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
+    return;
+  }
   res.json(taskList);
 });
 
