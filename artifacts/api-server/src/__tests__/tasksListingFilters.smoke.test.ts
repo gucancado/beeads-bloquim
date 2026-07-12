@@ -72,3 +72,37 @@ describe("filtros temporais + keyset nas listagens de tasks", () => {
     expect((await agent.get(`/api/workspaces/${workspaceId}/tasks?priority=hyper`)).status).toBe(400);
   });
 });
+
+describe("filtros + keyset em GET /my-tasks", () => {
+  let agent: Agent;
+  let user: TestUser;
+
+  beforeAll(async () => {
+    ({ agent, user } = await registerAndLogin("MyTasks Filter"));
+    for (let i = 0; i < 3; i++) {
+      const r = await agent.post("/api/my-tasks").send({ title: `M${i}` });
+      await agent.patch(`/api/my-tasks/${r.body.id}/status`).send({ status: "pending" });
+    }
+  });
+
+  afterAll(async () => {
+    await deleteUser(user.id);
+  });
+
+  it("keyset pagina standalone tasks", async () => {
+    const p1 = await agent.get("/api/my-tasks?limit=2");
+    expect(Array.isArray(p1.body)).toBe(false);
+    expect(p1.body.items.length).toBe(2);
+    const p2 = await agent.get(`/api/my-tasks?limit=2&cursor=${encodeURIComponent(p1.body.nextCursor)}`);
+    expect(p2.body.items.length).toBe(1);
+    expect(p2.body.nextCursor).toBeNull();
+  });
+
+  it("createdSince futuro zera; legacy continua array", async () => {
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const none = await agent.get(`/api/my-tasks?createdSince=${encodeURIComponent(future)}`);
+    expect(none.body.length).toBe(0);
+    const all = await agent.get("/api/my-tasks");
+    expect(Array.isArray(all.body)).toBe(true);
+  });
+});
