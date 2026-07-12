@@ -100,7 +100,13 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
         cursorCond,
       ),
     )
-    .orderBy(desc(taskActivities.createdAt), desc(taskActivities.id))
+    // ORDER BY precisa usar a MESMA chave truncada em ms que o predicado do
+    // keyset acima (date_trunc('milliseconds', ...)). O cursor só carrega
+    // precisão de ms (serializado de um JS Date via .toISOString()), então se
+    // o ORDER BY ordenasse pela coluna µs crua, duas linhas no mesmo ms mas
+    // com µs diferentes poderiam ordenar de um jeito no SQL e de outro no
+    // desempate por id — derrubando uma linha pra sempre na borda da página.
+    .orderBy(sql`date_trunc('milliseconds', ${taskActivities.createdAt}) DESC`, desc(taskActivities.id))
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
