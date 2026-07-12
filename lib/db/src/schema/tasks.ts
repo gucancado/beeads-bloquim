@@ -147,6 +147,11 @@ export const tasks = pgTable("tasks", {
   index("idx_tasks_map")
     .on(table.mapId)
     .where(sql`${table.mapId} IS NOT NULL`),
+  index("idx_tasks_workspace_created").on(
+    table.workspaceId,
+    table.createdAt,
+    table.id,
+  ),
 ]);
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({

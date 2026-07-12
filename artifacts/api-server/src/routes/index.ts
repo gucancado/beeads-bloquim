@@ -10,6 +10,7 @@ import myTasksRouter from "./myTasks";
 import tasksSearchRouter from "./tasksSearch";
 import commentsRouter, { taskRouter as taskCommentsRouter } from "./comments";
 import workspaceTasksRouter from "./workspaceTasks";
+import workspaceActivitiesRouter from "./workspaceActivities";
 import recentMapsRouter from "./recentMaps";
 import mapsSearchRouter from "./mapsSearch";
 import storageRouter from "./storage";
@@ -39,6 +40,7 @@ router.use("/workspaces/:workspaceId/maps/:mapId/connections", connectionsRouter
 router.use("/workspaces/:workspaceId/maps/:mapId/text-elements", textElementsRouter);
 router.use("/workspaces/:workspaceId/maps/:mapId/shapes", shapesRouter);
 router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
+router.use("/workspaces/:workspaceId/activities", workspaceActivitiesRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskCommentsRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskLinksRouter);
 router.use("/my-tasks", myTasksRouter);
