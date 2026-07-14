@@ -26,13 +26,16 @@ export function useMeetings(workspaceId?: string | null) {
   });
 }
 
-/** Poll individual das reuniões em coleta (poll-through no backend). */
+/** Poll individual das reuniões em coleta (poll-through no backend).
+ *  `enabled` é o gate inicial (status da lista); o `refetchInterval` é data-driven
+ *  e PARA quando o status buscado deixa de ser "collecting" — senão o poll seguiria
+ *  indefinidamente após a reunião virar transcribed pela própria resposta. */
 export function useMeetingPoll(id: string, enabled: boolean) {
   return useQuery<Meeting>({
     queryKey: [`/api/meetings/${id}`],
     queryFn: () => customFetch(`/api/meetings/${id}`),
     enabled,
-    refetchInterval: enabled ? 10_000 : false,
+    refetchInterval: (query) => (query.state.data?.status === "collecting" ? 10_000 : false),
   });
 }
 
