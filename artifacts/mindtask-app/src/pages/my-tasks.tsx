@@ -16,6 +16,7 @@ import { groupTasksByDeadline, selectWindow, type TimeWindow } from "@/lib/group
 import { ateSextaLabel } from "@/lib/groupTasksByDeadline";
 import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
 import { AgendaPanel } from "@/components/tasks/AgendaPanel";
+import { MeetingsPanel } from "@/components/meetings/MeetingsPanel";
 import { useRoute, useLocation } from "wouter";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 
@@ -294,8 +295,9 @@ export default function MyTasksPage() {
             </div>
           </div>
 
-          <div className="mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <AgendaPanel />
+            <MeetingsPanel />
           </div>
 
           {isLoading ? (
