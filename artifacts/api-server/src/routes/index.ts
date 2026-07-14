@@ -21,6 +21,7 @@ import shapesRouter from "./shapes";
 import taskTemplatesRouter from "./taskTemplates";
 import taskLinksRouter from "./taskLinks";
 import googleCalendarRouter from "./integrations/google-calendar";
+import meetingsRouter from "./meetings";
 import { meRouter as ssoMeRouter, publicRouter as ssoPublicRouter } from "./sso";
 import { internalRouter } from "./internal";
 
@@ -51,6 +52,7 @@ router.use("/maps/search", mapsSearchRouter);
 router.use("/sidebar", sidebarRouter);
 router.use("/preferences", preferencesRouter);
 router.use("/integrations/google-calendar", googleCalendarRouter);
+router.use("/meetings", meetingsRouter);
 router.use(storageRouter);
 
 export default router;
