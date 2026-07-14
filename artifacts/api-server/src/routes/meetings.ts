@@ -192,12 +192,14 @@ router.post("/:id/stop", requireAuth, async (req: AuthRequest, res) => {
   }
   if (!row.workerMeetingId) return res.status(400).json({ message: "Reunião sem coleta ativa" });
   try {
-    const worker = await getWorkerClient().stop(userId, row.workerMeetingId);
-    const mapped = workerStatusToMeeting(worker.status);
-    const patch: Record<string, unknown> = { status: mapped, updatedAt: new Date() };
-    if (worker.episode_id != null) patch.episodeId = worker.episode_id;
-    const [updated] = await db.update(meetings).set(patch).where(eq(meetings.id, row.id)).returning();
-    return res.json(updated);
+    // stop() dispara stopBot + import inline no worker. A resposta do /stop é magra (só
+    // status + episode_id), então re-sincronizamos via syncFromWorker (worker.get()) para
+    // preencher participants/occurredAt/durationSeconds. Sem isso, a reunião encerrada pelo
+    // botão perderia esses campos: o GET/:id posterior pula o sync quando status != "collecting".
+    // `row` ainda está "collecting" aqui (buscado antes do stop), então syncFromWorker prossegue.
+    await getWorkerClient().stop(userId, row.workerMeetingId);
+    const synced = await syncFromWorker(userId, row);
+    return res.json(synced);
   } catch {
     return res.status(502).json({ message: "Falha ao encerrar a coleta" });
   }
