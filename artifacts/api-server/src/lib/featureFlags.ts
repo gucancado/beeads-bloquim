@@ -21,6 +21,12 @@ export function isGoogleCalendarEnabled(): boolean {
   );
 }
 
+export function isMeetingsEnabled(): boolean {
+  const flag = (process.env.MEETINGS_ENABLED ?? "false").toLowerCase();
+  if (flag !== "true") return false;
+  return Boolean(process.env.WORKER_URL && process.env.WORKER_PANEL_TOKEN);
+}
+
 export function requireStorage(
   _req: Request,
   res: Response,
@@ -47,6 +53,21 @@ export function requireGoogleCalendar(
       error: "google_calendar_disabled",
       message:
         "Integração com Google Calendar está desabilitada neste ambiente.",
+    });
+    return;
+  }
+  next();
+}
+
+export function requireMeetings(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!isMeetingsEnabled()) {
+    res.status(503).json({
+      error: "meetings_disabled",
+      message: "Integração de reuniões está desabilitada neste ambiente.",
     });
     return;
   }
