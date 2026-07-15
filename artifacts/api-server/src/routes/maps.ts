@@ -1,12 +1,13 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
 import { maps, cards, cardConnections, tasks, users, userMapAccess, mapTextElements, attachments, mapShapes } from "@workspace/db/schema";
-import { eq, and, sql, isNull, ilike, desc } from "drizzle-orm";
+import { eq, and, sql, isNull, ilike, desc, asc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, requireMapInWorkspace } from "../middlewares/permissions";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
+import { computeLayout } from "../services/mapLayoutService";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -222,6 +223,74 @@ router.delete("/:mapId", requireAuth, requireWorkspaceRole(["admin", "editor"]),
     .where(and(eq(maps.id, req.params.mapId), eq(maps.workspaceId, req.params.workspaceId)));
   res.json({ success: true, message: "Map deleted" });
 });
+
+router.post(
+  "/:mapId/layout",
+  requireAuth,
+  requireWorkspaceRole(["admin", "editor"]),
+  requireMapInWorkspace,
+  async (req: AuthRequest, res) => {
+    // Cast local ao tipo de req.params.mapId: este router usa mergeParams,
+    // o que faz o tsc inferir `string | string[]` em todo o arquivo (mesmo
+    // padrão pré-existente nas outras rotas). Não altera comportamento — só
+    // evita que este bloco novo some 2 erros a mais no gate de typecheck.
+    const mapId = req.params.mapId as string;
+
+    const cardRows = await db
+      .select({
+        id: cards.id,
+        positionX: cards.positionX,
+        positionY: cards.positionY,
+        isApprovalTask: tasks.isApprovalTask,
+      })
+      .from(cards)
+      .leftJoin(tasks, eq(cards.taskId, tasks.id))
+      .where(eq(cards.mapId, mapId))
+      .orderBy(asc(cards.createdAt));
+
+    // Cards de aprovação têm posição derivada do próprio fluxo (join nodes e
+    // edges são geradas no front, não persistidas como conexões). Reposicioná-los
+    // quebraria o agrupamento visual — ficam de fora e mantêm a posição atual.
+    const movable = cardRows.filter((c) => c.isApprovalTask !== true);
+    if (movable.length === 0) {
+      res.json({ cards: [] });
+      return;
+    }
+    const movableIds = new Set(movable.map((c) => c.id));
+
+    const connRows = await db
+      .select({
+        sourceCardId: cardConnections.sourceCardId,
+        targetCardId: cardConnections.targetCardId,
+      })
+      .from(cardConnections)
+      .where(eq(cardConnections.mapId, mapId));
+
+    const positions = computeLayout(
+      movable.map((c) => ({ id: c.id })),
+      connRows
+        .filter((c) => movableIds.has(c.sourceCardId) && movableIds.has(c.targetCardId))
+        .map((c) => ({ source: c.sourceCardId, target: c.targetCardId })),
+    );
+
+    const updated: Array<{ id: string; positionX: number; positionY: number }> = [];
+    await db.transaction(async (tx) => {
+      for (const c of movable) {
+        const p = positions.get(c.id);
+        if (!p) continue;
+        // Só grava o que realmente mudou → a 2ª chamada seguida vira no-op.
+        if (Math.abs(p.x - c.positionX) < 0.5 && Math.abs(p.y - c.positionY) < 0.5) continue;
+        await tx
+          .update(cards)
+          .set({ positionX: p.x, positionY: p.y, updatedAt: new Date() })
+          .where(eq(cards.id, c.id));
+        updated.push({ id: c.id, positionX: p.x, positionY: p.y });
+      }
+    });
+
+    res.json({ cards: updated });
+  },
+);
 
 router.post("/:mapId/access", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { mapId, workspaceId } = req.params;
