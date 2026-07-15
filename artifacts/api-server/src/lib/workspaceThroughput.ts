@@ -43,8 +43,21 @@ export async function computeThroughput(
   // completions: último evento de conclusão por task na janela (mesmo padrão
   // do workspaceHealth.ts — activity log, nunca completedAt/updatedAt, porque
   // essas colunas são resetadas no reabrir).
-  const seriesQuery = db.execute(sql`
-    WITH completions AS (
+  //
+  // FONTE ÚNICA — não reescreva esta CTE à mão em nenhuma das 3 queries abaixo.
+  // Ela é a definição canônica de "conclusão" da spec, e as três métricas
+  // (series.completed, leadTimeDays, byAssignee) TÊM que contar exatamente o
+  // mesmo conjunto de tasks. Se as cópias driftarem, a falha é silenciosa —
+  // não crasha, só devolve métricas que não fecham entre si
+  // (series.completed ≠ Σ byAssignee.completed). O drizzle aninha fragmentos
+  // `SQL` preservando os bind params, então interpolar é seguro.
+  //
+  // `completed_at` fica no SELECT mesmo sendo usado só por series/lead: o
+  // assigneeQuery ignora a coluna (só agrupa por assigned_to). Uma coluna a
+  // mais numa linha já lida não muda o DISTINCT ON (a dedup é pela expressão
+  // do ON; o ORDER BY decide o vencedor) — o custo é irrelevante e vale menos
+  // que manter duas variantes da regra canônica.
+  const completionsCte = sql`completions AS (
       SELECT DISTINCT ON (a.task_id) a.task_id, a.created_at AS completed_at
         FROM task_activities a
         JOIN tasks t ON t.id = a.task_id
@@ -55,7 +68,10 @@ export async function computeThroughput(
          AND a.created_at >= ${sinceIso}::timestamptz AT TIME ZONE 'UTC'
          AND a.created_at < ${untilIso}::timestamptz AT TIME ZONE 'UTC'
        ORDER BY a.task_id, a.created_at DESC
-    ),
+    )`;
+
+  const seriesQuery = db.execute(sql`
+    WITH ${completionsCte},
     buckets AS (
       SELECT generate_series(
         date_trunc('${gran}', (${sinceIso}::timestamptz) AT TIME ZONE 'America/Sao_Paulo'),
@@ -87,18 +103,7 @@ export async function computeThroughput(
   `);
 
   const leadQuery = db.execute(sql`
-    WITH completions AS (
-      SELECT DISTINCT ON (a.task_id) a.task_id, a.created_at AS completed_at
-        FROM task_activities a
-        JOIN tasks t ON t.id = a.task_id
-       WHERE t.workspace_id = ${workspaceId}
-         AND NOT (t.is_approval_task = true AND t.status = 'draft')
-         AND a.type = 'status_changed'
-         AND a.metadata->>'newStatus' = 'completed'
-         AND a.created_at >= ${sinceIso}::timestamptz AT TIME ZONE 'UTC'
-         AND a.created_at < ${untilIso}::timestamptz AT TIME ZONE 'UTC'
-       ORDER BY a.task_id, a.created_at DESC
-    )
+    WITH ${completionsCte}
     SELECT COUNT(*)::int AS count,
            AVG(EXTRACT(EPOCH FROM (c.completed_at - t.created_at)) / 86400.0) AS avg_days,
            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (c.completed_at - t.created_at)) / 86400.0) AS median_days,
@@ -108,18 +113,7 @@ export async function computeThroughput(
   `);
 
   const assigneeQuery = db.execute(sql`
-    WITH completions AS (
-      SELECT DISTINCT ON (a.task_id) a.task_id
-        FROM task_activities a
-        JOIN tasks t ON t.id = a.task_id
-       WHERE t.workspace_id = ${workspaceId}
-         AND NOT (t.is_approval_task = true AND t.status = 'draft')
-         AND a.type = 'status_changed'
-         AND a.metadata->>'newStatus' = 'completed'
-         AND a.created_at >= ${sinceIso}::timestamptz AT TIME ZONE 'UTC'
-         AND a.created_at < ${untilIso}::timestamptz AT TIME ZONE 'UTC'
-       ORDER BY a.task_id, a.created_at DESC
-    )
+    WITH ${completionsCte}
     SELECT t.assigned_to AS user_id, u.name, COUNT(*)::int AS completed
       FROM completions c
       JOIN tasks t ON t.id = c.task_id
