@@ -3,7 +3,7 @@ import { registerAndLogin, deleteUser, deleteWorkspaces, type TestUser } from ".
 import type { Agent } from "supertest";
 import { db } from "@workspace/db";
 import { tasks, taskActivities } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 describe("GET /workspaces/:id/tasks/health", () => {
   let agent: Agent;
@@ -108,5 +108,54 @@ describe("GET /workspaces/:id/tasks/health — value vem da contagem, não da am
     expect(unassigned.deduction).toBe(15); // round(12/12 * 15) — não round(10/12 * 15) = 13
     expect(r.body.totals.open).toBe(SEEDED);
     expect(r.body.score).toBe(85); // 100 − 15
+  });
+});
+
+// "Bloqueada desde" vem do activity log, não de tasks.cancelled_at: a rota de
+// card bloqueia sem nunca escrever a coluna, e `NULL < now() - interval` é
+// NULL (não false), então a tarefa sumia do FILTER. Estas tarefas são
+// bloqueadas via PATCH /status (que ESCREVE cancelled_at = agora); backdatear
+// só o evento do log prova que a contagem lê o log, porque pela coluna as
+// duas seriam "bloqueadas agora" e o sinal daria 0.
+describe("GET /workspaces/:id/tasks/health — old_blocked conta pelo activity log", () => {
+  let agent: Agent;
+  let user: TestUser;
+  let workspaceId: string;
+
+  beforeAll(async () => {
+    ({ agent, user } = await registerAndLogin("Health Blocked Owner"));
+    const ws = await agent.post("/api/workspaces").send({ name: "WS Health Blocked" });
+    workspaceId = ws.body.id;
+
+    // bloqueada há 20 dias (> 14) — deve contar
+    const velha = await agent.post(`/api/workspaces/${workspaceId}/tasks`).send({ title: "bloqueada velha" });
+    await agent.patch(`/api/workspaces/${workspaceId}/tasks/${velha.body.id}/status`).send({ status: "blocked" });
+    const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+    await db
+      .update(taskActivities)
+      .set({ createdAt: twentyDaysAgo })
+      .where(and(eq(taskActivities.taskId, velha.body.id), eq(taskActivities.type, "status_changed")));
+
+    // bloqueada agora (< 14 dias) — NÃO deve contar
+    const recente = await agent.post(`/api/workspaces/${workspaceId}/tasks`).send({ title: "bloqueada recente" });
+    await agent.patch(`/api/workspaces/${workspaceId}/tasks/${recente.body.id}/status`).send({ status: "blocked" });
+  });
+
+  afterAll(async () => {
+    await deleteWorkspaces([workspaceId]);
+    await deleteUser(user.id);
+  });
+
+  it("conta só a bloqueada há 14+ dias, medindo pelo evento status_changed→blocked", async () => {
+    const r = await agent.get(`/api/workspaces/${workspaceId}/tasks/health`);
+    expect(r.status).toBe(200);
+
+    const blocked = r.body.signals.find((s: any) => s.key === "old_blocked");
+    expect(blocked.value).toBe(1); // só a velha; a recente fica de fora
+    expect(blocked.deduction).toBe(5); // cap(1 * 5, 10)
+    expect(blocked.sample).toHaveLength(1);
+    expect(blocked.sample[0].title).toBe("bloqueada velha");
+    expect(r.body.totals.open).toBe(2); // as duas blocked contam como abertas
+    expect(r.body.score).toBe(95); // 100 − 5
   });
 });

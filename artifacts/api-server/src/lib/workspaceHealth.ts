@@ -31,18 +31,42 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
   const base = and(eq(tasks.workspaceId, workspaceId), notApprovalDraft, ne(tasks.status, "draft"));
   const lastActivity = sql`COALESCE((SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id = ${tasks.id}), ${tasks.createdAt})`;
 
+  // "Bloqueada desde" sai do activity log, NÃO de `tasks.cancelled_at` — mesmo
+  // canon que o projeto já aplica pra conclusão ("conclusão é o activity log,
+  // nunca completedAt"), pela mesma razão: a coluna não é confiável.
+  //   - PATCH .../cards/:cardId/task/status (cards.ts) bloqueia a tarefa e
+  //     NUNCA escreve cancelled_at. Como `NULL < now() - interval '14 days'`
+  //     é NULL (não false), a linha sumia do FILTER sem erro: no DB dev 100%
+  //     das tarefas blocked têm cancelled_at NULL, incluindo uma bloqueada há
+  //     66 dias — o sinal era peso morto.
+  //   - cancelled_at também reiniciava o relógio num PATCH blocked→blocked
+  //     redundante e sobrevivia ao desbloqueio (cards.ts nunca limpa), fazendo
+  //     um re-block hoje contar como "bloqueada há meses". O activity log é
+  //     gravado só quando o status MUDA de fato, então não sofre de nenhum dos
+  //     dois.
+  // COALESCE pro createdAt cobre a tarefa que nasceu blocked (sem evento): aí
+  // createdAt É a data do bloqueio.
+  const blockedSince = sql`COALESCE((SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id = ${tasks.id} AND a.type = 'status_changed' AND a.metadata->>'newStatus' = 'blocked'), ${tasks.createdAt})`;
+
+  // Cada predicado é definido UMA vez e interpolado nos dois consumidores
+  // (contagem e amostra) — escrevê-lo em dois dialetos deixaria `value` e
+  // `sample` divergirem em silêncio num drift futuro. O and() do drizzle já
+  // emite SQL parentizado, então entra direto no FILTER (WHERE …).
+  const isActive = inArray(tasks.status, [...ACTIVE]);
+  const isOpen = inArray(tasks.status, [...OPEN]);
+  const isInProgress = eq(tasks.status, "in_progress");
+  const isOverdue = and(eq(tasks.overdue, true), isActive);
+  const isStale = and(isInProgress, sql`${lastActivity} < now() - interval '7 days'`);
+  const isUnassigned = and(isOpen, isNull(tasks.assignedTo));
+  const isOldUrgent = and(eq(tasks.scheduleMode, "urgente"), isOpen, sql`${tasks.createdAt} < now() - interval '7 days'`);
+  const isOldBlocked = and(eq(tasks.status, "blocked"), sql`${blockedSince} < now() - interval '14 days'`);
+  const isOldTail = and(isOpen, sql`${tasks.createdAt} < now() - interval '90 days'`);
+
   // `value` de cada sinal SEMPRE sai de count(*) filter (...) sem teto: as
   // queries de `sample` são capadas em SAMPLE_LIMIT e não servem de contagem
   // (um workspace com 600 atrasadas reportaria 500 e deduziria menos —
   // erro sempre na direção de fazer o workspace doente parecer saudável).
   const SAMPLE_LIMIT = 10;
-  const isOverdue = sql`${tasks.overdue} = true and ${tasks.status} in ('pending','in_progress')`;
-  const isStale = sql`${tasks.status} = 'in_progress' and ${lastActivity} < now() - interval '7 days'`;
-  const isUnassigned = sql`${tasks.status} in ('pending','in_progress','blocked') and ${tasks.assignedTo} is null`;
-  const isOldUrgent = sql`${tasks.scheduleMode} = 'urgente' and ${tasks.status} in ('pending','in_progress','blocked') and ${tasks.createdAt} < now() - interval '7 days'`;
-  const isOldBlocked = sql`${tasks.status} = 'blocked' and ${tasks.cancelledAt} < now() - interval '14 days'`;
-  const isOldTail = sql`${tasks.status} in ('pending','in_progress','blocked') and ${tasks.createdAt} < now() - interval '90 days'`;
-
   const sample = { id: tasks.id, title: tasks.title };
   const [
     [totals],
@@ -55,9 +79,9 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
   ] = await Promise.all([
     db
       .select({
-        active: sql<number>`count(*) filter (where ${tasks.status} in ('pending','in_progress'))::int`,
-        open: sql<number>`count(*) filter (where ${tasks.status} in ('pending','in_progress','blocked'))::int`,
-        inProgress: sql<number>`count(*) filter (where ${tasks.status} = 'in_progress')::int`,
+        active: sql<number>`count(*) filter (where ${isActive})::int`,
+        open: sql<number>`count(*) filter (where ${isOpen})::int`,
+        inProgress: sql<number>`count(*) filter (where ${isInProgress})::int`,
         overdue: sql<number>`count(*) filter (where ${isOverdue})::int`,
         stale: sql<number>`count(*) filter (where ${isStale})::int`,
         unassigned: sql<number>`count(*) filter (where ${isUnassigned})::int`,
@@ -67,12 +91,12 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       })
       .from(tasks)
       .where(base),
-    db.select(sample).from(tasks).where(and(base, eq(tasks.overdue, true), inArray(tasks.status, [...ACTIVE]))).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, eq(tasks.status, "in_progress"), sql`${lastActivity} < now() - interval '7 days'`)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, inArray(tasks.status, [...OPEN]), isNull(tasks.assignedTo))).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, eq(tasks.scheduleMode, "urgente"), inArray(tasks.status, [...OPEN]), sql`${tasks.createdAt} < now() - interval '7 days'`)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, eq(tasks.status, "blocked"), sql`${tasks.cancelledAt} < now() - interval '14 days'`)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, inArray(tasks.status, [...OPEN]), sql`${tasks.createdAt} < now() - interval '90 days'`)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isOverdue)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isStale)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isUnassigned)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isOldUrgent)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isOldBlocked)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isOldTail)).limit(SAMPLE_LIMIT),
   ]);
 
   const t = totals ?? {
