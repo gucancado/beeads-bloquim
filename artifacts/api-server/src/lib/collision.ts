@@ -11,3 +11,64 @@ export const NODE_HEIGHT = 80;
 
 export type Point = { x: number; y: number };
 export type Box = { x: number; y: number; width: number; height: number };
+
+/** Duas caixas se sobrepõem, considerando um respiro `gap` obrigatório entre elas. */
+export function boxesOverlap(a: Box, b: Box, gap = 0): boolean {
+  return (
+    a.x < b.x + b.width + gap &&
+    a.x + a.width + gap > b.x &&
+    a.y < b.y + b.height + gap &&
+    a.y + a.height + gap > b.y
+  );
+}
+
+export type FreeSlotOpts = {
+  gap?: number;
+  stepX?: number;
+  stepY?: number;
+  maxRings?: number;
+};
+
+/**
+ * Acha o ponto livre mais próximo de `desired` pra uma caixa `size`, varrendo
+ * anéis concêntricos e, dentro de cada anel, testando os candidatos do mais
+ * perto pro mais longe (empate → prefere abaixo, depois à direita, que é a
+ * ordem natural de irmãos no canvas).
+ *
+ * Determinístico. Se não achar vaga em `maxRings` anéis, devolve `desired` —
+ * degrada pro comportamento antigo em vez de travar a criação do card.
+ */
+export function findFreeSlot(
+  desired: Point,
+  size: { width: number; height: number },
+  occupied: Box[],
+  opts: FreeSlotOpts = {},
+): Point {
+  const gap = opts.gap ?? 24;
+  const stepX = opts.stepX ?? size.width + gap;
+  const stepY = opts.stepY ?? size.height + gap;
+  const maxRings = opts.maxRings ?? 12;
+
+  const fits = (x: number, y: number): boolean =>
+    !occupied.some((o) =>
+      boxesOverlap({ x, y, width: size.width, height: size.height }, o, gap),
+    );
+
+  if (fits(desired.x, desired.y)) return { x: desired.x, y: desired.y };
+
+  for (let ring = 1; ring <= maxRings; ring++) {
+    const candidates: Array<{ x: number; y: number; dx: number; dy: number; dist: number }> = [];
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue; // só o perímetro
+        const x = desired.x + dx * stepX;
+        const y = desired.y + dy * stepY;
+        candidates.push({ x, y, dx, dy, dist: Math.hypot(x - desired.x, y - desired.y) });
+      }
+    }
+    candidates.sort((a, b) => a.dist - b.dist || b.dy - a.dy || b.dx - a.dx);
+    for (const c of candidates) if (fits(c.x, c.y)) return { x: c.x, y: c.y };
+  }
+
+  return { x: desired.x, y: desired.y };
+}
