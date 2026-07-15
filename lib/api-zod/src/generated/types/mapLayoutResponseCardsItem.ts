@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type LayoutMapResponseCardsItem = {
+export type MapLayoutResponseCardsItem = {
   id: string;
   positionX: number;
   positionY: number;

@@ -5,9 +5,9 @@
  * MindTask API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { LayoutMapResponseCardsItem } from "./layoutMapResponseCardsItem";
+import type { MapLayoutResponseCardsItem } from "./mapLayoutResponseCardsItem";
 
-export interface LayoutMapResponse {
+export interface MapLayoutResponse {
   /** Only the cards whose position actually changed. */
-  cards: LayoutMapResponseCardsItem[];
+  cards: MapLayoutResponseCardsItem[];
 }

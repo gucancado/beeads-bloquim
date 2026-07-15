@@ -37,9 +37,9 @@ import type {
   ErrorResponse,
   GetMyTasksParams,
   HealthStatus,
-  LayoutMapResponse,
   LoginRequest,
   MapDetailResponse,
+  MapLayoutResponse,
   MapResponse,
   PromoteOrDemoteResponse,
   RegisterRequest,
@@ -1830,8 +1830,8 @@ export const layoutMap = async (
   workspaceId: string,
   mapId: string,
   options?: RequestInit,
-): Promise<LayoutMapResponse> => {
-  return customFetch<LayoutMapResponse>(getLayoutMapUrl(workspaceId, mapId), {
+): Promise<MapLayoutResponse> => {
+  return customFetch<MapLayoutResponse>(getLayoutMapUrl(workspaceId, mapId), {
     ...options,
     method: "POST",
   });

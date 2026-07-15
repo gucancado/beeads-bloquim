@@ -522,7 +522,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LayoutMapResponse"
+                $ref: "#/components/schemas/MapLayoutResponse"
 
   /workspaces/{workspaceId}/maps/{mapId}/cards:
     post:
@@ -1913,7 +1913,7 @@ components:
           nullable: true
       required: [id, mapId, title, positionX, positionY, statusVisual, createdAt, updatedAt]
 
-    LayoutMapResponse:
+    MapLayoutResponse:
       type: object
       required: [cards]
       properties:
