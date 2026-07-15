@@ -59,6 +59,7 @@ import { duplicateTask } from "../services/taskDuplicateService";
 import { patchTaskStatus } from "../services/taskStatusService";
 import { parseSinceParam, parseUntilParam } from "../lib/queryDates";
 import { encodeCursor, decodeCursor } from "../lib/keysetCursor";
+import { computeHealth } from "../lib/workspaceHealth";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -231,6 +232,12 @@ router.get("/stats", requireAuth, requireWorkspaceRole(["admin", "editor", "exec
     aging: agingRow ?? { d0_7: 0, d8_30: 0, d31_90: 0, d90_plus: 0 },
     window,
   });
+});
+
+router.get("/health", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const health = await computeHealth(db, workspaceId);
+  res.json({ workspaceId, ...health });
 });
 
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
