@@ -44,8 +44,23 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
   //     um re-block hoje contar como "bloqueada há meses". O activity log é
   //     gravado só quando o status MUDA de fato, então não sofre de nenhum dos
   //     dois.
-  // COALESCE pro createdAt cobre a tarefa que nasceu blocked (sem evento): aí
-  // createdAt É a data do bloqueio.
+  // O COALESCE pro createdAt é LOAD-BEARING — não remova. Ele cobre a tarefa
+  // blocked SEM evento correspondente no log: linhas anteriores ao activity
+  // log, backfills, ou um pruning futuro de activities antigas. Sem ele a
+  // subquery devolve NULL, `NULL < now() - interval` é NULL (não false), e a
+  // linha sumiria do FILTER em silêncio — exatamente o bug do cancelled_at que
+  // este código existe pra matar.
+  // (Não confunda com "tarefa que nasceu blocked": esse caso NÃO existe — o
+  // default do schema é 'pending' e nenhum caminho de produção cria task
+  // blocked. Concluir daí que o COALESCE é código morto reintroduz o NULL-drop.)
+  // No fallback, createdAt ≤ data real do bloqueio, então o erro aponta pra
+  // "mais doente" — direção segura: superexpõe em vez de esconder.
+  // O filtro `newStatus = 'blocked'` também é defensivo e NÃO tem teste que o
+  // proteja: hoje os dois writers de status logam só quando o status MUDA, então
+  // numa task blocked o último status_changed é sempre →blocked e MAX(todos) dá
+  // o mesmo resultado. Isso vale por construção, não por contrato — um writer
+  // futuro que logue sem mudar status (ou que mude status sem logar) quebraria a
+  // equivalência e o MAX pegaria um evento de desbloqueio. Manter.
   const blockedSince = sql`COALESCE((SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id = ${tasks.id} AND a.type = 'status_changed' AND a.metadata->>'newStatus' = 'blocked'), ${tasks.createdAt})`;
 
   // Cada predicado é definido UMA vez e interpolado nos dois consumidores

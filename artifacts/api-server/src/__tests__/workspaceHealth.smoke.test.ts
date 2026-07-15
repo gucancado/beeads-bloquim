@@ -3,7 +3,9 @@ import { registerAndLogin, deleteUser, deleteWorkspaces, type TestUser } from ".
 import type { Agent } from "supertest";
 import { db } from "@workspace/db";
 import { tasks, taskActivities } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
+
+const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
 describe("GET /workspaces/:id/tasks/health", () => {
   let agent: Agent;
@@ -130,15 +132,34 @@ describe("GET /workspaces/:id/tasks/health — old_blocked conta pelo activity l
     // bloqueada há 20 dias (> 14) — deve contar
     const velha = await agent.post(`/api/workspaces/${workspaceId}/tasks`).send({ title: "bloqueada velha" });
     await agent.patch(`/api/workspaces/${workspaceId}/tasks/${velha.body.id}/status`).send({ status: "blocked" });
-    const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
     await db
       .update(taskActivities)
-      .set({ createdAt: twentyDaysAgo })
+      .set({ createdAt: daysAgo(20) })
       .where(and(eq(taskActivities.taskId, velha.body.id), eq(taskActivities.type, "status_changed")));
 
     // bloqueada agora (< 14 dias) — NÃO deve contar
     const recente = await agent.post(`/api/workspaces/${workspaceId}/tasks`).send({ title: "bloqueada recente" });
     await agent.patch(`/api/workspaces/${workspaceId}/tasks/${recente.body.id}/status`).send({ status: "blocked" });
+
+    // desbloqueio → re-block: bloqueada há 30d, desbloqueada há 15d, re-bloqueada
+    // há 2d. "Bloqueada desde" é o re-block (MAX), então NÃO conta. Ancora o MAX:
+    // com MIN, o evento de 30d venceria e ela entraria no sinal.
+    const rebloq = await agent.post(`/api/workspaces/${workspaceId}/tasks`).send({ title: "re-bloqueada" });
+    const rebloqId = rebloq.body.id;
+    const isRebloq = eq(taskActivities.taskId, rebloqId);
+    // 1º block (30d atrás) — único evento até aqui
+    await agent.patch(`/api/workspaces/${workspaceId}/tasks/${rebloqId}/status`).send({ status: "blocked" });
+    await db.update(taskActivities).set({ createdAt: daysAgo(30) })
+      .where(and(isRebloq, eq(taskActivities.type, "status_changed")));
+    // desbloqueio (15d atrás) — o único evento com newStatus='pending'
+    await agent.patch(`/api/workspaces/${workspaceId}/tasks/${rebloqId}/status`).send({ status: "pending" });
+    await db.update(taskActivities).set({ createdAt: daysAgo(15) })
+      .where(and(isRebloq, sql`${taskActivities.metadata}->>'newStatus' = 'pending'`));
+    // re-block (2d atrás) — o evento blocked recém-criado; o de 30d já está
+    // retroagido, então o corte por createdAt isola só este.
+    await agent.patch(`/api/workspaces/${workspaceId}/tasks/${rebloqId}/status`).send({ status: "blocked" });
+    await db.update(taskActivities).set({ createdAt: daysAgo(2) })
+      .where(and(isRebloq, sql`${taskActivities.metadata}->>'newStatus' = 'blocked'`, gt(taskActivities.createdAt, daysAgo(1))));
   });
 
   afterAll(async () => {
@@ -146,16 +167,18 @@ describe("GET /workspaces/:id/tasks/health — old_blocked conta pelo activity l
     await deleteUser(user.id);
   });
 
-  it("conta só a bloqueada há 14+ dias, medindo pelo evento status_changed→blocked", async () => {
+  it("conta só a bloqueada há 14+ dias, medindo pelo MAX do evento status_changed→blocked", async () => {
     const r = await agent.get(`/api/workspaces/${workspaceId}/tasks/health`);
     expect(r.status).toBe(200);
 
     const blocked = r.body.signals.find((s: any) => s.key === "old_blocked");
-    expect(blocked.value).toBe(1); // só a velha; a recente fica de fora
+    // só a velha: a recente é nova, e a re-bloqueada conta a partir do re-block
+    // de 2d (com MIN, o block original de 30d a incluiria e value seria 2).
+    expect(blocked.value).toBe(1);
     expect(blocked.deduction).toBe(5); // cap(1 * 5, 10)
     expect(blocked.sample).toHaveLength(1);
     expect(blocked.sample[0].title).toBe("bloqueada velha");
-    expect(r.body.totals.open).toBe(2); // as duas blocked contam como abertas
+    expect(r.body.totals.open).toBe(3); // as três blocked contam como abertas
     expect(r.body.score).toBe(95); // 100 − 5
   });
 });
