@@ -7,6 +7,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMeetings } from "@/components/meetings/useMeetings";
 import { MeetingItem } from "@/components/meetings/MeetingItem";
 
+function isToday(iso: string): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
 export function AgendaPanel() {
   const [expanded, setExpanded] = useState(false);
   const { data: status, isLoading: statusLoading, isFetched: statusFetched } = useGoogleCalendarStatus();
@@ -20,7 +27,10 @@ export function AgendaPanel() {
   const events = data?.events ?? [];
   const allDay = events.filter(e => e.allDay);
   const timed = events.filter(e => !e.allDay);
-  const meetings = meetingsData ?? [];
+  // A agenda é do dia: a rota devolve o histórico todo, então filtramos aqui —
+  // "hoje" é semântica desta tela, não da API. Coleta em andamento fica visível
+  // mesmo virando o dia, senão o botão de encerrar sumiria no meio da reunião.
+  const meetings = (meetingsData ?? []).filter(m => m.status === "collecting" || isToday(m.occurredAt));
 
   // Abre a agenda automaticamente quando há uma reunião coletando (feedback pós "nova reunião").
   const hasCollecting = meetings.some(m => m.status === "collecting");

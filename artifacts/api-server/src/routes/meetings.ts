@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { z } from "zod/v4";
-import { and, eq, isNull, desc } from "drizzle-orm";
+import { and, eq, or, isNull, inArray, desc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { meetings, workspaceMembers, maps } from "@workspace/db/schema";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -86,9 +86,17 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const rows = await db.select().from(meetings).where(eq(meetings.workspaceId, workspaceId)).orderBy(desc(meetings.createdAt));
     return res.json(rows);
   }
-  // sem workspace: standalone criadas pelo próprio usuário
+  // sem workspace: tudo que o usuário legitimamente vê — standalone criadas por
+  // ele + reuniões dos workspaces onde é membro. A agenda (my-tasks) é uma visão
+  // cross-workspace e chama sem parâmetro; filtrar só standalone aqui esconderia
+  // da UI toda reunião com workspace (e travaria o poll-through do syncFromWorker).
+  const myWorkspaces = db.select({ id: workspaceMembers.workspaceId })
+    .from(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   const rows = await db.select().from(meetings)
-    .where(and(eq(meetings.createdBy, userId), isNull(meetings.workspaceId)))
+    .where(or(
+      and(eq(meetings.createdBy, userId), isNull(meetings.workspaceId)),
+      inArray(meetings.workspaceId, myWorkspaces),
+    ))
     .orderBy(desc(meetings.createdAt));
   return res.json(rows);
 });
