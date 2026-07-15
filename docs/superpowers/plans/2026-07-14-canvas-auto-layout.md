@@ -39,6 +39,8 @@ Consequência: **não existe Task de free-slot no front**, e não é preciso cri
   Se a suíte inteira falhar por timeout, **re-rode antes de suspeitar de regressão** (flakiness ambiental conhecida contra o DB remoto).
 - **pnpm/lockfile (deploy-crítico):** pnpm local é **11.4.0**, mas o Dockerfile fixa **9.15.9**. Qualquer mudança em `pnpm-lock.yaml` precisa ser regerada com 9.15.9 ou o build do Coolify quebra com `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Comando exato na Task 1.
 - **Migration de banco:** nenhuma. Reusa `cards.position_x` / `cards.position_y` (já `doublePrecision NOT NULL DEFAULT 0`).
+- **Typecheck é gate RELATIVO, não absoluto (medido em 2026-07-15):** o `api-server` tem **274 erros de tsc pré-existentes** no baseline desta branch — concentrados em `routes/workspaceTasks.ts` (60), `routes/myTasks.ts` (44), `routes/workspaces.ts` (29), `routes/maps.ts` (23), `routes/cards.ts` (19), `middlewares/permissions.ts` (15). O deploy usa esbuild (sem tsc), então isso não bloqueia build. **Atenção:** `maps.ts` e `cards.ts` são justamente os arquivos que as Tasks 3 e 4 modificam — você **vai** ver erros vermelhos neles que não são seus. O gate é: **não introduzir erro novo que referencie os arquivos da sua task**. Não conserte a dívida alheia (scope creep). Mesma regra já valia pro `mindtask-app` (~71 erros).
+- **Worktree novo precisa buildar `lib/db` antes de qualquer typecheck:** `lib/db` é um projeto TS composite com `emitDeclarationOnly` e o `api-server` o referencia; sem `dist/` o tsc cospe uma cascata de TS6305 que não tem relação com o seu código. Rodar uma vez, da raiz do worktree: `npx tsc -b lib/db`. (Já feito no worktree atual.)
 
 ---
 
@@ -375,13 +377,13 @@ npx vitest run src/__tests__/mapLayout.test.ts
 
 Esperado: PASS, 9 testes.
 
-- [ ] **Step 8: Typecheck**
+- [ ] **Step 8: Typecheck (gate relativo)**
 
 ```bash
 pnpm --config.verify-deps-before-run=false --filter @workspace/api-server run typecheck
 ```
 
-Esperado: sem erros.
+Esperado: ~274 erros pré-existentes, e **nenhum** deles citando `collision.ts`, `mapLayoutService.ts` ou `mapLayout.test.ts`. Confirme filtrando a saída por esses nomes — o gate é não ter erro novo nos seus arquivos, não zerar a dívida do repo.
 
 - [ ] **Step 9: Commit**
 
@@ -843,13 +845,13 @@ DATABASE_URL='postgresql://postgres.dzhdnaemauvtdchbkppp:8ffEOVU11yv3rEio@aws-1-
 
 Esperado: PASS, 5 testes. Se falhar por **timeout**, re-rode antes de investigar (flakiness conhecida contra o DB remoto).
 
-- [ ] **Step 6: Typecheck**
+- [ ] **Step 6: Typecheck (gate relativo)**
 
 ```bash
 pnpm --config.verify-deps-before-run=false --filter @workspace/api-server run typecheck
 ```
 
-Esperado: sem erros.
+Esperado: ~274 erros pré-existentes. **`routes/maps.ts` já tem 23 erros vermelhos que não são seus** — não os conserte. O gate é: a contagem total não sobe, e nenhum erro novo aparece por causa do bloco que você adicionou. Compare a contagem antes/depois da sua mudança.
 
 - [ ] **Step 7: Commit**
 
@@ -1131,7 +1133,7 @@ Esperado: pelo menos um match (a definição do hook).
 
 Agora **leia** a assinatura gerada de `layoutMap`/`useLayoutMap` e anote a forma exata das variáveis da mutation. Como o endpoint **não tem requestBody**, o Orval normalmente gera variáveis `{ workspaceId, mapId }` (sem `data`). A Task 6 depende disso — se a forma gerada for diferente, use a real.
 
-- [ ] **Step 5: Typecheck dos pacotes gerados**
+- [ ] **Step 5: Typecheck dos pacotes gerados (gate relativo)**
 
 Da raiz do repo:
 
@@ -1139,7 +1141,7 @@ Da raiz do repo:
 pnpm --config.verify-deps-before-run=false --filter @workspace/api-server run typecheck
 ```
 
-Esperado: sem erros.
+Esperado: ~274 erros pré-existentes e nenhum erro novo vindo do código gerado. O gate é a contagem não subir.
 
 - [ ] **Step 6: Commit**
 
@@ -1495,13 +1497,14 @@ DATABASE_URL='postgresql://postgres.dzhdnaemauvtdchbkppp:8ffEOVU11yv3rEio@aws-1-
 
 Esperado: verde. Falha por **timeout** nos testes pesados de aprovação é flakiness ambiental — **re-rode** antes de tratar como regressão.
 
-- [ ] **Typecheck do front (gate relativo)**
+- [ ] **Typecheck dos dois pacotes (gate relativo nos dois)**
 
 ```bash
 pnpm --config.verify-deps-before-run=false --filter @workspace/mindtask-app run typecheck
+pnpm --config.verify-deps-before-run=false --filter @workspace/api-server run typecheck
 ```
 
-O `mindtask-app` tem ~71 erros de tsc **pré-existentes** no baseline e o deploy usa `vite build` (sem tsc). O gate é **não introduzir erro novo** — compare a contagem/os arquivos com o baseline em `master`, não espere zero.
+Ambos têm dívida de tsc pré-existente (`mindtask-app` ~71, `api-server` ~274 — medido em 2026-07-15) e nenhum dos dois entra no build de deploy via tsc (`vite build` e esbuild, respectivamente). O gate é **não introduzir erro novo**: compare contagem e arquivos com o baseline, não espere zero.
 
 - [ ] **Build do front**
 
