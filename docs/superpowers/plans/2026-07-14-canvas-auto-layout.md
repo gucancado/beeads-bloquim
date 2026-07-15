@@ -560,7 +560,7 @@ De dentro de `artifacts/api-server`:
 npx vitest run src/__tests__/collision.test.ts
 ```
 
-Esperado: PASS, 11 testes.
+Esperado: PASS, 10 testes (4 de `boxesOverlap` + 6 de `findFreeSlot`).
 
 - [ ] **Step 5: Commit**
 
