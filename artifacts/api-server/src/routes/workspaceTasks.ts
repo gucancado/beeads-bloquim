@@ -60,6 +60,7 @@ import { patchTaskStatus } from "../services/taskStatusService";
 import { parseSinceParam, parseUntilParam } from "../lib/queryDates";
 import { encodeCursor, decodeCursor } from "../lib/keysetCursor";
 import { computeHealth } from "../lib/workspaceHealth";
+import { computeThroughput } from "../lib/workspaceThroughput";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -238,6 +239,57 @@ router.get("/health", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
   const { workspaceId } = req.params;
   const health = await computeHealth(db, workspaceId);
   res.json({ workspaceId, ...health });
+});
+
+router.get("/throughput", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const q = req.query as { since?: string; until?: string; granularity?: string };
+  const granularity = q.granularity ?? "week";
+  if (!["day", "week", "month"].includes(granularity)) {
+    res.status(400).json({ error: "Validation error", message: "granularity aceita: day, week, month" });
+    return;
+  }
+  const sinceParsed = parseSinceParam(q.since);
+  const untilParsed = parseUntilParam(q.until);
+  if (sinceParsed === "invalid" || untilParsed === "invalid") {
+    res.status(400).json({ error: "Validation error", message: "since/until devem ser ISO 8601 ou YYYY-MM-DD" });
+    return;
+  }
+  const until = untilParsed ?? new Date();
+  const since = sinceParsed ?? new Date(until.getTime() - 56 * 24 * 60 * 60 * 1000);
+  if (since >= until) {
+    res.status(400).json({ error: "Validation error", message: "since deve ser < until" });
+    return;
+  }
+  const bucketMs = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 }[granularity as "day" | "week" | "month"];
+  if ((until.getTime() - since.getTime()) / bucketMs > 200) {
+    res.status(400).json({ error: "Validation error", message: "janela/granularity excede 200 buckets" });
+    return;
+  }
+
+  const gran = granularity as "day" | "week" | "month";
+  const prevUntil = since;
+  const prevSince = new Date(since.getTime() - (until.getTime() - since.getTime()));
+  const [current, previous] = await Promise.all([
+    computeThroughput(db, workspaceId, { since, until, granularity: gran }),
+    computeThroughput(db, workspaceId, { since: prevSince, until: prevUntil, granularity: gran }),
+  ]);
+
+  res.json({
+    workspaceId,
+    granularity: gran,
+    window: { since: since.toISOString(), until: until.toISOString() },
+    series: current.series,
+    leadTimeDays: current.leadTimeDays,
+    byAssignee: current.byAssignee,
+    previousPeriod: {
+      since: prevSince.toISOString(),
+      until: prevUntil.toISOString(),
+      created: previous.series.reduce((s, b) => s + b.created, 0),
+      completed: previous.series.reduce((s, b) => s + b.completed, 0),
+      leadTimeDays: previous.leadTimeDays,
+    },
+  });
 });
 
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
