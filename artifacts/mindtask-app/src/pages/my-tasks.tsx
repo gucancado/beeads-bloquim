@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { DashboardGreeting } from "@/components/DashboardGreeting";
 import { customFetch, useGetMe } from "@workspace/api-client-react";
-import { Inbox, Plus, RotateCcw } from "lucide-react";
+import { Inbox, Plus, RotateCcw, Video } from "lucide-react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
 import { TaskListItemMember, TaskListItemData } from "@/components/tasks/TaskListItem";
@@ -16,7 +16,7 @@ import { groupTasksByDeadline, selectWindow, type TimeWindow } from "@/lib/group
 import { ateSextaLabel } from "@/lib/groupTasksByDeadline";
 import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
 import { AgendaPanel } from "@/components/tasks/AgendaPanel";
-import { MeetingsPanel } from "@/components/meetings/MeetingsPanel";
+import { NewMeetingModal } from "@/components/meetings/NewMeetingModal";
 import { useRoute, useLocation } from "wouter";
 import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
 
@@ -218,6 +218,8 @@ export default function MyTasksPage() {
     return acc;
   }, {});
 
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+
   return (
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
@@ -226,13 +228,23 @@ export default function MyTasksPage() {
           <div className="flex flex-col gap-6 mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div />
-              <Button
-                title="nova tarefa"
-                className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
-                onClick={handleNewTaskClick}
-              >
-                <Plus className="w-5 h-5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  title="nova reunião"
+                  variant="outline"
+                  className="rounded-xl h-12 w-12 p-0 hover:-translate-y-0.5 transition-all"
+                  onClick={() => setMeetingModalOpen(true)}
+                >
+                  <Video className="w-5 h-5" />
+                </Button>
+                <Button
+                  title="nova tarefa"
+                  className="rounded-xl px-4 h-12 shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
+                  onClick={handleNewTaskClick}
+                >
+                  <Plus className="w-5 h-5" />
+                </Button>
+              </div>
             </div>
 
             {me && (me as { createdAt?: string }).createdAt && (
@@ -295,9 +307,8 @@ export default function MyTasksPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="mb-6">
             <AgendaPanel />
-            <MeetingsPanel />
           </div>
 
           {isLoading ? (
@@ -415,6 +426,8 @@ export default function MyTasksPage() {
           navigate(`/my-tasks/tasks/${newTaskId}`, { replace: true });
         }}
       />
+
+      <NewMeetingModal open={meetingModalOpen} onOpenChange={setMeetingModalOpen} />
     </AppLayout>
   );
 }

@@ -1,38 +1,61 @@
-import { Badge, Button } from "@beeads/ui";
 import { Loader2, Check, X, Square } from "lucide-react";
 import { type Meeting, useMeetingPoll, useStopMeeting } from "./useMeetings";
 
-function StatusBadge({ m }: { m: Meeting }) {
-  if (m.status === "collecting") return <Badge className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> coletando</Badge>;
-  if (m.status === "transcribed") return <Badge className="gap-1 bg-honey text-ink"><Check className="h-3 w-3" /> transcrita</Badge>;
-  if (m.status === "failed") return <Badge variant="destructive" className="gap-1"><X className="h-3 w-3" /> falhou{m.failureReason ? `: ${m.failureReason}` : ""}</Badge>;
-  return <Badge variant="outline" className="gap-1">cancelada</Badge>;
-}
+// Barra de status à esquerda da linha (mesmo padrão visual do EventRow da agenda).
+const STATUS_BAR: Record<Meeting["status"], string> = {
+  collecting: "bg-amber-500",
+  transcribed: "bg-emerald-500",
+  failed: "bg-red-500",
+  canceled: "bg-slate-400",
+};
 
+/** Linha de reunião no estilo da agenda — renderizada na mesma lista dos eventos do Google Calendar. */
 export function MeetingItem({ meeting }: { meeting: Meeting }) {
   // poll-through enquanto coletando
   const poll = useMeetingPoll(meeting.id, meeting.status === "collecting");
   const m = poll.data ?? meeting;
   const stop = useStopMeeting(m.id);
 
+  const time = new Date(m.occurredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const title = m.title ?? `reunião ${new Date(m.occurredAt).toLocaleDateString("pt-BR")}`;
+  const participants =
+    m.status === "transcribed" && m.participants && m.participants.length > 0
+      ? m.participants.map((p) => p.name).join(", ")
+      : null;
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-fg">{m.title ?? `Reunião ${new Date(m.occurredAt).toLocaleDateString("pt-BR")}`}</div>
-          <div className="text-xs text-muted-foreground">{new Date(m.occurredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} · {m.meetCode}</div>
+    <div className="flex items-start gap-3 p-3 rounded-xl bg-transparent border border-transparent hover:border-border/60 transition-colors">
+      <span className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${STATUS_BAR[m.status]}`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-sm font-medium truncate">{title}</p>
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 lowercase">
+            {m.status === "collecting" && <Loader2 className="w-3 h-3 animate-spin" />}
+            {m.status === "transcribed" && <Check className="w-3 h-3" />}
+            {m.status === "failed" && <X className="w-3 h-3" />}
+            <span>
+              {m.status === "collecting" && "coletando"}
+              {m.status === "transcribed" && "transcrita"}
+              {m.status === "failed" && `falhou${m.failureReason ? `: ${m.failureReason}` : ""}`}
+              {m.status === "canceled" && "cancelada"}
+            </span>
+          </span>
         </div>
-        <StatusBadge m={m} />
+        <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
+          <span className="text-xs text-muted-foreground tabular-nums">{time}</span>
+          <span className="text-[11px] text-muted-foreground/70 truncate">· {m.meetCode}</span>
+          {participants && <span className="text-xs text-muted-foreground truncate">· {participants}</span>}
+        </div>
       </div>
-      {m.status === "transcribed" && m.participants && m.participants.length > 0 && (
-        <div className="text-xs text-muted-foreground">Participantes: {m.participants.map((p) => p.name).join(", ")}</div>
-      )}
       {m.status === "collecting" && (
-        <div className="flex justify-end">
-          <Button size="sm" variant="ghost" className="gap-1" disabled={stop.isPending} onClick={() => stop.mutate()}>
-            <Square className="h-3 w-3" /> encerrar coleta
-          </Button>
-        </div>
+        <button
+          onClick={() => stop.mutate()}
+          disabled={stop.isPending}
+          title="encerrar coleta"
+          className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors lowercase disabled:opacity-50"
+        >
+          <Square className="w-3 h-3" /> encerrar
+        </button>
       )}
     </div>
   );
