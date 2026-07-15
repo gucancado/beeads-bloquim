@@ -143,4 +143,46 @@ describe("map layout smoke", () => {
     const res = await execAgent.post(`/api/workspaces/${workspaceId}/maps/${mapId}/layout`);
     expect(res.status).toBe(403);
   });
+
+  it("card novo não nasce em cima de outro no mesmo ponto pedido", async () => {
+    const { agent, workspaceId, mapId } = await setupMap("freeslot");
+
+    const first = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "primeiro", positionX: 500, positionY: 500 });
+    expect(first.status).toBe(201);
+    expect(first.body.positionX).toBe(500);
+    expect(first.body.positionY).toBe(500);
+
+    const second = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "segundo", positionX: 500, positionY: 500 });
+    expect(second.status).toBe(201);
+    // Mesmo ponto pedido → o servidor empurra pro vizinho livre mais próximo.
+    const dx = Math.abs(second.body.positionX - 500);
+    const dy = Math.abs(second.body.positionY - 500);
+    expect(dx >= 200 || dy >= 80).toBe(true);
+  });
+
+  it("cards sem posição (caso MCP) não empilham todos em (0,0)", async () => {
+    const { agent, workspaceId, mapId } = await setupMap("mcp");
+
+    const positions: Array<{ x: number; y: number }> = [];
+    for (const title of ["t1", "t2", "t3"]) {
+      const res = await agent
+        .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+        .send({ title });
+      expect(res.status).toBe(201);
+      positions.push({ x: res.body.positionX as number, y: res.body.positionY as number });
+    }
+
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const apart =
+          Math.abs(positions[i].x - positions[j].x) >= 200 ||
+          Math.abs(positions[i].y - positions[j].y) >= 80;
+        expect(apart).toBe(true);
+      }
+    }
+  });
 });
