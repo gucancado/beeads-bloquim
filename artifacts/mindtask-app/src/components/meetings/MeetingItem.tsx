@@ -9,6 +9,21 @@ const STATUS_BAR: Record<Meeting["status"], string> = {
   canceled: "bg-slate-400",
 };
 
+// failure_reason vem cru do worker (src/meetings-collect/*). Traduz o que ele
+// sabe emitir; qualquer código novo cai no fallback e aparece como veio, em vez
+// de sumir — é diagnóstico, não decoração.
+const FAILURE_LABEL: Record<string, string> = {
+  not_admitted: "o bot não foi admitido na reunião",
+  stopped_empty: "ninguém falou",
+  vexa_send_failed: "falha ao acionar o bot",
+  vexa_failed: "falha na transcrição",
+};
+
+function failureLabel(reason: string | null): string | null {
+  if (!reason) return null;
+  return FAILURE_LABEL[reason] ?? reason;
+}
+
 /** Linha de reunião no estilo da agenda — renderizada na mesma lista dos eventos do Google Calendar. */
 export function MeetingItem({ meeting }: { meeting: Meeting }) {
   // poll-through enquanto coletando
@@ -36,8 +51,8 @@ export function MeetingItem({ meeting }: { meeting: Meeting }) {
             <span>
               {m.status === "collecting" && "coletando"}
               {m.status === "transcribed" && "transcrita"}
-              {m.status === "failed" && `falhou${m.failureReason ? `: ${m.failureReason}` : ""}`}
-              {m.status === "canceled" && "cancelada"}
+              {m.status === "failed" && `falhou${failureLabel(m.failureReason) ? `: ${failureLabel(m.failureReason)}` : ""}`}
+              {m.status === "canceled" && `cancelada${failureLabel(m.failureReason) ? `: ${failureLabel(m.failureReason)}` : ""}`}
             </span>
           </span>
         </div>
