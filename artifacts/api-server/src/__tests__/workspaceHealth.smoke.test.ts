@@ -66,3 +66,47 @@ describe("GET /workspaces/:id/tasks/health", () => {
     await deleteUser(strangerUser.id);
   });
 });
+
+// `value` sai de count(*) sem teto; `sample` é capado em 10. Um `value`
+// re-derivado de sample.length reportaria 10 e deduziria round(10/12*15)=13
+// em vez de round(12/12*15)=15 — sempre subestimando a doença do workspace.
+describe("GET /workspaces/:id/tasks/health — value vem da contagem, não da amostra", () => {
+  let agent: Agent;
+  let user: TestUser;
+  let workspaceId: string;
+  const SEEDED = 12;
+
+  beforeAll(async () => {
+    ({ agent, user } = await registerAndLogin("Health Count Owner"));
+    const ws = await agent.post("/api/workspaces").send({ name: "WS Health Count" });
+    workspaceId = ws.body.id;
+
+    // 12 tarefas abertas SEM responsável (assignedTo: null explícito — omitir
+    // o campo faria o backend default pro criador) — acima do teto de amostra.
+    for (let i = 0; i < SEEDED; i++) {
+      const t = await agent
+        .post(`/api/workspaces/${workspaceId}/tasks`)
+        .send({ title: `sem dono ${i}`, assignedTo: null });
+      // tasks nascem draft — ativar pra entrar nos denominadores
+      await agent.patch(`/api/workspaces/${workspaceId}/tasks/${t.body.id}/status`).send({ status: "pending" });
+    }
+  });
+
+  afterAll(async () => {
+    await deleteWorkspaces([workspaceId]);
+    await deleteUser(user.id);
+  });
+
+  it("value reflete a contagem real, sample é capado em 10 e a dedução usa o value real", async () => {
+    const r = await agent.get(`/api/workspaces/${workspaceId}/tasks/health`);
+    expect(r.status).toBe(200);
+
+    const unassigned = r.body.signals.find((s: any) => s.key === "unassigned_backlog");
+    expect(unassigned.value).toBe(SEEDED); // contagem real, não o tamanho da amostra
+    expect(unassigned.sample).toHaveLength(10); // amostra capada
+    expect(unassigned.of).toBe(SEEDED);
+    expect(unassigned.deduction).toBe(15); // round(12/12 * 15) — não round(10/12 * 15) = 13
+    expect(r.body.totals.open).toBe(SEEDED);
+    expect(r.body.score).toBe(85); // 100 − 15
+  });
+});
