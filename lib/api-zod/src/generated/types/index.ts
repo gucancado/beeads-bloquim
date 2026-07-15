@@ -39,6 +39,8 @@ export * from "./dashboardResponseTasksByStatus";
 export * from "./errorResponse";
 export * from "./getMyTasksParams";
 export * from "./healthStatus";
+export * from "./layoutMapResponse";
+export * from "./layoutMapResponseCardsItem";
 export * from "./loginRequest";
 export * from "./mapDetailResponse";
 export * from "./mapResponse";

@@ -533,6 +533,26 @@ export const DeleteMapResponse = zod.object({
 });
 
 /**
+ * @summary Auto-arrange map cards (dagre, minimizes edge crossings)
+ */
+export const LayoutMapParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+});
+
+export const LayoutMapResponse = zod.object({
+  cards: zod
+    .array(
+      zod.object({
+        id: zod.string().uuid(),
+        positionX: zod.number(),
+        positionY: zod.number(),
+      }),
+    )
+    .describe("Only the cards whose position actually changed."),
+});
+
+/**
  * @summary Create a card in the map
  */
 export const CreateCardParams = zod.object({
