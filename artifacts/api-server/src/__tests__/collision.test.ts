@@ -34,10 +34,11 @@ describe("findFreeSlot", () => {
     expect(findFreeSlot({ x: 0, y: 0 }, SIZE, occupied)).toEqual({ x: 0, y: 0 });
   });
 
-  it("ponto ocupado desloca pra baixo (vizinho mais próximo)", () => {
+  it("ponto ocupado desloca pro vizinho livre mais próximo", () => {
     const occupied = [{ x: 0, y: 0, width: NODE_WIDTH, height: NODE_HEIGHT }];
-    // gap default 24 → stepY = NODE_HEIGHT (200) + 24 = 224
-    expect(findFreeSlot({ x: 0, y: 0 }, SIZE, occupied)).toEqual({ x: 0, y: 224 });
+    // gap 24 → stepX = 200+24 = 224, stepY = 320+24 = 344. O vizinho mais PRÓXIMO
+    // é o horizontal (224 < 344), então desloca pra direita.
+    expect(findFreeSlot({ x: 0, y: 0 }, SIZE, occupied)).toEqual({ x: 224, y: 0 });
   });
 
   it("resultado nunca sobrepõe o que já está ocupado", () => {

@@ -40,12 +40,13 @@ describe("computeLayout", () => {
   });
 
   it("irmãos num fan-out ficam separados o bastante pra cards reais não sobreporem", () => {
-    // Regressão: com NODE_HEIGHT=80 (subestimado), o dagre separava irmãos por
-    // 80+48=128px, mas o card renderizado mede ~175px de altura → sobrepunham
-    // ~47px no canvas (medido em 2026-07-16). O limiar aqui é ABSOLUTO (a altura
-    // real do card), decoplado de NODE_HEIGHT de propósito, pra pegar
-    // sub-espaçamento mesmo que a constante mude.
-    const REAL_CARD_HEIGHT = 175;
+    // Regressão: o dagre separa irmãos por altura+nodesep; se a altura assumida
+    // subestima o card renderizado, irmãos empilhados se sobrepõem. Já aconteceu
+    // com 80 (card 175px) e com 200 (card COM DESCRIÇÃO 254px, medido em
+    // 2026-07-16). O limiar aqui é ABSOLUTO (a altura real de um card descritivo),
+    // decoplado de NODE_HEIGHT de propósito, pra pegar sub-espaçamento mesmo que
+    // a constante mude.
+    const REAL_CARD_HEIGHT = 254;
     const pos = computeLayout(
       [{ id: "a" }, { id: "b" }, { id: "c" }],
       [

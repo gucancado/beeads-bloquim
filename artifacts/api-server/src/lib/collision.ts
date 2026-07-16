@@ -5,19 +5,23 @@
  * o conteúdo, mas layout e detecção de colisão trabalham com a caixa nominal —
  * é o que o servidor consegue saber sem medir o DOM.
  *
- * ALTURA: um card de tarefa (título + responsável + prazo + status) mede ~175px
- * renderizado (medido em 2026-07-16). O valor 80 antigo subestimava demais: o
- * dagre separa irmãos por altura+nodesep, então com 80 os irmãos ficavam a
- * 80+48=128px e sobrepunham os ~175px reais. Usamos 200 pra cobrir os 175 + folga
- * pra cards com descrição/datas empilhadas. Isso também corrige o free-slot de
- * criação e a grade de nós isolados, que usam a mesma constante.
+ * ALTURA: o card renderizado varia MUITO com o conteúdo (medido em 2026-07-16):
+ * sem tarefa ~60px, tarefa simples ~175px, tarefa COM DESCRIÇÃO ~254px, e com
+ * título de 2 linhas + datas empilhadas pode chegar a ~320px. O dagre separa
+ * irmãos por altura+nodesep, então uma altura subestimada faz irmãos empilhados
+ * (fan-out/convergência) se sobreporem — foi o que aconteceu com 200 num mapa de
+ * cards descritivos (254px reais > 200+48 de gap). Usamos 320 pra cobrir
+ * praticamente todos os cards não-expandidos. Como cadeias lineares têm 1 card
+ * por rank (sem irmão vertical), o valor maior NÃO incha cadeias — só dá o
+ * respiro necessário onde os cards de fato empilham. Alimenta também o free-slot
+ * de criação e a grade de isolados.
  *
  * LARGURA: o card real mede ~220px (min-w-[220px]). Mantemos 200 de propósito —
  * não é a causa de sobreposição (colunas a width+ranksep=320px deixam 100px de
  * folga pra um card de 220), e mexer recalibraria todas as colunas do layout.
  */
 export const NODE_WIDTH = 200;
-export const NODE_HEIGHT = 200;
+export const NODE_HEIGHT = 320;
 
 export type Point = { x: number; y: number };
 export type Box = { x: number; y: number; width: number; height: number };
