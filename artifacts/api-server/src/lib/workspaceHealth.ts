@@ -2,7 +2,7 @@
 // Health score dedutivo do workspace (spec fase 2 do bloquim-mcp):
 // score = 100 − Σ deduções, piso 0. Sempre retorna os 6 sinais (deduction 0
 // quando saudável). Thresholds fixos: 7d (stale/urgente), 14d (blocked), 90d (cauda).
-import { and, eq, inArray, isNull, ne, not, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, not, sql } from "drizzle-orm";
 import type { db as Db } from "@workspace/db";
 import { tasks } from "@workspace/db/schema";
 
@@ -81,6 +81,10 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
   // queries de `sample` são capadas em SAMPLE_LIMIT e não servem de contagem
   // (um workspace com 600 atrasadas reportaria 500 e deduziria menos —
   // erro sempre na direção de fazer o workspace doente parecer saudável).
+  // Cada amostra ORDENA pelos piores casos primeiro (a mais atrasada, a mais
+  // parada, a mais antiga...): sem ORDER BY o .limit(10) recortaria 10 linhas
+  // quaisquer (ordem de heap/plano), e a amostra deixaria de mostrar o que
+  // importa quando há mais casos que o teto.
   const SAMPLE_LIMIT = 10;
   const sample = { id: tasks.id, title: tasks.title };
   const [
@@ -106,12 +110,16 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       })
       .from(tasks)
       .where(base),
-    db.select(sample).from(tasks).where(and(base, isOverdue)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, isStale)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, isUnassigned)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, isOldUrgent)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, isOldBlocked)).limit(SAMPLE_LIMIT),
-    db.select(sample).from(tasks).where(and(base, isOldTail)).limit(SAMPLE_LIMIT),
+    // overdue: mais atrasada (due_date mais antiga) primeiro.
+    db.select(sample).from(tasks).where(and(base, isOverdue)).orderBy(asc(tasks.dueDate)).limit(SAMPLE_LIMIT),
+    // stale: parada há mais tempo (última atividade mais antiga) primeiro.
+    db.select(sample).from(tasks).where(and(base, isStale)).orderBy(sql`${lastActivity} asc`).limit(SAMPLE_LIMIT),
+    // unassigned/urgent/tail: mais antiga (created_at) primeiro.
+    db.select(sample).from(tasks).where(and(base, isUnassigned)).orderBy(asc(tasks.createdAt)).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isOldUrgent)).orderBy(asc(tasks.createdAt)).limit(SAMPLE_LIMIT),
+    // old_blocked: bloqueada há mais tempo primeiro.
+    db.select(sample).from(tasks).where(and(base, isOldBlocked)).orderBy(sql`${blockedSince} asc`).limit(SAMPLE_LIMIT),
+    db.select(sample).from(tasks).where(and(base, isOldTail)).orderBy(asc(tasks.createdAt)).limit(SAMPLE_LIMIT),
   ]);
 
   const t = totals ?? {
@@ -128,6 +136,10 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
   const cap = (n: number, max: number) => Math.min(n, max);
   const toSample = (rows: Array<{ id: unknown; title: unknown }>) =>
     rows.map((r) => ({ taskId: String(r.id), title: String(r.title) }));
+  // O consumidor é um agente LLM: com value=0 a recomendação vira ruído
+  // ("0 de N atrasadas — repactuar prazos"). Devolve o texto afirmativo nesse
+  // caso e o imperativo só quando há de fato o que fazer.
+  const rec = (value: number, problem: string, ok: string) => (value === 0 ? ok : problem);
 
   const signals: Signal[] = [
     {
@@ -137,7 +149,11 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       of: t.active,
       deduction: t.active > 0 ? Math.round((t.overdue / t.active) * 30) : 0,
       sample: toSample(overdueRows),
-      recommendation: `${t.overdue} de ${t.active} tarefas ativas estão atrasadas — repactuar prazos ou repriorizar.`,
+      recommendation: rec(
+        t.overdue,
+        `${t.overdue} de ${t.active} tarefas ativas estão atrasadas — repactuar prazos ou repriorizar.`,
+        "Nenhuma tarefa ativa atrasada.",
+      ),
     },
     {
       key: "stale_in_progress",
@@ -146,7 +162,11 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       of: t.inProgress,
       deduction: t.inProgress > 0 ? Math.round((t.stale / t.inProgress) * 20) : 0,
       sample: toSample(staleRows),
-      recommendation: `${t.stale} de ${t.inProgress} tarefas em andamento sem atividade há 7+ dias — cobrar status ou devolver pra fila.`,
+      recommendation: rec(
+        t.stale,
+        `${t.stale} de ${t.inProgress} tarefas em andamento sem atividade há 7+ dias — cobrar status ou devolver pra fila.`,
+        "Nenhuma tarefa em andamento parada há 7+ dias.",
+      ),
     },
     {
       key: "unassigned_backlog",
@@ -155,7 +175,11 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       of: t.open,
       deduction: t.open > 0 ? Math.round((t.unassigned / t.open) * 15) : 0,
       sample: toSample(unassignedRows),
-      recommendation: `${t.unassigned} de ${t.open} tarefas abertas sem dono — atribuir responsável.`,
+      recommendation: rec(
+        t.unassigned,
+        `${t.unassigned} de ${t.open} tarefas abertas sem dono — atribuir responsável.`,
+        "Todas as tarefas abertas têm responsável.",
+      ),
     },
     {
       key: "old_urgent",
@@ -164,7 +188,11 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       of: null,
       deduction: cap(t.oldUrgent * 5, 15),
       sample: toSample(urgentRows),
-      recommendation: `${t.oldUrgent} tarefas marcadas urgentes há 7+ dias — ou não eram urgentes, ou precisam de ação imediata.`,
+      recommendation: rec(
+        t.oldUrgent,
+        `${t.oldUrgent} tarefas marcadas urgentes há 7+ dias — ou não eram urgentes, ou precisam de ação imediata.`,
+        "Nenhuma tarefa urgente parada há 7+ dias.",
+      ),
     },
     {
       key: "old_blocked",
@@ -173,7 +201,11 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       of: null,
       deduction: cap(t.oldBlocked * 5, 10),
       sample: toSample(blockedRows),
-      recommendation: `${t.oldBlocked} tarefas bloqueadas há 14+ dias — resolver o impedimento ou cancelar.`,
+      recommendation: rec(
+        t.oldBlocked,
+        `${t.oldBlocked} tarefas bloqueadas há 14+ dias — resolver o impedimento ou cancelar.`,
+        "Nenhuma tarefa bloqueada há 14+ dias.",
+      ),
     },
     {
       key: "old_tail",
@@ -182,7 +214,11 @@ export async function computeHealth(db: typeof Db, workspaceId: string): Promise
       of: null,
       deduction: cap(t.oldTail * 2, 10),
       sample: toSample(tailRows),
-      recommendation: `${t.oldTail} tarefas abertas há 90+ dias — concluir, arquivar ou assumir que não vão acontecer.`,
+      recommendation: rec(
+        t.oldTail,
+        `${t.oldTail} tarefas abertas há 90+ dias — concluir, arquivar ou assumir que não vão acontecer.`,
+        "Nenhuma tarefa aberta há mais de 90 dias.",
+      ),
     },
   ];
 
