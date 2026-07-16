@@ -1027,7 +1027,18 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     layoutMapMut.mutate(
       { workspaceId, mapId },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          // O efeito que sincroniza mapData→nodes (acima) só INSERE cards novos; ele nunca
+          // move os que já existem (senão um refetch arrancaria o card que o usuário está
+          // arrastando). Por isso o relayout aplica as posições aqui, direto da resposta do
+          // endpoint, e só depois invalida o cache pra manter tudo coerente com o banco.
+          const moved = new Map(result.cards.map((c) => [c.id, { x: c.positionX, y: c.positionY }]));
+          setNodes(prev =>
+            prev.map(n => {
+              const p = moved.get(n.id);
+              return p ? { ...n, position: p } : n;
+            }),
+          );
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
         },
         onError: () => {
@@ -1039,7 +1050,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         },
       },
     );
-  }, [workspaceId, mapId, layoutMapMut, pushSnapshot, queryClient]);
+  }, [workspaceId, mapId, layoutMapMut, pushSnapshot, queryClient, setNodes]);
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     // For parallel mode, prefer the join node position (to the right of the join circle)
