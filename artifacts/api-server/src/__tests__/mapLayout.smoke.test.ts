@@ -57,10 +57,11 @@ describe("map layout smoke", () => {
     const byId = new Map<string, { positionX: number; positionY: number }>(
       (map.body.cards as Array<{ id: string; positionX: number; positionY: number }>).map((k) => [k.id, k]),
     );
-    // Cadeia a→b→c com rankdir=LR: uma coluna por nível, 320 de passo.
+    // Cadeia a→b→c com rankdir=LR: uma coluna por nível, 440 de passo
+    // (200 de largura + 240 de ranksep).
     expect(byId.get(a)!.positionX).toBe(0);
-    expect(byId.get(b)!.positionX).toBe(320);
-    expect(byId.get(c)!.positionX).toBe(640);
+    expect(byId.get(b)!.positionX).toBe(440);
+    expect(byId.get(c)!.positionX).toBe(880);
     expect(byId.get(a)!.positionY).toBe(byId.get(b)!.positionY);
   });
 

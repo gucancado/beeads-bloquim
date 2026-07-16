@@ -123,7 +123,11 @@ export function computeLayout(
   opts: LayoutOpts = {},
 ): Map<string, Point> {
   const rankdir = opts.rankdir ?? "LR";
-  const ranksep = opts.ranksep ?? 120;
+  // ranksep = gap horizontal entre pai e filho (ranks) no layout LR. Com 120 os
+  // cards ficavam ~100px de distância (o card real tem ~220px de largura, então
+  // a coluna 200+120=320 deixava só 100px de folga) — visualmente "colado". 240
+  // dá ~220px de respiro entre pai e filho.
+  const ranksep = opts.ranksep ?? 240;
   const nodesep = opts.nodesep ?? 48;
   const gridGap = opts.gridGap ?? 48;
 
