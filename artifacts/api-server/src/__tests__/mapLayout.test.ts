@@ -1,6 +1,6 @@
 // artifacts/api-server/src/__tests__/mapLayout.test.ts
 import { describe, it, expect } from "vitest";
-import { computeLayout } from "../services/mapLayoutService";
+import { computeLayout, buildLayoutEdges } from "../services/mapLayoutService";
 import { NODE_WIDTH, NODE_HEIGHT } from "../lib/collision";
 
 // Valores conferidos rodando o dagre de verdade com os defaults deste módulo
@@ -121,5 +121,78 @@ describe("computeLayout", () => {
       [{ source: "a", target: "b" }, { source: "b", target: "a" }],
     );
     expect(pos.size).toBe(2);
+  });
+});
+
+describe("buildLayoutEdges", () => {
+  // Espelha o caso real do mapa Clínica CBV / AÇÃO CO2 (2026-07-16):
+  //   Conferir → EDITAR ; EDITAR tem uma aprovação ; aprovação → Subir.
+  // A aprovação é satélite (fora do dagre), mas está no meio do fluxo. Sem
+  // rotear, a aresta "aprovação → Subir" era descartada e o Subir virava um
+  // nó isolado, jogado na grade de sobras com uma linha cruzando o mapa.
+  const cards = [
+    { id: "conferir", taskId: "t-conf", isApprovalTask: false, parentTaskId: null },
+    { id: "editar", taskId: "t-edit", isApprovalTask: false, parentTaskId: null },
+    { id: "aprov", taskId: "t-aprov", isApprovalTask: true, parentTaskId: "t-edit" },
+    { id: "subir", taskId: "t-subir", isApprovalTask: false, parentTaskId: null },
+  ];
+
+  it("roteia aresta que SAI de card de aprovação pro card do pai", () => {
+    const edges = buildLayoutEdges(cards, [
+      { source: "conferir", target: "editar" },
+      { source: "aprov", target: "subir" },
+    ]);
+    // aprov → subir vira editar → subir; conferir → editar intacta.
+    expect(edges).toContainEqual({ source: "conferir", target: "editar" });
+    expect(edges).toContainEqual({ source: "editar", target: "subir" });
+    expect(edges).toHaveLength(2);
+  });
+
+  it("com o roteamento, a cadeia inteira vira 3 colunas (Subir deixa de ser isolado)", () => {
+    const edges = buildLayoutEdges(cards, [
+      { source: "conferir", target: "editar" },
+      { source: "aprov", target: "subir" },
+    ]);
+    const pos = computeLayout(
+      cards.filter((c) => !c.isApprovalTask).map((c) => ({ id: c.id })),
+      edges,
+    );
+    expect(pos.get("conferir")!.x).toBe(0);
+    expect(pos.get("editar")!.x).toBe(320);
+    expect(pos.get("subir")!.x).toBe(640);
+    // todos na mesma linha (cadeia linear) → Subir não caiu na grade de isolados.
+    expect(pos.get("subir")!.y).toBe(pos.get("conferir")!.y);
+  });
+
+  it("roteia aresta que CHEGA num card de aprovação pro card do pai", () => {
+    const edges = buildLayoutEdges(cards, [{ source: "conferir", target: "aprov" }]);
+    expect(edges).toEqual([{ source: "conferir", target: "editar" }]);
+  });
+
+  it("arestas entre cards normais passam intactas", () => {
+    const edges = buildLayoutEdges(cards, [{ source: "conferir", target: "editar" }]);
+    expect(edges).toEqual([{ source: "conferir", target: "editar" }]);
+  });
+
+  it("descarta aresta de aprovação sem pai resolvível", () => {
+    const orphan = [{ id: "aprovSemPai", taskId: "t-x", isApprovalTask: true, parentTaskId: null }, { id: "z", taskId: "t-z", isApprovalTask: false, parentTaskId: null }];
+    expect(buildLayoutEdges(orphan, [{ source: "aprovSemPai", target: "z" }])).toEqual([]);
+  });
+
+  it("colapsa auto-loop: aprovação → seu próprio pai vira pai → pai e é descartada", () => {
+    expect(buildLayoutEdges(cards, [{ source: "aprov", target: "editar" }])).toEqual([]);
+  });
+
+  it("deduplica arestas que colapsam pro mesmo par", () => {
+    const two = [
+      ...cards,
+      { id: "aprov2", taskId: "t-aprov2", isApprovalTask: true, parentTaskId: "t-edit" },
+    ];
+    // aprov → subir e aprov2 → subir colapsam ambas pra editar → subir.
+    const edges = buildLayoutEdges(two, [
+      { source: "aprov", target: "subir" },
+      { source: "aprov2", target: "subir" },
+    ]);
+    expect(edges).toEqual([{ source: "editar", target: "subir" }]);
   });
 });

@@ -150,6 +150,57 @@ describe("map layout smoke", () => {
     expect(approvalAfter!.positionY).toBe(approvalMoved!.positionY);
   });
 
+  it("card ligado por um card de aprovação no meio da cadeia não vira isolado", async () => {
+    // Reproduz o mapa Clínica CBV / AÇÃO CO2 (2026-07-16): editar → aprovação → subir.
+    // A conexão parte do card de APROVAÇÃO. Sem roteamento, o "subir" perdia a
+    // única conexão e caía na grade de isolados, longe da cadeia.
+    const { agent, user, workspaceId, mapId } = await setupMap("approval-chain");
+
+    const editar = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "editar", positionX: 0, positionY: 0 });
+    expect(editar.status).toBe(201);
+    const editarId = editar.body.id as string;
+    const editarTaskId = editar.body.taskId as string;
+
+    const subir = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "subir", positionX: 900, positionY: 700 });
+    expect(subir.status).toBe(201);
+    const subirId = subir.body.id as string;
+
+    // aprovação no "editar" → cria o card de aprovação
+    const ap = await agent
+      .post(`/api/workspaces/${workspaceId}/tasks/${editarTaskId}/approvals`)
+      .send({ approverId: user.id, dueDate: null });
+    expect(ap.status).toBe(201);
+
+    type MapCard = { id: string; taskIsApprovalTask: boolean };
+    const mapBefore = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
+    const approvalCard = (mapBefore.body.cards as MapCard[]).find((c) => c.taskIsApprovalTask);
+    expect(approvalCard).toBeTruthy();
+
+    // conexão REAL saindo do card de aprovação pro "subir"
+    const conn = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/connections`)
+      .send({ sourceCardId: approvalCard!.id, targetCardId: subirId, sourceHandle: "source-right", targetHandle: "target-left" });
+    expect(conn.status).toBe(201);
+
+    const layout = await agent.post(`/api/workspaces/${workspaceId}/maps/${mapId}/layout`);
+    expect(layout.status).toBe(200);
+
+    const after = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
+    const byId = new Map<string, { positionX: number; positionY: number }>(
+      (after.body.cards as Array<{ id: string; positionX: number; positionY: number }>).map((k) => [k.id, k]),
+    );
+    const editarPos = byId.get(editarId)!;
+    const subirPos = byId.get(subirId)!;
+    // Roteado: editar → subir. Subir fica UMA coluna à direita do editar, na mesma
+    // linha — parte da cadeia, não isolado abaixo dela.
+    expect(subirPos.positionX).toBe(editarPos.positionX + 320);
+    expect(subirPos.positionY).toBe(editarPos.positionY);
+  });
+
   it("mapa sem cards devolve lista vazia", async () => {
     const { agent, workspaceId, mapId } = await setupMap("empty");
     const res = await agent.post(`/api/workspaces/${workspaceId}/maps/${mapId}/layout`);
