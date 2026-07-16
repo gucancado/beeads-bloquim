@@ -321,7 +321,7 @@ export default function MyTasksPage() {
             let flatTasks: TaskListItemData[];
             let dateColumnMode: "default" | "completed" | "cancelled" = "default";
             if (selectedStatus === "completed" || selectedStatus === "blocked") {
-              const dateKey = selectedStatus === "completed" ? "completedAt" : "cancelledAt";
+              const dateKey = selectedStatus === "completed" ? "completedAt" : "blockedSince";
               flatTasks = [...(tasks ?? [])].sort((a, b) => {
                 const ta = a[dateKey] ? new Date(a[dateKey]).getTime() : 0;
                 const tb = b[dateKey] ? new Date(b[dateKey]).getTime() : 0;
