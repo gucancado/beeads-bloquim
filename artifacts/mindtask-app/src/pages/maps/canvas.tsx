@@ -1040,6 +1040,13 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             }),
           );
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          // O computeLayout normaliza o mapa pro canto (0,0); num mapa cujos cards
+          // vivem longe da origem isso teleporta tudo sem o viewport acompanhar.
+          // requestAnimationFrame espera o React aplicar as posições novas antes de
+          // enquadrar — senão o fitView enquadraria as posições antigas.
+          requestAnimationFrame(() => {
+            fitView({ duration: 400 });
+          });
         },
         onError: () => {
           toast({
@@ -1050,7 +1057,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         },
       },
     );
-  }, [workspaceId, mapId, layoutMapMut, pushSnapshot, queryClient, setNodes]);
+  }, [workspaceId, mapId, layoutMapMut, pushSnapshot, queryClient, setNodes, fitView]);
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     // For parallel mode, prefer the join node position (to the right of the join circle)
