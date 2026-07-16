@@ -37,7 +37,7 @@ Consequência: **não existe Task de free-slot no front**, e não é preciso cri
   DATABASE_URL='postgresql://postgres.dzhdnaemauvtdchbkppp:8ffEOVU11yv3rEio@aws-1-sa-east-1.pooler.supabase.com:5432/postgres' JWT_SECRET='7396043fd27a4b1c4868c4bf8329a944b50410fe8d7847ff999122813450ea0d' npx vitest run <pattern>
   ```
   Se a suíte inteira falhar por timeout, **re-rode antes de suspeitar de regressão** (flakiness ambiental conhecida contra o DB remoto).
-- **pnpm/lockfile (deploy-crítico):** pnpm local é **11.4.0**, mas o Dockerfile fixa **9.15.9**. Qualquer mudança em `pnpm-lock.yaml` precisa ser regerada com 9.15.9 ou o build do Coolify quebra com `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Comando exato na Task 1.
+- **pnpm/lockfile (deploy-crítico):** o Dockerfile fixa **pnpm@11.4.0** (`corepack prepare pnpm@11.4.0`), igual ao pnpm local. Qualquer mudança em `pnpm-lock.yaml` tem que ser regerada com a MESMA major do Dockerfile, senão o build do Coolify quebra com `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` no bloco `overrides:`. **Correção histórica:** a v1 deste plano mandava regenerar com 9.15.9 (memória obsoleta) — isso estava ERRADO e gerou o commit de conserto `d87f533`. Sempre ler a versão real no Dockerfile antes de regenerar.
 - **Migration de banco:** nenhuma. Reusa `cards.position_x` / `cards.position_y` (já `doublePrecision NOT NULL DEFAULT 0`).
 - **Typecheck é gate RELATIVO, não absoluto (medido em 2026-07-15):** o `api-server` tem **274 erros de tsc pré-existentes** no baseline desta branch — concentrados em `routes/workspaceTasks.ts` (60), `routes/myTasks.ts` (44), `routes/workspaces.ts` (29), `routes/maps.ts` (23), `routes/cards.ts` (19), `middlewares/permissions.ts` (15). O deploy usa esbuild (sem tsc), então isso não bloqueia build. **Atenção:** `maps.ts` e `cards.ts` são justamente os arquivos que as Tasks 3 e 4 modificam — você **vai** ver erros vermelhos neles que não são seus. O gate é: **não introduzir erro novo que referencie os arquivos da sua task**. Não conserte a dívida alheia (scope creep). Mesma regra já valia pro `mindtask-app` (~71 erros).
 - **Worktree novo precisa buildar `lib/db` antes de qualquer typecheck:** `lib/db` é um projeto TS composite com `emitDeclarationOnly` e o `api-server` o referencia; sem `dist/` o tsc cospe uma cascata de TS6305 que não tem relação com o seu código. Rodar uma vez, da raiz do worktree: `npx tsc -b lib/db`. (Já feito no worktree atual.)
@@ -80,7 +80,7 @@ Direção de dependência: `routes` → `services` → `lib`. `lib/collision.ts`
 - Create: `artifacts/api-server/src/services/mapLayoutService.ts`
 - Create: `artifacts/api-server/src/__tests__/mapLayout.test.ts`
 - Modify: `artifacts/api-server/package.json` (dep `@dagrejs/dagre`)
-- Modify: `pnpm-lock.yaml` (regen com pnpm 9.15.9)
+- Modify: `pnpm-lock.yaml` (regen com pnpm 11.4.0 — a versão do Dockerfile)
 
 **Interfaces:**
 - Consumes: nada.
@@ -100,22 +100,21 @@ pnpm --config.verify-deps-before-run=false --filter @workspace/api-server add @d
 
 (O `--config.verify-deps-before-run=false` é necessário: o `preinstall` do repo quebra no pnpm 11.)
 
-- [ ] **Step 2: Regerar o lockfile com pnpm 9.15.9 (deploy-crítico)**
+- [ ] **Step 2: Regerar o lockfile com pnpm 11.4.0 (deploy-crítico)**
 
-O pnpm local (11.4.0) grava overrides no lockfile de um jeito que o Dockerfile (pnpm 9.15.9) rejeita. Da raiz do repo:
-
-```bash
-corepack prepare pnpm@9.15.9 --activate
-CI=1 pnpm install --no-frozen-lockfile --lockfile-only
-```
-
-Depois confirme que o lockfile passa como o container vê:
+O lockfile tem que ser gerado com a MESMA major que o Dockerfile usa (`corepack prepare pnpm@11.4.0`), senão o build do Coolify rejeita o bloco `overrides:`. O pnpm local já é 11.4.0. Da raiz do repo:
 
 ```bash
-pnpm install --frozen-lockfile
+CI=1 pnpm install --lockfile-only
 ```
 
-Esperado: termina sem `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`.
+Depois confirme que passa como o container vê:
+
+```bash
+CI=1 pnpm install --frozen-lockfile
+```
+
+Esperado: imprime `Lockfile is up to date` e termina sem `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. (Sem `CI=1`, o frozen check pode abortar com `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` — é o pnpm querendo purgar node_modules, não erro de lockfile.)
 
 - [ ] **Step 3: Criar `lib/collision.ts` com as constantes (a geometria vem na Task 2)**
 
@@ -1522,7 +1521,7 @@ Da raiz do repo:
 pnpm install --frozen-lockfile
 ```
 
-Esperado: sem `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Se falhar, refaça o Step 2 da Task 1 (regen com corepack pnpm@9.15.9).
+Esperado: sem `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Se falhar, refaça o Step 2 da Task 1 (regen com pnpm 11.4.0, a versão do Dockerfile).
 
 ---
 
