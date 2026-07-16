@@ -7,7 +7,7 @@ import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, requireMapInWorkspace } from "../middlewares/permissions";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
-import { computeLayout } from "../services/mapLayoutService";
+import { computeLayout, buildLayoutEdges } from "../services/mapLayoutService";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -269,11 +269,24 @@ router.post(
       .from(cardConnections)
       .where(eq(cardConnections.mapId, mapId));
 
+    // Arestas roteadas: conexões que tocam cards de aprovação sobem pro card do
+    // pai, pra não deixar o card seguinte órfão (ver buildLayoutEdges). Sem isso,
+    // um "aprovação → X" era descartado e o X caía na grade de isolados.
+    const layoutEdges = buildLayoutEdges(
+      // cardRows aliasa parentTaskId como `taskParentTaskId`; buildLayoutEdges
+      // espera `parentTaskId` — mapear aqui pra não silenciar o roteamento.
+      cardRows.map((c) => ({
+        id: c.id,
+        taskId: c.taskId,
+        isApprovalTask: c.isApprovalTask,
+        parentTaskId: c.taskParentTaskId,
+      })),
+      connRows.map((c) => ({ source: c.sourceCardId, target: c.targetCardId })),
+    ).filter((e) => movableIds.has(e.source) && movableIds.has(e.target));
+
     const positions = computeLayout(
       movable.map((c) => ({ id: c.id })),
-      connRows
-        .filter((c) => movableIds.has(c.sourceCardId) && movableIds.has(c.targetCardId))
-        .map((c) => ({ source: c.sourceCardId, target: c.targetCardId })),
+      layoutEdges,
     );
 
     // task.id → card, pra resolver o card do task PAI de cada card de

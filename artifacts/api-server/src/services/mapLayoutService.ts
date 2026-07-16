@@ -15,6 +15,64 @@ const layout = dagreModule.layout ?? dagreDefault?.layout;
 export type LayoutNode = { id: string; width?: number; height?: number };
 export type LayoutEdge = { source: string; target: string };
 
+export type CardMeta = {
+  id: string;
+  taskId?: string | null;
+  isApprovalTask?: boolean | null;
+  parentTaskId?: string | null;
+};
+
+/**
+ * Constrói as arestas pro layout a partir das conexões persistidas, roteando as
+ * que tocam cards de aprovação através do card do task PAI.
+ *
+ * Um card de aprovação fica FORA do dagre (é satélite do pai, andando junto com
+ * ele). Mas ele pode ser um nó ESTRUTURAL do fluxo — ex.: EDITAR → aprovação →
+ * Subir, onde "aprovação → Subir" é uma conexão real. Descartar essa aresta só
+ * porque a ponta é aprovação deixava o card seguinte (Subir) sem nenhuma conexão
+ * → o dagre o tratava como isolado e o jogava na grade de sobras, com a linha
+ * cruzando o mapa. Roteando "aprovação → X" pra "pai → X" (e "X → aprovação" pra
+ * "X → pai"), a cadeia continua conectada e o layout sai limpo.
+ *
+ * Devolve só arestas entre cards NÃO-aprovação. Descarta: pontas de aprovação
+ * sem pai resolvível, auto-loops (aprovação → próprio pai) e duplicatas que
+ * colapsam pro mesmo par.
+ */
+export function buildLayoutEdges(
+  cards: CardMeta[],
+  connections: Array<{ source: string; target: string }>,
+): LayoutEdge[] {
+  const byId = new Map<string, CardMeta>(cards.map((c) => [c.id, c]));
+  const cardByTaskId = new Map<string, CardMeta>();
+  for (const c of cards) if (c.taskId) cardByTaskId.set(c.taskId, c);
+
+  // Resolve um card pro nó que ele representa no grafo do layout: ele mesmo se
+  // for card normal; o card do task pai se for aprovação; null se não resolve
+  // (aprovação sem pai, ou pai que também é aprovação — casos raros, descartados).
+  const resolve = (cardId: string): string | null => {
+    const c = byId.get(cardId);
+    if (!c) return null;
+    if (c.isApprovalTask !== true) return c.id;
+    if (!c.parentTaskId) return null;
+    const parent = cardByTaskId.get(c.parentTaskId);
+    if (!parent || parent.isApprovalTask === true) return null;
+    return parent.id;
+  };
+
+  const out: LayoutEdge[] = [];
+  const seen = new Set<string>();
+  for (const conn of connections) {
+    const s = resolve(conn.source);
+    const t = resolve(conn.target);
+    if (!s || !t || s === t) continue;
+    const key = `${s}->${t}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ source: s, target: t });
+  }
+  return out;
+}
+
 export type LayoutOpts = {
   rankdir?: "LR" | "TB";
   ranksep?: number;
