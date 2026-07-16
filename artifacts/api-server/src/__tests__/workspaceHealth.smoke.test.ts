@@ -56,6 +56,14 @@ describe("GET /workspaces/:id/tasks/health", () => {
     expect(urgent.value).toBe(1);
     expect(urgent.deduction).toBe(5);
 
+    // Recomendação: neutra/afirmativa quando value=0 (não o imperativo absurdo
+    // "0 de N atrasadas — repactuar prazos"); imperativa quando há problema.
+    const overdue = r.body.signals.find((s: any) => s.key === "overdue");
+    expect(overdue.value).toBe(0);
+    expect(overdue.recommendation).toBe("Nenhuma tarefa ativa atrasada.");
+    expect(overdue.recommendation).not.toContain("repactuar");
+    expect(stale.recommendation).toContain("cobrar status"); // value=1 → imperativa
+
     // score = 100 - 20 (stale) - 5 (urgent) - unassigned? tasks têm assignee (criador) → 0
     expect(r.body.score).toBe(75);
     expect(r.body.band).toBe("atencao");
@@ -180,5 +188,54 @@ describe("GET /workspaces/:id/tasks/health — old_blocked conta pelo activity l
     expect(blocked.sample[0].title).toBe("bloqueada velha");
     expect(r.body.totals.open).toBe(3); // as três blocked contam como abertas
     expect(r.body.score).toBe(95); // 100 − 5
+  });
+});
+
+// A amostra de cada sinal deve trazer os PIORES casos primeiro (ORDER BY
+// determinístico), não a ordem arbitrária do heap do Postgres. Sem ORDER BY,
+// o .limit(10) recortaria 10 quaisquer — inútil quando há mais que o teto.
+// Usa unassigned (ordena por created_at, que NÃO tem índice → heap = ordem de
+// inserção), com created_at backdated na ordem INVERSA à inserção: sem ORDER BY
+// a amostra sairia na ordem de inserção (≠ esperado) → RED garantido; um sinal
+// com índice de suporte (ex.: overdue por due_date) sairia ordenado por
+// coincidência de plano e não discriminaria a falta do ORDER BY.
+describe("GET /workspaces/:id/tasks/health — amostra ordena os piores casos primeiro", () => {
+  let agent: Agent;
+  let user: TestUser;
+  let workspaceId: string;
+
+  beforeAll(async () => {
+    ({ agent, user } = await registerAndLogin("Health Order Owner"));
+    const ws = await agent.post("/api/workspaces").send({ name: "WS Health Order" });
+    workspaceId = ws.body.id;
+
+    // Ordem de inserção: [5d, 20d, 10d]; ordem esperada (created_at asc, mais
+    // antiga primeiro): [20d, 10d, 5d] — encabeçada por um item que NÃO é o 1º
+    // inserido, então a ordem de heap não pode coincidir com a esperada.
+    const specs = [
+      { title: "aberta 5d", created: daysAgo(5) },
+      { title: "aberta 20d", created: daysAgo(20) }, // a mais antiga
+      { title: "aberta 10d", created: daysAgo(10) },
+    ];
+    for (const s of specs) {
+      const t = await agent
+        .post(`/api/workspaces/${workspaceId}/tasks`)
+        .send({ title: s.title, assignedTo: null });
+      await agent.patch(`/api/workspaces/${workspaceId}/tasks/${t.body.id}/status`).send({ status: "pending" });
+      await db.update(tasks).set({ createdAt: s.created }).where(eq(tasks.id, t.body.id));
+    }
+  });
+
+  afterAll(async () => {
+    await deleteWorkspaces([workspaceId]);
+    await deleteUser(user.id);
+  });
+
+  it("unassigned.sample vem por created_at asc (mais antiga primeiro)", async () => {
+    const r = await agent.get(`/api/workspaces/${workspaceId}/tasks/health`);
+    expect(r.status).toBe(200);
+    const unassigned = r.body.signals.find((s: any) => s.key === "unassigned_backlog");
+    expect(unassigned.value).toBe(3);
+    expect(unassigned.sample.map((x: any) => x.title)).toEqual(["aberta 20d", "aberta 10d", "aberta 5d"]);
   });
 });
