@@ -1,6 +1,6 @@
 // artifacts/api-server/src/__tests__/mapLayout.test.ts
 import { describe, it, expect } from "vitest";
-import { computeLayout, buildLayoutEdges } from "../services/mapLayoutService";
+import { computeLayout, buildApprovalLayoutGraph } from "../services/mapLayoutService";
 import { NODE_WIDTH, NODE_HEIGHT } from "../lib/collision";
 
 // Valores conferidos rodando o dagre de verdade com os defaults deste módulo
@@ -124,12 +124,12 @@ describe("computeLayout", () => {
   });
 });
 
-describe("buildLayoutEdges", () => {
-  // Espelha o caso real do mapa Clínica CBV / AÇÃO CO2 (2026-07-16):
+describe("buildApprovalLayoutGraph", () => {
+  // Caso real do mapa Clínica CBV / AÇÃO CO2 (2026-07-16):
   //   Conferir → EDITAR ; EDITAR tem uma aprovação ; aprovação → Subir.
-  // A aprovação é satélite (fora do dagre), mas está no meio do fluxo. Sem
-  // rotear, a aresta "aprovação → Subir" era descartada e o Subir virava um
-  // nó isolado, jogado na grade de sobras com uma linha cruzando o mapa.
+  // A aprovação é um WAYPOINT do fluxo: precisa participar do layout como nó,
+  // com aresta derivada EDITAR → aprovação, pra ganhar espaço próprio na cadeia
+  // (senão ficava sobreposta ao Subir).
   const cards = [
     { id: "conferir", taskId: "t-conf", isApprovalTask: false, parentTaskId: null },
     { id: "editar", taskId: "t-edit", isApprovalTask: false, parentTaskId: null },
@@ -137,62 +137,82 @@ describe("buildLayoutEdges", () => {
     { id: "subir", taskId: "t-subir", isApprovalTask: false, parentTaskId: null },
   ];
 
-  it("roteia aresta que SAI de card de aprovação pro card do pai", () => {
-    const edges = buildLayoutEdges(cards, [
-      { source: "conferir", target: "editar" },
-      { source: "aprov", target: "subir" },
-    ]);
-    // aprov → subir vira editar → subir; conferir → editar intacta.
-    expect(edges).toContainEqual({ source: "conferir", target: "editar" });
-    expect(edges).toContainEqual({ source: "editar", target: "subir" });
-    expect(edges).toHaveLength(2);
+  it("inclui todos os cards como nós; aprovação com caixa menor", () => {
+    const { nodes } = buildApprovalLayoutGraph(cards, []);
+    expect(nodes).toHaveLength(4);
+    const aprov = nodes.find((n) => n.id === "aprov")!;
+    expect(aprov.width).toBeGreaterThan(0);
+    expect(aprov.height).toBeGreaterThan(0);
+    expect(aprov.width! < 200 && aprov.height! < 200).toBe(true);
+    // cards normais usam o default (sem width/height explícito)
+    expect(nodes.find((n) => n.id === "editar")!.width).toBeUndefined();
   });
 
-  it("com o roteamento, a cadeia inteira vira 3 colunas (Subir deixa de ser isolado)", () => {
-    const edges = buildLayoutEdges(cards, [
+  it("deriva a aresta pai → aprovação e mantém as conexões persistidas", () => {
+    const { edges } = buildApprovalLayoutGraph(cards, [
       { source: "conferir", target: "editar" },
       { source: "aprov", target: "subir" },
     ]);
-    const pos = computeLayout(
-      cards.filter((c) => !c.isApprovalTask).map((c) => ({ id: c.id })),
-      edges,
-    );
-    expect(pos.get("conferir")!.x).toBe(0);
-    expect(pos.get("editar")!.x).toBe(320);
-    expect(pos.get("subir")!.x).toBe(640);
-    // todos na mesma linha (cadeia linear) → Subir não caiu na grade de isolados.
+    expect(edges).toContainEqual({ source: "conferir", target: "editar" }); // persistida
+    expect(edges).toContainEqual({ source: "editar", target: "aprov" }); // derivada pai→aprovação
+    expect(edges).toContainEqual({ source: "aprov", target: "subir" }); // persistida
+    expect(edges).toHaveLength(3);
+  });
+
+  it("a cadeia inteira vira 4 colunas em ordem (Subir depois da aprovação, mesma linha)", () => {
+    const { nodes, edges } = buildApprovalLayoutGraph(cards, [
+      { source: "conferir", target: "editar" },
+      { source: "aprov", target: "subir" },
+    ]);
+    const pos = computeLayout(nodes, edges);
+    // Conferir → EDITAR → aprovação → Subir, x estritamente crescente.
+    expect(pos.get("conferir")!.x).toBeLessThan(pos.get("editar")!.x);
+    expect(pos.get("editar")!.x).toBeLessThan(pos.get("aprov")!.x);
+    expect(pos.get("aprov")!.x).toBeLessThan(pos.get("subir")!.x);
+    // cadeia linear → todos na mesma linha; Subir não isolado.
     expect(pos.get("subir")!.y).toBe(pos.get("conferir")!.y);
   });
 
-  it("roteia aresta que CHEGA num card de aprovação pro card do pai", () => {
-    const edges = buildLayoutEdges(cards, [{ source: "conferir", target: "aprov" }]);
-    expect(edges).toEqual([{ source: "conferir", target: "editar" }]);
-  });
-
-  it("arestas entre cards normais passam intactas", () => {
-    const edges = buildLayoutEdges(cards, [{ source: "conferir", target: "editar" }]);
-    expect(edges).toEqual([{ source: "conferir", target: "editar" }]);
-  });
-
-  it("descarta aresta de aprovação sem pai resolvível", () => {
-    const orphan = [{ id: "aprovSemPai", taskId: "t-x", isApprovalTask: true, parentTaskId: null }, { id: "z", taskId: "t-z", isApprovalTask: false, parentTaskId: null }];
-    expect(buildLayoutEdges(orphan, [{ source: "aprovSemPai", target: "z" }])).toEqual([]);
-  });
-
-  it("colapsa auto-loop: aprovação → seu próprio pai vira pai → pai e é descartada", () => {
-    expect(buildLayoutEdges(cards, [{ source: "aprov", target: "editar" }])).toEqual([]);
-  });
-
-  it("deduplica arestas que colapsam pro mesmo par", () => {
-    const two = [
-      ...cards,
-      { id: "aprov2", taskId: "t-aprov2", isApprovalTask: true, parentTaskId: "t-edit" },
+  it("sequencial: encadeia aprovações por approvalOrder (pai → a1 → a2)", () => {
+    // approvalMode fica no card PAI (p); a query traz isso no card do pai.
+    const seq = [
+      { id: "p", taskId: "t-p", isApprovalTask: false, parentTaskId: null, approvalMode: "sequential" },
+      { id: "a1", taskId: "t-a1", isApprovalTask: true, parentTaskId: "t-p", approvalOrder: 0 },
+      { id: "a2", taskId: "t-a2", isApprovalTask: true, parentTaskId: "t-p", approvalOrder: 1 },
     ];
-    // aprov → subir e aprov2 → subir colapsam ambas pra editar → subir.
-    const edges = buildLayoutEdges(two, [
-      { source: "aprov", target: "subir" },
-      { source: "aprov2", target: "subir" },
+    const { edges } = buildApprovalLayoutGraph(seq, []);
+    expect(edges).toContainEqual({ source: "p", target: "a1" });
+    expect(edges).toContainEqual({ source: "a1", target: "a2" });
+    expect(edges).toHaveLength(2);
+  });
+
+  it("paralelo: fan-out do pai pra cada aprovação (pai → a1, pai → a2)", () => {
+    const par = [
+      { id: "p", taskId: "t-p", isApprovalTask: false, parentTaskId: null, approvalMode: "parallel" },
+      { id: "a1", taskId: "t-a1", isApprovalTask: true, parentTaskId: "t-p", approvalOrder: 0 },
+      { id: "a2", taskId: "t-a2", isApprovalTask: true, parentTaskId: "t-p", approvalOrder: 1 },
+    ];
+    const { edges } = buildApprovalLayoutGraph(par, []);
+    expect(edges).toContainEqual({ source: "p", target: "a1" });
+    expect(edges).toContainEqual({ source: "p", target: "a2" });
+    expect(edges).toHaveLength(2);
+  });
+
+  it("ignora aprovação sem pai resolvível e conexões pra fora do mapa; sem self-loop", () => {
+    const orphan = [
+      { id: "aprovSemPai", taskId: "t-x", isApprovalTask: true, parentTaskId: null },
+      { id: "z", taskId: "t-z", isApprovalTask: false, parentTaskId: null },
+    ];
+    const { edges } = buildApprovalLayoutGraph(orphan, [
+      { source: "z", target: "fantasma" }, // fora do mapa
+      { source: "z", target: "z" }, // self-loop
     ]);
-    expect(edges).toEqual([{ source: "editar", target: "subir" }]);
+    expect(edges).toEqual([]);
+  });
+
+  it("dedup: conexão persistida igual à derivada não duplica", () => {
+    // se já existir uma conexão persistida editar→aprov, não vira aresta dupla.
+    const { edges } = buildApprovalLayoutGraph(cards, [{ source: "editar", target: "aprov" }]);
+    expect(edges.filter((e) => e.source === "editar" && e.target === "aprov")).toHaveLength(1);
   });
 });

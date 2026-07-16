@@ -90,12 +90,11 @@ describe("map layout smoke", () => {
     expect(second.body.cards).toEqual([]);
   });
 
-  it("cards de aprovação transladam junto com o card pai", async () => {
+  it("card de aprovação participa do layout, posicionado à direita do pai (não sobreposto)", async () => {
     const { agent, user, workspaceId, mapId } = await setupMap("approval");
 
-    // Card pai longe da origem, com uma conexão pra garantir que o dagre
-    // realmente o traga pra perto de (0,0) no relayout (senão o teste não
-    // prova nada). Adicionar um aprovador cria um card de aprovação junto.
+    // Pai com um filho (conexão) e uma aprovação. A aprovação vira um nó do
+    // layout: o dagre a posiciona como waypoint depois do pai, não sobreposta.
     const parent = await agent
       .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
       .send({ title: "Pai", positionX: 1000, positionY: 1000 });
@@ -120,40 +119,28 @@ describe("map layout smoke", () => {
     type MapCard = { id: string; positionX: number; positionY: number; taskIsApprovalTask: boolean };
     const before = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
     expect(before.status).toBe(200);
-    const approvalBefore = (before.body.cards as MapCard[]).find((c) => c.taskIsApprovalTask);
-    expect(approvalBefore).toBeTruthy();
-    const parentBefore = (before.body.cards as MapCard[]).find((c) => c.id === parentCardId)!;
+    const approvalCard = (before.body.cards as MapCard[]).find((c) => c.taskIsApprovalTask);
+    expect(approvalCard).toBeTruthy();
 
     const layout = await agent.post(`/api/workspaces/${workspaceId}/maps/${mapId}/layout`);
     expect(layout.status).toBe(200);
-    const layoutCards = layout.body.cards as Array<{ id: string; positionX: number; positionY: number }>;
 
-    const parentMoved = layoutCards.find((c) => c.id === parentCardId);
-    expect(parentMoved).toBeTruthy();
-    // Prova que o cenário realmente move o pai — senão o teste não valida nada.
-    const parentDx = parentMoved!.positionX - parentBefore.positionX;
-    const parentDy = parentMoved!.positionY - parentBefore.positionY;
-    expect(Math.abs(parentDx) >= 0.5 || Math.abs(parentDy) >= 0.5).toBe(true);
-
-    // O card de aprovação entra na resposta, transladado pelo MESMO delta do pai.
-    const approvalMoved = layoutCards.find((c) => c.id === approvalBefore!.id);
-    expect(approvalMoved).toBeTruthy();
-    const approvalDx = approvalMoved!.positionX - approvalBefore!.positionX;
-    const approvalDy = approvalMoved!.positionY - approvalBefore!.positionY;
-    expect(approvalDx).toBeCloseTo(parentDx, 5);
-    expect(approvalDy).toBeCloseTo(parentDy, 5);
-
-    // Persistido no banco também.
     const after = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
-    const approvalAfter = (after.body.cards as MapCard[]).find((c) => c.id === approvalBefore!.id);
-    expect(approvalAfter!.positionX).toBe(approvalMoved!.positionX);
-    expect(approvalAfter!.positionY).toBe(approvalMoved!.positionY);
+    const byId = new Map<string, MapCard>((after.body.cards as MapCard[]).map((k) => [k.id, k]));
+    const parentPos = byId.get(parentCardId)!;
+    const approvalPos = byId.get(approvalCard!.id)!;
+
+    // A aprovação foi posicionada pelo layout à direita do pai (pai → aprovação),
+    // com pelo menos a largura de um card de distância → não sobrepõe o pai.
+    expect(approvalPos.positionX).toBeGreaterThan(parentPos.positionX);
+    expect(approvalPos.positionX - parentPos.positionX).toBeGreaterThanOrEqual(200);
   });
 
-  it("card ligado por um card de aprovação no meio da cadeia não vira isolado", async () => {
+  it("aprovação no meio da cadeia vira waypoint inline (editar → aprovação → subir)", async () => {
     // Reproduz o mapa Clínica CBV / AÇÃO CO2 (2026-07-16): editar → aprovação → subir.
-    // A conexão parte do card de APROVAÇÃO. Sem roteamento, o "subir" perdia a
-    // única conexão e caía na grade de isolados, longe da cadeia.
+    // A conexão parte do card de APROVAÇÃO. A aprovação participa do layout como
+    // nó, então a cadeia sai ordenada e o Subir ganha espaço à direita da aprovação
+    // (antes o Subir ficava isolado; depois, sobreposto à aprovação).
     const { agent, user, workspaceId, mapId } = await setupMap("approval-chain");
 
     const editar = await agent
@@ -175,7 +162,7 @@ describe("map layout smoke", () => {
       .send({ approverId: user.id, dueDate: null });
     expect(ap.status).toBe(201);
 
-    type MapCard = { id: string; taskIsApprovalTask: boolean };
+    type MapCard = { id: string; positionX: number; positionY: number; taskIsApprovalTask: boolean };
     const mapBefore = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
     const approvalCard = (mapBefore.body.cards as MapCard[]).find((c) => c.taskIsApprovalTask);
     expect(approvalCard).toBeTruthy();
@@ -190,15 +177,78 @@ describe("map layout smoke", () => {
     expect(layout.status).toBe(200);
 
     const after = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
-    const byId = new Map<string, { positionX: number; positionY: number }>(
-      (after.body.cards as Array<{ id: string; positionX: number; positionY: number }>).map((k) => [k.id, k]),
-    );
+    const byId = new Map<string, MapCard>((after.body.cards as MapCard[]).map((k) => [k.id, k]));
     const editarPos = byId.get(editarId)!;
+    const approvalPos = byId.get(approvalCard!.id)!;
     const subirPos = byId.get(subirId)!;
-    // Roteado: editar → subir. Subir fica UMA coluna à direita do editar, na mesma
-    // linha — parte da cadeia, não isolado abaixo dela.
-    expect(subirPos.positionX).toBe(editarPos.positionX + 320);
+    // Cadeia ordenada: editar → aprovação → subir (x estritamente crescente).
+    // Subir não é isolado (deixaria de estar à direita) nem sobreposto à aprovação.
+    expect(editarPos.positionX).toBeLessThan(approvalPos.positionX);
+    expect(approvalPos.positionX).toBeLessThan(subirPos.positionX);
+    // cadeia linear → editar e subir na mesma linha.
     expect(subirPos.positionY).toBe(editarPos.positionY);
+  });
+
+  it("aprovação PARALELA: as 2 aprovações viram nós à direita do pai, próximo depois delas", async () => {
+    // Garante que o modo paralelo (2 aprovadores + join node no front) não quebra
+    // o layout: ambas as aprovações entram como nós, o card seguinte fica à direita.
+    const { agent, user, workspaceId, mapId } = await setupMap("approval-parallel");
+    const { user: approver2 } = await registerAndLogin("Aprovador Dois Paralelo");
+    createdUserIds.push(approver2.id);
+    const inv = await agent
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .send({ email: approver2.email, role: "editor" });
+    expect(inv.status).toBe(201);
+
+    const pai = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "PAI", positionX: 0, positionY: 0 });
+    expect(pai.status).toBe(201);
+    const paiId = pai.body.id as string;
+    const paiTaskId = pai.body.taskId as string;
+    const prox = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "PROX", positionX: 900, positionY: 700 });
+    expect(prox.status).toBe(201);
+    const proxId = prox.body.id as string;
+
+    // 2 aprovadores, depois modo paralelo.
+    const a1 = await agent
+      .post(`/api/workspaces/${workspaceId}/tasks/${paiTaskId}/approvals`)
+      .send({ approverId: user.id, dueDate: null });
+    expect(a1.status).toBe(201);
+    const a2 = await agent
+      .post(`/api/workspaces/${workspaceId}/tasks/${paiTaskId}/approvals`)
+      .send({ approverId: approver2.id, dueDate: null });
+    expect(a2.status).toBe(201);
+    const mode = await agent
+      .patch(`/api/workspaces/${workspaceId}/tasks/${paiTaskId}/approval-mode`)
+      .send({ approvalMode: "parallel" });
+    expect(mode.status).toBe(200);
+
+    type MapCard = { id: string; positionX: number; positionY: number; taskIsApprovalTask: boolean };
+    const before = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
+    const approvals = (before.body.cards as MapCard[]).filter((c) => c.taskIsApprovalTask);
+    expect(approvals.length).toBe(2);
+
+    const conn = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/connections`)
+      .send({ sourceCardId: approvals[0].id, targetCardId: proxId, sourceHandle: "source-right", targetHandle: "target-left" });
+    expect(conn.status).toBe(201);
+
+    const layout = await agent.post(`/api/workspaces/${workspaceId}/maps/${mapId}/layout`);
+    expect(layout.status).toBe(200);
+
+    const after = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
+    const byId = new Map<string, MapCard>((after.body.cards as MapCard[]).map((k) => [k.id, k]));
+    const paiX = byId.get(paiId)!.positionX;
+    // ambas as aprovações à direita do pai
+    for (const ap of approvals) {
+      expect(byId.get(ap.id)!.positionX).toBeGreaterThan(paiX);
+    }
+    // o próximo fica à direita (ou junto) das aprovações — não isolado, não à esquerda
+    const maxApprovalX = Math.max(...approvals.map((ap) => byId.get(ap.id)!.positionX));
+    expect(byId.get(proxId)!.positionX).toBeGreaterThanOrEqual(maxApprovalX);
   });
 
   it("mapa sem cards devolve lista vazia", async () => {
