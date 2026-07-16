@@ -7,7 +7,7 @@ import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole, requireMapInWorkspace } from "../middlewares/permissions";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
-import { computeLayout, buildLayoutEdges } from "../services/mapLayoutService";
+import { computeLayout, buildApprovalLayoutGraph } from "../services/mapLayoutService";
 import { z } from "zod";
 
 const router: IRouter = Router({ mergeParams: true });
@@ -244,22 +244,18 @@ router.post(
         taskId: cards.taskId,
         isApprovalTask: tasks.isApprovalTask,
         taskParentTaskId: tasks.parentTaskId,
+        taskApprovalMode: tasks.approvalMode,
+        taskApprovalOrder: tasks.approvalOrder,
       })
       .from(cards)
       .leftJoin(tasks, eq(cards.taskId, tasks.id))
       .where(eq(cards.mapId, mapId))
       .orderBy(asc(cards.createdAt));
 
-    // Cards de aprovação têm posição derivada do próprio fluxo (join nodes e
-    // edges são geradas no front, não persistidas como conexões) — não entram
-    // no grafo do dagre. Mas eles precisam ANDAR JUNTO com o card do task pai
-    // pra preservar o agrupamento visual (ver translação logo abaixo).
-    const movable = cardRows.filter((c) => c.isApprovalTask !== true);
-    if (movable.length === 0) {
+    if (cardRows.length === 0) {
       res.json({ cards: [] });
       return;
     }
-    const movableIds = new Set(movable.map((c) => c.id));
 
     const connRows = await db
       .select({
@@ -269,59 +265,31 @@ router.post(
       .from(cardConnections)
       .where(eq(cardConnections.mapId, mapId));
 
-    // Arestas roteadas: conexões que tocam cards de aprovação sobem pro card do
-    // pai, pra não deixar o card seguinte órfão (ver buildLayoutEdges). Sem isso,
-    // um "aprovação → X" era descartado e o X caía na grade de isolados.
-    const layoutEdges = buildLayoutEdges(
-      // cardRows aliasa parentTaskId como `taskParentTaskId`; buildLayoutEdges
-      // espera `parentTaskId` — mapear aqui pra não silenciar o roteamento.
+    // Cards de aprovação participam do layout como nós (waypoints do fluxo),
+    // com uma aresta derivada pai → aprovação. Assim o dagre lhes dá espaço
+    // próprio na cadeia (pai → aprovação → próximo) em vez de deixá-los
+    // sobrepostos ao card seguinte.
+    const { nodes, edges } = buildApprovalLayoutGraph(
       cardRows.map((c) => ({
         id: c.id,
         taskId: c.taskId,
         isApprovalTask: c.isApprovalTask,
         parentTaskId: c.taskParentTaskId,
+        approvalMode: c.taskApprovalMode,
+        approvalOrder: c.taskApprovalOrder,
       })),
       connRows.map((c) => ({ source: c.sourceCardId, target: c.targetCardId })),
-    ).filter((e) => movableIds.has(e.source) && movableIds.has(e.target));
-
-    const positions = computeLayout(
-      movable.map((c) => ({ id: c.id })),
-      layoutEdges,
     );
 
-    // task.id → card, pra resolver o card do task PAI de cada card de
-    // aprovação (card_aprovação.taskId → task.parentTaskId → task_pai.id → card_pai).
-    const cardByTaskId = new Map<string, (typeof cardRows)[number]>();
-    for (const c of cardRows) {
-      if (c.taskId) cardByTaskId.set(c.taskId, c);
-    }
+    const positions = computeLayout(nodes, edges);
 
     const updated: Array<{ id: string; positionX: number; positionY: number }> = [];
-    const deltaByCardId = new Map<string, { dx: number; dy: number }>();
-
-    for (const c of movable) {
+    for (const c of cardRows) {
       const p = positions.get(c.id);
       if (!p) continue;
       // Só grava o que realmente mudou → a 2ª chamada seguida vira no-op.
       if (Math.abs(p.x - c.positionX) < 0.5 && Math.abs(p.y - c.positionY) < 0.5) continue;
-      deltaByCardId.set(c.id, { dx: p.x - c.positionX, dy: p.y - c.positionY });
       updated.push({ id: c.id, positionX: p.x, positionY: p.y });
-    }
-
-    // Translada cada card de aprovação pelo MESMO delta que o card do seu
-    // task pai sofreu, mantendo o cluster de aprovação colado no pai. Pai não
-    // encontrado ou pai que não se moveu → aprovação fica parada e fora da resposta.
-    for (const ac of cardRows) {
-      if (ac.isApprovalTask !== true || !ac.taskParentTaskId) continue;
-      const parentCard = cardByTaskId.get(ac.taskParentTaskId);
-      if (!parentCard) continue;
-      const delta = deltaByCardId.get(parentCard.id);
-      if (!delta) continue;
-      updated.push({
-        id: ac.id,
-        positionX: ac.positionX + delta.dx,
-        positionY: ac.positionY + delta.dy,
-      });
     }
 
     // Um único UPDATE em lote em vez de N round-trips seriais: um plano de

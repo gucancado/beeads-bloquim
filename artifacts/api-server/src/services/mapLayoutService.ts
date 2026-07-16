@@ -20,57 +20,83 @@ export type CardMeta = {
   taskId?: string | null;
   isApprovalTask?: boolean | null;
   parentTaskId?: string | null;
+  approvalMode?: string | null;
+  approvalOrder?: number | null;
 };
 
+// Cards de aprovação renderizam como um nó redondo pequeno (~90px), não como um
+// card cheio. No layout eles recebem uma caixa menor pra ocuparem um "gap"
+// enxuto entre o pai e o próximo card, em vez de uma coluna inteira.
+const APPROVAL_LAYOUT_WIDTH = 150;
+const APPROVAL_LAYOUT_HEIGHT = 100;
+
 /**
- * Constrói as arestas pro layout a partir das conexões persistidas, roteando as
- * que tocam cards de aprovação através do card do task PAI.
+ * Monta o grafo do layout (nós + arestas) COM os cards de aprovação como nós de
+ * verdade — eles são waypoints do fluxo (pai → aprovação → próximo), então
+ * precisam de espaço próprio na cadeia em vez de ficar sobrepostos ao card
+ * seguinte.
  *
- * Um card de aprovação fica FORA do dagre (é satélite do pai, andando junto com
- * ele). Mas ele pode ser um nó ESTRUTURAL do fluxo — ex.: EDITAR → aprovação →
- * Subir, onde "aprovação → Subir" é uma conexão real. Descartar essa aresta só
- * porque a ponta é aprovação deixava o card seguinte (Subir) sem nenhuma conexão
- * → o dagre o tratava como isolado e o jogava na grade de sobras, com a linha
- * cruzando o mapa. Roteando "aprovação → X" pra "pai → X" (e "X → aprovação" pra
- * "X → pai"), a cadeia continua conectada e o layout sai limpo.
+ * - Nós: todos os cards. Aprovações recebem uma caixa menor (APPROVAL_LAYOUT_*).
+ * - Arestas: as conexões persistidas MAIS as arestas de aprovação derivadas
+ *   (pai → aprovação), espelhando o buildApprovalEdges do front — sequencial
+ *   encadeia por `approvalOrder`, paralelo faz fan-out do pai pra cada aprovação.
+ *   Descarta pontas fora do mapa, auto-loops e duplicatas.
  *
- * Devolve só arestas entre cards NÃO-aprovação. Descarta: pontas de aprovação
- * sem pai resolvível, auto-loops (aprovação → próprio pai) e duplicatas que
- * colapsam pro mesmo par.
+ * O join node do modo paralelo é virtual (não é card, é derivado no front das
+ * posições das aprovações), então não entra aqui — ele segue as aprovações.
  */
-export function buildLayoutEdges(
+export function buildApprovalLayoutGraph(
   cards: CardMeta[],
   connections: Array<{ source: string; target: string }>,
-): LayoutEdge[] {
-  const byId = new Map<string, CardMeta>(cards.map((c) => [c.id, c]));
+): { nodes: LayoutNode[]; edges: LayoutEdge[] } {
+  const ids = new Set(cards.map((c) => c.id));
   const cardByTaskId = new Map<string, CardMeta>();
   for (const c of cards) if (c.taskId) cardByTaskId.set(c.taskId, c);
 
-  // Resolve um card pro nó que ele representa no grafo do layout: ele mesmo se
-  // for card normal; o card do task pai se for aprovação; null se não resolve
-  // (aprovação sem pai, ou pai que também é aprovação — casos raros, descartados).
-  const resolve = (cardId: string): string | null => {
-    const c = byId.get(cardId);
-    if (!c) return null;
-    if (c.isApprovalTask !== true) return c.id;
-    if (!c.parentTaskId) return null;
-    const parent = cardByTaskId.get(c.parentTaskId);
-    if (!parent || parent.isApprovalTask === true) return null;
-    return parent.id;
-  };
+  const nodes: LayoutNode[] = cards.map((c) =>
+    c.isApprovalTask === true
+      ? { id: c.id, width: APPROVAL_LAYOUT_WIDTH, height: APPROVAL_LAYOUT_HEIGHT }
+      : { id: c.id },
+  );
 
-  const out: LayoutEdge[] = [];
+  // Arestas de aprovação derivadas (pai → aprovação).
+  const derived: LayoutEdge[] = [];
+  const groups = new Map<string, CardMeta[]>();
+  for (const c of cards) {
+    if (c.isApprovalTask === true && c.parentTaskId) {
+      const g = groups.get(c.parentTaskId);
+      if (g) g.push(c);
+      else groups.set(c.parentTaskId, [c]);
+    }
+  }
+  for (const [parentTaskId, children] of groups) {
+    const parent = cardByTaskId.get(parentTaskId);
+    if (!parent || parent.isApprovalTask === true) continue;
+    const sorted = [...children].sort(
+      (a, b) => (a.approvalOrder ?? 0) - (b.approvalOrder ?? 0),
+    );
+    if ((parent.approvalMode ?? "sequential") === "sequential") {
+      let prev = parent.id;
+      for (const child of sorted) {
+        derived.push({ source: prev, target: child.id });
+        prev = child.id;
+      }
+    } else {
+      for (const child of sorted) derived.push({ source: parent.id, target: child.id });
+    }
+  }
+
+  const edges: LayoutEdge[] = [];
   const seen = new Set<string>();
-  for (const conn of connections) {
-    const s = resolve(conn.source);
-    const t = resolve(conn.target);
-    if (!s || !t || s === t) continue;
-    const key = `${s}->${t}`;
+  for (const e of [...connections, ...derived]) {
+    if (!ids.has(e.source) || !ids.has(e.target) || e.source === e.target) continue;
+    const key = `${e.source}->${e.target}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ source: s, target: t });
+    edges.push({ source: e.source, target: e.target });
   }
-  return out;
+
+  return { nodes, edges };
 }
 
 export type LayoutOpts = {
