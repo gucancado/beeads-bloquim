@@ -291,6 +291,11 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       status: tasks.status,
       completedAt: tasks.completedAt,
       cancelledAt: tasks.cancelledAt,
+      // "Bloqueada desde" vem do activity log (último status_changed→blocked),
+      // NÃO de tasks.cancelled_at: o bloqueio via canvas (cards.ts) grava o
+      // evento mas não a coluna, e a UI, lendo a coluna, mostrava data vazia.
+      // NULL quando nunca houve bloqueio → a UI renderiza "—".
+      blockedSince: sql<string | null>`(SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id = ${tasks.id} AND a.type = 'status_changed' AND a.metadata->>'newStatus' = 'blocked')`,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       overdue: tasks.overdue,
