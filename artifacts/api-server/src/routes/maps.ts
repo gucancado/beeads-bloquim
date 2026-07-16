@@ -241,7 +241,9 @@ router.post(
         id: cards.id,
         positionX: cards.positionX,
         positionY: cards.positionY,
+        taskId: cards.taskId,
         isApprovalTask: tasks.isApprovalTask,
+        taskParentTaskId: tasks.parentTaskId,
       })
       .from(cards)
       .leftJoin(tasks, eq(cards.taskId, tasks.id))
@@ -249,8 +251,9 @@ router.post(
       .orderBy(asc(cards.createdAt));
 
     // Cards de aprovação têm posição derivada do próprio fluxo (join nodes e
-    // edges são geradas no front, não persistidas como conexões). Reposicioná-los
-    // quebraria o agrupamento visual — ficam de fora e mantêm a posição atual.
+    // edges são geradas no front, não persistidas como conexões) — não entram
+    // no grafo do dagre. Mas eles precisam ANDAR JUNTO com o card do task pai
+    // pra preservar o agrupamento visual (ver translação logo abaixo).
     const movable = cardRows.filter((c) => c.isApprovalTask !== true);
     if (movable.length === 0) {
       res.json({ cards: [] });
@@ -273,18 +276,47 @@ router.post(
         .map((c) => ({ source: c.sourceCardId, target: c.targetCardId })),
     );
 
+    // task.id → card, pra resolver o card do task PAI de cada card de
+    // aprovação (card_aprovação.taskId → task.parentTaskId → task_pai.id → card_pai).
+    const cardByTaskId = new Map<string, (typeof cardRows)[number]>();
+    for (const c of cardRows) {
+      if (c.taskId) cardByTaskId.set(c.taskId, c);
+    }
+
     const updated: Array<{ id: string; positionX: number; positionY: number }> = [];
+    const deltaByCardId = new Map<string, { dx: number; dy: number }>();
+
+    for (const c of movable) {
+      const p = positions.get(c.id);
+      if (!p) continue;
+      // Só grava o que realmente mudou → a 2ª chamada seguida vira no-op.
+      if (Math.abs(p.x - c.positionX) < 0.5 && Math.abs(p.y - c.positionY) < 0.5) continue;
+      deltaByCardId.set(c.id, { dx: p.x - c.positionX, dy: p.y - c.positionY });
+      updated.push({ id: c.id, positionX: p.x, positionY: p.y });
+    }
+
+    // Translada cada card de aprovação pelo MESMO delta que o card do seu
+    // task pai sofreu, mantendo o cluster de aprovação colado no pai. Pai não
+    // encontrado ou pai que não se moveu → aprovação fica parada e fora da resposta.
+    for (const ac of cardRows) {
+      if (ac.isApprovalTask !== true || !ac.taskParentTaskId) continue;
+      const parentCard = cardByTaskId.get(ac.taskParentTaskId);
+      if (!parentCard) continue;
+      const delta = deltaByCardId.get(parentCard.id);
+      if (!delta) continue;
+      updated.push({
+        id: ac.id,
+        positionX: ac.positionX + delta.dx,
+        positionY: ac.positionY + delta.dy,
+      });
+    }
+
     await db.transaction(async (tx) => {
-      for (const c of movable) {
-        const p = positions.get(c.id);
-        if (!p) continue;
-        // Só grava o que realmente mudou → a 2ª chamada seguida vira no-op.
-        if (Math.abs(p.x - c.positionX) < 0.5 && Math.abs(p.y - c.positionY) < 0.5) continue;
+      for (const c of updated) {
         await tx
           .update(cards)
-          .set({ positionX: p.x, positionY: p.y, updatedAt: new Date() })
+          .set({ positionX: c.positionX, positionY: c.positionY, updatedAt: new Date() })
           .where(eq(cards.id, c.id));
-        updated.push({ id: c.id, positionX: p.x, positionY: p.y });
       }
     });
 

@@ -90,15 +90,27 @@ describe("map layout smoke", () => {
     expect(second.body.cards).toEqual([]);
   });
 
-  it("cards de aprovação mantêm a posição (ficam fora do relayout)", async () => {
+  it("cards de aprovação transladam junto com o card pai", async () => {
     const { agent, user, workspaceId, mapId } = await setupMap("approval");
 
-    // Card pai no mapa; adicionar um aprovador cria um card de aprovação junto.
+    // Card pai longe da origem, com uma conexão pra garantir que o dagre
+    // realmente o traga pra perto de (0,0) no relayout (senão o teste não
+    // prova nada). Adicionar um aprovador cria um card de aprovação junto.
     const parent = await agent
       .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
-      .send({ title: "Pai", positionX: 0, positionY: 0 });
+      .send({ title: "Pai", positionX: 1000, positionY: 1000 });
     expect(parent.status).toBe(201);
+    const parentCardId = parent.body.id as string;
     const parentTaskId = parent.body.taskId as string;
+
+    const child = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/cards`)
+      .send({ title: "Filho", positionX: 1400, positionY: 1000 });
+    expect(child.status).toBe(201);
+    const conn = await agent
+      .post(`/api/workspaces/${workspaceId}/maps/${mapId}/connections`)
+      .send({ sourceCardId: parentCardId, targetCardId: child.body.id, sourceHandle: "source-right", targetHandle: "target-left" });
+    expect(conn.status).toBe(201);
 
     const ap = await agent
       .post(`/api/workspaces/${workspaceId}/tasks/${parentTaskId}/approvals`)
@@ -110,17 +122,32 @@ describe("map layout smoke", () => {
     expect(before.status).toBe(200);
     const approvalBefore = (before.body.cards as MapCard[]).find((c) => c.taskIsApprovalTask);
     expect(approvalBefore).toBeTruthy();
+    const parentBefore = (before.body.cards as MapCard[]).find((c) => c.id === parentCardId)!;
 
     const layout = await agent.post(`/api/workspaces/${workspaceId}/maps/${mapId}/layout`);
     expect(layout.status).toBe(200);
-    // Nem aparece na lista de movidos...
-    expect((layout.body.cards as Array<{ id: string }>).some((c) => c.id === approvalBefore!.id)).toBe(false);
+    const layoutCards = layout.body.cards as Array<{ id: string; positionX: number; positionY: number }>;
 
-    // ...nem mudou de lugar no banco.
+    const parentMoved = layoutCards.find((c) => c.id === parentCardId);
+    expect(parentMoved).toBeTruthy();
+    // Prova que o cenário realmente move o pai — senão o teste não valida nada.
+    const parentDx = parentMoved!.positionX - parentBefore.positionX;
+    const parentDy = parentMoved!.positionY - parentBefore.positionY;
+    expect(Math.abs(parentDx) >= 0.5 || Math.abs(parentDy) >= 0.5).toBe(true);
+
+    // O card de aprovação entra na resposta, transladado pelo MESMO delta do pai.
+    const approvalMoved = layoutCards.find((c) => c.id === approvalBefore!.id);
+    expect(approvalMoved).toBeTruthy();
+    const approvalDx = approvalMoved!.positionX - approvalBefore!.positionX;
+    const approvalDy = approvalMoved!.positionY - approvalBefore!.positionY;
+    expect(approvalDx).toBeCloseTo(parentDx, 5);
+    expect(approvalDy).toBeCloseTo(parentDy, 5);
+
+    // Persistido no banco também.
     const after = await agent.get(`/api/workspaces/${workspaceId}/maps/${mapId}`);
     const approvalAfter = (after.body.cards as MapCard[]).find((c) => c.id === approvalBefore!.id);
-    expect(approvalAfter!.positionX).toBe(approvalBefore!.positionX);
-    expect(approvalAfter!.positionY).toBe(approvalBefore!.positionY);
+    expect(approvalAfter!.positionX).toBe(approvalMoved!.positionX);
+    expect(approvalAfter!.positionY).toBe(approvalMoved!.positionY);
   });
 
   it("mapa sem cards devolve lista vazia", async () => {
