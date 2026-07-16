@@ -36,8 +36,8 @@ describe("findFreeSlot", () => {
 
   it("ponto ocupado desloca pra baixo (vizinho mais próximo)", () => {
     const occupied = [{ x: 0, y: 0, width: NODE_WIDTH, height: NODE_HEIGHT }];
-    // gap default 24 → stepY = 80 + 24 = 104
-    expect(findFreeSlot({ x: 0, y: 0 }, SIZE, occupied)).toEqual({ x: 0, y: 104 });
+    // gap default 24 → stepY = NODE_HEIGHT (200) + 24 = 224
+    expect(findFreeSlot({ x: 0, y: 0 }, SIZE, occupied)).toEqual({ x: 0, y: 224 });
   });
 
   it("resultado nunca sobrepõe o que já está ocupado", () => {

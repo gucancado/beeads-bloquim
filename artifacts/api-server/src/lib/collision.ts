@@ -4,10 +4,20 @@
  * Dimensões nominais de um card no canvas. O card renderizado pode crescer com
  * o conteúdo, mas layout e detecção de colisão trabalham com a caixa nominal —
  * é o que o servidor consegue saber sem medir o DOM.
- * Espelha NODE_W/NODE_H de mindtask-app/src/pages/maps/canvas.tsx.
+ *
+ * ALTURA: um card de tarefa (título + responsável + prazo + status) mede ~175px
+ * renderizado (medido em 2026-07-16). O valor 80 antigo subestimava demais: o
+ * dagre separa irmãos por altura+nodesep, então com 80 os irmãos ficavam a
+ * 80+48=128px e sobrepunham os ~175px reais. Usamos 200 pra cobrir os 175 + folga
+ * pra cards com descrição/datas empilhadas. Isso também corrige o free-slot de
+ * criação e a grade de nós isolados, que usam a mesma constante.
+ *
+ * LARGURA: o card real mede ~220px (min-w-[220px]). Mantemos 200 de propósito —
+ * não é a causa de sobreposição (colunas a width+ranksep=320px deixam 100px de
+ * folga pra um card de 220), e mexer recalibraria todas as colunas do layout.
  */
 export const NODE_WIDTH = 200;
-export const NODE_HEIGHT = 80;
+export const NODE_HEIGHT = 200;
 
 export type Point = { x: number; y: number };
 export type Box = { x: number; y: number; width: number; height: number };

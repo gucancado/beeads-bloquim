@@ -39,6 +39,26 @@ describe("computeLayout", () => {
     expect(Math.abs(pos.get("b")!.y - pos.get("c")!.y)).toBeGreaterThanOrEqual(NODE_HEIGHT);
   });
 
+  it("irmãos num fan-out ficam separados o bastante pra cards reais não sobreporem", () => {
+    // Regressão: com NODE_HEIGHT=80 (subestimado), o dagre separava irmãos por
+    // 80+48=128px, mas o card renderizado mede ~175px de altura → sobrepunham
+    // ~47px no canvas (medido em 2026-07-16). O limiar aqui é ABSOLUTO (a altura
+    // real do card), decoplado de NODE_HEIGHT de propósito, pra pegar
+    // sub-espaçamento mesmo que a constante mude.
+    const REAL_CARD_HEIGHT = 175;
+    const pos = computeLayout(
+      [{ id: "a" }, { id: "b" }, { id: "c" }],
+      [
+        { source: "a", target: "b" },
+        { source: "a", target: "c" },
+      ],
+    );
+    // b e c são irmãos (filhos de a) → mesma coluna.
+    expect(pos.get("b")!.x).toBe(pos.get("c")!.x);
+    const dy = Math.abs(pos.get("b")!.y - pos.get("c")!.y);
+    expect(dy).toBeGreaterThanOrEqual(REAL_CARD_HEIGHT);
+  });
+
   it("é determinístico: mesma entrada → mesma saída", () => {
     const nodes = [{ id: "a" }, { id: "b" }, { id: "c" }];
     const edges = [{ source: "a", target: "b" }, { source: "b", target: "c" }];
