@@ -1,6 +1,16 @@
 // artifacts/api-server/src/services/mapLayoutService.ts
-import { Graph, layout } from "@dagrejs/dagre";
+import * as dagreModule from "@dagrejs/dagre";
 import { NODE_WIDTH, NODE_HEIGHT, type Point } from "../lib/collision";
+
+// dagre@3 é dual ESM/CJS e os dois builds são inconsistentes entre si: no ESM real
+// (Vitest, node .mjs) o named export `Graph` existe mas o `default` do pacote NÃO
+// inclui Graph (bug de packaging do dagre); no CJS-interop do tsx (dev) é o oposto —
+// o named import quebra ("does not provide an export named 'Graph'") e só o `default`
+// carrega Graph. Nem named import puro nem default import puro funcionam nos dois
+// runners ao mesmo tempo — namespace import + fallback pro `.default` cobre ambos.
+const dagreDefault = dagreModule.default as unknown as typeof dagreModule | undefined;
+const Graph = dagreModule.Graph ?? dagreDefault?.Graph;
+const layout = dagreModule.layout ?? dagreDefault?.layout;
 
 export type LayoutNode = { id: string; width?: number; height?: number };
 export type LayoutEdge = { source: string; target: string };
