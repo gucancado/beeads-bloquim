@@ -498,6 +498,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /workspaces/{workspaceId}/maps/{mapId}/layout:
+    post:
+      operationId: layoutMap
+      tags: [maps]
+      summary: Auto-arrange map cards (dagre, minimizes edge crossings)
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cards repositioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapLayoutResponse"
+
   /workspaces/{workspaceId}/maps/{mapId}/cards:
     post:
       operationId: createCard
@@ -1886,6 +1912,25 @@ components:
           format: date-time
           nullable: true
       required: [id, mapId, title, positionX, positionY, statusVisual, createdAt, updatedAt]
+
+    MapLayoutResponse:
+      type: object
+      required: [cards]
+      properties:
+        cards:
+          type: array
+          description: Only the cards whose position actually changed.
+          items:
+            type: object
+            required: [id, positionX, positionY]
+            properties:
+              id:
+                type: string
+                format: uuid
+              positionX:
+                type: number
+              positionY:
+                type: number
 
     CardDetailResponse:
       type: object

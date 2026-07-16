@@ -41,6 +41,8 @@ export * from "./getMyTasksParams";
 export * from "./healthStatus";
 export * from "./loginRequest";
 export * from "./mapDetailResponse";
+export * from "./mapLayoutResponse";
+export * from "./mapLayoutResponseCardsItem";
 export * from "./mapResponse";
 export * from "./promoteOrDemoteResponse";
 export * from "./registerRequest";

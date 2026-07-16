@@ -14,11 +14,11 @@ import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex, type ShapeKind } from "@/components/maps/layerOrder";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
-import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape } from "@workspace/api-client-react";
+import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape, useLayoutMap } from "@workspace/api-client-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import type { ShapeResponse } from "@workspace/api-client-react";
-import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes, Wand2 } from "lucide-react";
 import { Button } from "@beeads/ui";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@beeads/ui";
 import { Link } from "wouter";
@@ -1012,6 +1012,52 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const createShapeMut = useCreateShape();
   const updateShapeMut = useUpdateShape();
   const deleteShapeMut = useDeleteShape();
+  const layoutMapMut = useLayoutMap();
+
+  // Reorganiza o mapa inteiro pelo layout do servidor. Empurra o snapshot das
+  // posições atuais ANTES de chamar, então Ctrl+Z desfaz (e re-persiste) tudo —
+  // por isso não há diálogo de confirmação.
+  const handleAutoLayout = useCallback(() => {
+    const snapshot: NodePositionSnapshot = {};
+    for (const n of nodesRef.current) {
+      snapshot[n.id] = { x: n.position.x, y: n.position.y };
+    }
+    pushSnapshot(snapshot);
+
+    layoutMapMut.mutate(
+      { workspaceId, mapId },
+      {
+        onSuccess: (result) => {
+          // O efeito que sincroniza mapData→nodes (acima) só INSERE cards novos; ele nunca
+          // move os que já existem (senão um refetch arrancaria o card que o usuário está
+          // arrastando). Por isso o relayout aplica as posições aqui, direto da resposta do
+          // endpoint, e só depois invalida o cache pra manter tudo coerente com o banco.
+          const moved = new Map(result.cards.map((c) => [c.id, { x: c.positionX, y: c.positionY }]));
+          setNodes(prev =>
+            prev.map(n => {
+              const p = moved.get(n.id);
+              return p ? { ...n, position: p } : n;
+            }),
+          );
+          queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+          // O computeLayout normaliza o mapa pro canto (0,0); num mapa cujos cards
+          // vivem longe da origem isso teleporta tudo sem o viewport acompanhar.
+          // requestAnimationFrame espera o React aplicar as posições novas antes de
+          // enquadrar — senão o fitView enquadraria as posições antigas.
+          requestAnimationFrame(() => {
+            fitView({ duration: 400 });
+          });
+        },
+        onError: () => {
+          toast({
+            title: "Erro ao reorganizar",
+            description: "Não foi possível reorganizar o mapa. Tente novamente.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  }, [workspaceId, mapId, layoutMapMut, pushSnapshot, queryClient, setNodes, fitView]);
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     // For parallel mode, prefer the join node position (to the right of the join circle)
@@ -2928,6 +2974,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               </ControlButton>
               <ControlButton title="enquadrar" onClick={() => fitView()}>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M5.333 16c0-5.891 4.776-10.667 10.667-10.667S26.667 10.109 26.667 16 21.891 26.667 16 26.667 5.333 21.891 5.333 16zM16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" /></svg>
+              </ControlButton>
+              <ControlButton title="reorganizar" onClick={handleAutoLayout}>
+                <Wand2 />
               </ControlButton>
             </Controls>
             <PresenceCursorsOverlay peers={presencePeers} />

@@ -39,6 +39,7 @@ import type {
   HealthStatus,
   LoginRequest,
   MapDetailResponse,
+  MapLayoutResponse,
   MapResponse,
   PromoteOrDemoteResponse,
   RegisterRequest,
@@ -1816,6 +1817,91 @@ export const useDeleteMap = <
   TContext
 > => {
   return useMutation(getDeleteMapMutationOptions(options));
+};
+
+/**
+ * @summary Auto-arrange map cards (dagre, minimizes edge crossings)
+ */
+export const getLayoutMapUrl = (workspaceId: string, mapId: string) => {
+  return `/api/workspaces/${workspaceId}/maps/${mapId}/layout`;
+};
+
+export const layoutMap = async (
+  workspaceId: string,
+  mapId: string,
+  options?: RequestInit,
+): Promise<MapLayoutResponse> => {
+  return customFetch<MapLayoutResponse>(getLayoutMapUrl(workspaceId, mapId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getLayoutMapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof layoutMap>>,
+    TError,
+    { workspaceId: string; mapId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof layoutMap>>,
+  TError,
+  { workspaceId: string; mapId: string },
+  TContext
+> => {
+  const mutationKey = ["layoutMap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof layoutMap>>,
+    { workspaceId: string; mapId: string }
+  > = (props) => {
+    const { workspaceId, mapId } = props ?? {};
+
+    return layoutMap(workspaceId, mapId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LayoutMapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof layoutMap>>
+>;
+
+export type LayoutMapMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Auto-arrange map cards (dagre, minimizes edge crossings)
+ */
+export const useLayoutMap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof layoutMap>>,
+    TError,
+    { workspaceId: string; mapId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof layoutMap>>,
+  TError,
+  { workspaceId: string; mapId: string },
+  TContext
+> => {
+  return useMutation(getLayoutMapMutationOptions(options));
 };
 
 /**

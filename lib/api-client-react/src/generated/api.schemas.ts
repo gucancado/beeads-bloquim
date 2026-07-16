@@ -306,6 +306,17 @@ export interface UpdateCardRequest {
   positionY?: number;
 }
 
+export type MapLayoutResponseCardsItem = {
+  id: string;
+  positionX: number;
+  positionY: number;
+};
+
+export interface MapLayoutResponse {
+  /** Only the cards whose position actually changed. */
+  cards: MapLayoutResponseCardsItem[];
+}
+
 export interface TaskResponse {
   id: string;
   mapId: string;
