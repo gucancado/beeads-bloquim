@@ -311,14 +311,24 @@ router.post(
       });
     }
 
-    await db.transaction(async (tx) => {
-      for (const c of updated) {
-        await tx
-          .update(cards)
-          .set({ positionX: c.positionX, positionY: c.positionY, updatedAt: new Date() })
-          .where(eq(cards.id, c.id));
-      }
-    });
+    // Um único UPDATE em lote em vez de N round-trips seriais: um plano de
+    // 80-100 cards não pode segurar um slot do pooler (transaction mode,
+    // DB_POOL_MAX=10) por 80-100 idas e vindas — e o MCP chama /layout a cada
+    // mudança de dependência. Um único statement já é atômico por si só.
+    if (updated.length > 0) {
+      const values = sql.join(
+        updated.map(
+          (c) => sql`(${c.id}::uuid, ${c.positionX}::double precision, ${c.positionY}::double precision)`,
+        ),
+        sql`, `,
+      );
+      await db.execute(sql`
+        UPDATE cards AS c
+        SET position_x = v.px, position_y = v.py, updated_at = now()
+        FROM (VALUES ${values}) AS v(id, px, py)
+        WHERE c.id = v.id
+      `);
+    }
 
     res.json({ cards: updated });
   },
