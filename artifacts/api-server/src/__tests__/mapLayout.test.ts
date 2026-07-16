@@ -4,8 +4,8 @@ import { computeLayout, buildApprovalLayoutGraph } from "../services/mapLayoutSe
 import { NODE_WIDTH, NODE_HEIGHT } from "../lib/collision";
 
 // Valores conferidos rodando o dagre de verdade com os defaults deste módulo
-// (rankdir=LR, ranksep=120, nodesep=48, nó 200x80): as colunas ficam 320 apart
-// (200 de largura + 120 de ranksep).
+// (rankdir=LR, ranksep=240, nodesep=48, nó 200 de largura): as colunas ficam
+// 440 apart (200 de largura + 240 de ranksep).
 describe("computeLayout", () => {
   it("mapa vazio devolve mapa vazio", () => {
     expect(computeLayout([], []).size).toBe(0);
@@ -17,8 +17,8 @@ describe("computeLayout", () => {
       [{ source: "a", target: "b" }, { source: "b", target: "c" }],
     );
     expect(pos.get("a")).toEqual({ x: 0, y: 0 });
-    expect(pos.get("b")).toEqual({ x: 320, y: 0 });
-    expect(pos.get("c")).toEqual({ x: 640, y: 0 });
+    expect(pos.get("b")).toEqual({ x: 440, y: 0 });
+    expect(pos.get("c")).toEqual({ x: 880, y: 0 });
   });
 
   it("diamante: 3 ranks, e os dois nós do meio não se sobrepõem", () => {
@@ -32,9 +32,9 @@ describe("computeLayout", () => {
       ],
     );
     expect(pos.get("a")!.x).toBe(0);
-    expect(pos.get("b")!.x).toBe(320);
-    expect(pos.get("c")!.x).toBe(320);
-    expect(pos.get("d")!.x).toBe(640);
+    expect(pos.get("b")!.x).toBe(440);
+    expect(pos.get("c")!.x).toBe(440);
+    expect(pos.get("d")!.x).toBe(880);
     // b e c dividem a coluna → precisam estar separados verticalmente
     expect(Math.abs(pos.get("b")!.y - pos.get("c")!.y)).toBeGreaterThanOrEqual(NODE_HEIGHT);
   });
@@ -113,7 +113,7 @@ describe("computeLayout", () => {
       ],
     );
     expect(pos.get("a")).toEqual({ x: 0, y: 0 });
-    expect(pos.get("b")).toEqual({ x: 320, y: 0 });
+    expect(pos.get("b")).toEqual({ x: 440, y: 0 });
   });
 
   it("tolera ciclo sem quebrar (aciclicidade é responsabilidade do MCP, não daqui)", () => {
