@@ -10,16 +10,19 @@ import { toVisualStatus } from "../services/taskVisualSyncService";
 import { resolveSchedule, isWithinScheduleWindow, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
 import { recordTaskActivity } from "../services/taskActivitiesService";
+import { findFreeSlot, NODE_WIDTH, NODE_HEIGHT } from "../lib/collision";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
 const router: IRouter = Router({ mergeParams: true });
 
+// Sem .default(0): posição omitida significa "escolha por mim" e é resolvida
+// pelo free-slot no handler, em vez de empilhar todo mundo na origem.
 const createCardSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  positionX: z.number().optional().default(0),
-  positionY: z.number().optional().default(0),
+  positionX: z.number().optional(),
+  positionY: z.number().optional(),
 });
 
 const updateCardSchema = z.object({
@@ -47,6 +50,7 @@ const updateTaskDetailsSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
+  ownerId: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
   scheduleMode: z.enum(["ate", "entre", "em", "sem_prazo", "urgente"]).optional(),
@@ -80,14 +84,45 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor"]), require
   const { workspaceId, mapId } = req.params;
   const userId = (req as AuthRequest).user!.userId;
 
+  // A posição pedida é um desejo, não uma ordem: se estiver ocupada, o card vai
+  // pra vaga livre mais próxima. Card novo nunca nasce em cima de outro — nem
+  // pela UI (que manda um ponto fixo pros irmãos) nem pelo MCP (que não manda
+  // posição nenhuma). Arrastar depois continua livre pra sobrepor: o PUT não
+  // passa por aqui.
+  // mergeParams faz tsc inferir req.params.* como string | string[] (dívida
+  // pré-existente da linha acima); pro uso novo abaixo casteamos separado — rota
+  // folha nunca devolve array pra :mapId, e o middleware já validou o UUID.
+  const mapIdParam = req.params.mapId as string;
+  const existing = await db
+    .select({ positionX: cards.positionX, positionY: cards.positionY })
+    .from(cards)
+    .where(eq(cards.mapId, mapIdParam));
+
+  const slot = findFreeSlot(
+    { x: parsed.data.positionX ?? 0, y: parsed.data.positionY ?? 0 },
+    { width: NODE_WIDTH, height: NODE_HEIGHT },
+    existing.map((c) => ({
+      x: c.positionX,
+      y: c.positionY,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    })),
+  );
+
   const [card] = await db
     .insert(cards)
-    .values({ mapId, ...parsed.data })
+    .values({
+      mapId,
+      title: parsed.data.title,
+      description: parsed.data.description,
+      positionX: slot.x,
+      positionY: slot.y,
+    })
     .returning();
 
   const [task] = await db
     .insert(tasks)
-    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId, scheduleMode: "sem_prazo" })
+    .values({ title: parsed.data.title, mapId, workspaceId, priority: "medium", status: "draft", assignedTo: userId, ownerId: userId, scheduleMode: "sem_prazo" })
     .returning();
 
   const [updated] = await db
@@ -222,6 +257,7 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     .values({
       ...rest,
       assignedTo,
+      ownerId: userId,
       mapId,
       workspaceId,
       dueDate: sched.value.dueDate,
@@ -590,6 +626,34 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
         newAssigneeId,
         oldAssigneeName,
         newAssigneeName,
+      },
+      source: req.user?.source ?? null,
+    });
+  }
+
+  if (parsed.data.ownerId !== undefined && currentTask && currentTask.ownerId !== parsed.data.ownerId) {
+    const newOwnerId = parsed.data.ownerId ?? null;
+    let newOwnerName: string | null = null;
+    if (newOwnerId) {
+      const [newUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, newOwnerId)).limit(1);
+      newOwnerName = newUser?.name ?? null;
+    }
+    let oldOwnerName: string | null = null;
+    if (currentTask.ownerId) {
+      const [oldUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, currentTask.ownerId)).limit(1);
+      oldOwnerName = oldUser?.name ?? null;
+    }
+    await recordTaskActivity({
+      taskId: card.taskId,
+      actorId: userId,
+      type: "owner_changed",
+      metadata: {
+        actorName: actorUser?.name ?? null,
+        actorId: userId,
+        oldOwnerId: currentTask.ownerId ?? null,
+        newOwnerId,
+        oldOwnerName,
+        newOwnerName,
       },
       source: req.user?.source ?? null,
     });

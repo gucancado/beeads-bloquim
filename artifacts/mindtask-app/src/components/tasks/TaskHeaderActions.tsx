@@ -13,6 +13,7 @@ export function TaskHeaderActions({
   onDuplicate,
   onDelete,
   leftSlot,
+  ownerSlot,
   taskId,
   taskStatus,
   onTemplateApplied,
@@ -28,6 +29,7 @@ export function TaskHeaderActions({
   onDuplicate: () => void;
   onDelete: () => void;
   leftSlot?: ReactNode;
+  ownerSlot?: ReactNode;
   taskId?: string | null;
   taskStatus?: string;
   onTemplateApplied?: () => void;
@@ -69,6 +71,7 @@ export function TaskHeaderActions({
           {leftSlot}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+        {ownerSlot}
         {isEditing && taskStatus !== undefined && (
           <TaskApplyTemplateButton
             taskId={taskId ?? null}

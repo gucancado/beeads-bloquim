@@ -31,9 +31,9 @@ export const attachments = pgTable(
   "attachments",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    workspaceId: uuid("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
     cardId: uuid("card_id").references(() => cards.id, { onDelete: "cascade" }),
     commentId: uuid("comment_id").references(() => taskComments.id, {
       onDelete: "cascade",

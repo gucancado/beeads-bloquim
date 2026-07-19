@@ -225,6 +225,20 @@
       "when": 1779660009000,
       "tag": "0036_drop_legacy_attachment_anchors",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1779660010000,
+      "tag": "0037_create_workspace_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1779660011000,
+      "tag": "0038_attachments_nullable_workspace_and_activity",
+      "breakpoints": true
     }
   ]
 }

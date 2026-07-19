@@ -19,7 +19,7 @@ export interface TaskActivityItem {
   actorId: string | null;
   actorName: string | null;
   actorAvatarUrl: string | null;
-  type: "task_created" | "assignee_changed" | "status_changed" | "priority_changed" | "due_date_changed" | "approval_comment" | "task_approved" | "task_rejected" | "task_duplicated";
+  type: "task_created" | "assignee_changed" | "owner_changed" | "status_changed" | "priority_changed" | "due_date_changed" | "approval_comment" | "task_approved" | "task_rejected" | "task_duplicated";
   metadata: Record<string, string | null>;
   createdAt: string;
 }

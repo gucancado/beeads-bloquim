@@ -16,6 +16,9 @@ export interface TaskWithContextResponse {
   title: string;
   description?: string | null;
   assignedTo?: string | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
   dueDate?: Date | null;
   startAt?: Date | null;
   scheduleMode?: ScheduleMode;

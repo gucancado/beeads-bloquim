@@ -14,10 +14,18 @@ type WorkspaceRole = "admin" | "editor" | "executor";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function loadRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
-  const cached = getCachedRole(workspaceId, userId);
-  if (cached !== undefined) return cached;
-
+/**
+ * Single source of truth for the membership role query.
+ *
+ * Both `loadRole` (which caches the result) and `getMemberRoleFresh` (which
+ * never caches) call this, so any future change to the SELECT — e.g. adding a
+ * `deletedAt IS NULL` filter — applies identically to the cached and the
+ * uncached ground-truth path. Keep this the ONLY place the query lives.
+ */
+async function queryRoleFromDb(
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceRole | null> {
   const [member] = await db
     .select({ role: workspaceMembers.role })
     .from(workspaceMembers)
@@ -29,7 +37,14 @@ async function loadRole(workspaceId: string, userId: string): Promise<WorkspaceR
     )
     .limit(1);
 
-  const role = (member?.role as WorkspaceRole) ?? null;
+  return (member?.role as WorkspaceRole) ?? null;
+}
+
+async function loadRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
+  const cached = getCachedRole(workspaceId, userId);
+  if (cached !== undefined) return cached;
+
+  const role = await queryRoleFromDb(workspaceId, userId);
   setCachedRole(workspaceId, userId, role);
   return role;
 }
@@ -206,4 +221,23 @@ export async function requireConnectionInMap(
 
 export async function getMemberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
   return loadRole(workspaceId, userId);
+}
+
+/**
+ * Ground-truth, UNCACHED role resolution.
+ *
+ * Runs the same parameterized membership SELECT as `loadRole`, but never
+ * reads from or writes to `permissionsCache`. Use this for service-to-service
+ * authz (e.g. the internal /authz/workspace-role endpoint) where a stale role
+ * within the cache TTL would be a security hole — e.g. an ex-admin must not be
+ * able to act in the TTL window after demotion/removal.
+ *
+ * The user-facing routes keep using `getMemberRole`/`loadRole` (30s cache) to
+ * absorb their per-request poll storm; do NOT route those through this fn.
+ */
+export async function getMemberRoleFresh(
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceRole | null> {
+  return queryRoleFromDb(workspaceId, userId);
 }

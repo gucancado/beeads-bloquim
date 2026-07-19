@@ -265,6 +265,21 @@ function buildActivityBase(activity: TaskActivityItem): string {
       }
       return `${dateStr}: ${actor} atribuiu a tarefa para ${newName}.`;
     }
+    case "owner_changed": {
+      const actor = m.actorName ?? activity.actorName ?? "Alguém";
+      const newName = m.newOwnerName;
+      const oldName = m.oldOwnerName;
+      if (m.actorId && m.newOwnerId && m.actorId === m.newOwnerId) {
+        return `${dateStr}: ${actor} tornou-se dono da tarefa.`;
+      }
+      if (!newName) {
+        return `${dateStr}: ${actor} removeu o dono da tarefa.`;
+      }
+      if (oldName) {
+        return `${dateStr}: ${actor} alterou o dono de ${oldName} para ${newName}.`;
+      }
+      return `${dateStr}: ${actor} definiu ${newName} como dono da tarefa.`;
+    }
     case "priority_changed": {
       const actor = m.actorName ?? activity.actorName ?? "Alguém";
       const PRIORITY_LABELS: Record<string, string> = {

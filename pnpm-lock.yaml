@@ -143,7 +143,7 @@ importers:
     devDependencies:
       '@playwright/test':
         specifier: ^1.60.0
-        version: 1.60.0
+        version: 1.61.1
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -153,6 +153,9 @@ importers:
 
   artifacts/api-server:
     dependencies:
+      '@dagrejs/dagre':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@sentry/node':
         specifier: ^10.52.0
         version: 10.52.0
@@ -241,15 +244,15 @@ importers:
 
   artifacts/mindtask-app:
     dependencies:
-      '@beeads/charts':
+      '@beeads/fonts':
         specifier: ^0.2.0
-        version: 0.2.0(@beeads/tokens@0.3.0)(@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 0.2.0
       '@beeads/tokens':
-        specifier: ^0.3.0
-        version: 0.3.0
-      '@beeads/ui':
         specifier: ^0.5.0
-        version: 0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 0.5.0(tailwindcss@4.2.2)
+      '@beeads/ui':
+        specifier: ^0.7.0
+        version: 0.7.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(tailwindcss@4.2.2)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -1029,19 +1032,16 @@ packages:
       '@types/react':
         optional: true
 
-  '@beeads/charts@0.2.0':
-    resolution: {integrity: sha512-9VtRGN23Jbi2ebn2boOnmqD2HCtZ8b9Xx9dN3Xiut8JhhzCXLc10NcFbcIgfc9j01ciyIYPCDiqZ9PrXH4QtKQ==}
+  '@beeads/fonts@0.2.0':
+    resolution: {integrity: sha512-qDOH9ZgogYJ9c5x6OiaNItGoAeOuugCd6s41nPUmE7pLk7Qit0uAs0+m+MqGoRZ9SDK/4ikHolkUPYcA2sDeXA==}
     peerDependencies:
-      '@beeads/tokens': '>=0.2.0 <1.0.0'
-      '@beeads/ui': '>=0.4.0 <1.0.0'
-      react: '>=18'
-      react-dom: '>=18'
+      next: '>=14'
 
-  '@beeads/tokens@0.3.0':
-    resolution: {integrity: sha512-JVKjWfDqBqOd8ujalOBerZ3UrqqhDwxPnshJ1WK+We1d1d7hlCUp/Q3gLZKg6t18JcrlDMk5/Hmgq3iptgzuuw==}
+  '@beeads/tokens@0.5.0':
+    resolution: {integrity: sha512-rX2k9H0531x+Tx9LE6eT/o9tMYCzG3rQ+OtSavUiZU3KJsAiNMx/q/69OIsoa5LzVVUSIKTWUgIntAXxprJUXA==}
 
-  '@beeads/ui@0.5.0':
-    resolution: {integrity: sha512-3kFG9KtDy6GZa0oSh4SB/TgRv00eZ/xYGRaHbVwuR7fOAYPNEiO3NZbG5BxVGXxrPirumZd7Az9JCptyTcN+/Q==}
+  '@beeads/ui@0.7.0':
+    resolution: {integrity: sha512-7ajah6zVCBRnbLKEVuBcwhOTS1JY5ED69aoO65DfgX4wPp6ZKlaoKPmH6dzurxnw1bjnBiAw9tt7/34F+SI8hw==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -1078,6 +1078,12 @@ packages:
   '@csstools/css-tokenizer@3.0.4':
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
+
+  '@dagrejs/dagre@3.0.0':
+    resolution: {integrity: sha512-ZzhnTy1rfuoew9Ez3EIw4L2znPGnYYhfn8vc9c4oB8iw6QAsszbiU0vRhlxWPFnmmNSFAkrYeF1PhM5m4lAN0Q==}
+
+  '@dagrejs/graphlib@4.0.1':
+    resolution: {integrity: sha512-IvcV6FduIIAmLwnH+yun+QtV36SC7mERqa86aClNqmMN09WhmPPYU8ckHrZBozErf+UvHPWOTJYaGYiIcs0DgA==}
 
   '@date-fns/tz@1.4.1':
     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
@@ -1477,8 +1483,8 @@ packages:
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
-  '@playwright/test@1.60.0':
-    resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
+  '@playwright/test@1.61.1':
+    resolution: {integrity: sha512-8nKv6+0RJSL9FE4jYOEGXnPeM/Hg12qZpmqzZjRh3qM0Y7c3z1mrOTfFLids72RDQYVh9WpLEfR5WdpNX4fkig==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -4289,13 +4295,13 @@ packages:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
     hasBin: true
 
-  playwright-core@1.60.0:
-    resolution: {integrity: sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==}
+  playwright-core@1.61.1:
+    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
     engines: {node: '>=18'}
     hasBin: true
 
-  playwright@1.60.0:
-    resolution: {integrity: sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==}
+  playwright@1.61.1:
+    resolution: {integrity: sha512-DWnY5o3YbLWK4GovuAVwpqL+1VwGNdUGrRr++8j8PtQQzvAVZUIMjKQ90fY689sEJZJBbZVw1rXaOKSTitkzPQ==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -4814,6 +4820,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -5749,22 +5756,18 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@beeads/charts@0.2.0(@beeads/tokens@0.3.0)(@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/fonts@0.2.0': {}
+
+  '@beeads/tokens@0.5.0(tailwindcss@4.2.2)':
     dependencies:
-      '@beeads/tokens': 0.3.0
-      '@beeads/ui': 0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      date-fns: 4.3.0
-      lucide-react: 0.469.0(react@19.2.5)
-      react: 19.2.5
-      react-dom: 19.2.5(react@19.2.5)
-      recharts: 2.15.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tailwindcss-animate: 1.0.7(tailwindcss@4.2.2)
+    transitivePeerDependencies:
+      - tailwindcss
 
-  '@beeads/tokens@0.3.0': {}
-
-  '@beeads/ui@0.5.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@beeads/ui@0.7.0(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(tailwindcss@4.2.2)':
     dependencies:
       '@base-ui/react': 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.3.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@beeads/tokens': 0.3.0
+      '@beeads/tokens': 0.5.0(tailwindcss@4.2.2)
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.5)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -5781,6 +5784,7 @@ snapshots:
       - '@date-fns/tz'
       - '@types/react'
       - '@types/react-dom'
+      - tailwindcss
 
   '@commander-js/extra-typings@14.0.0(commander@14.0.3)':
     dependencies:
@@ -5805,6 +5809,12 @@ snapshots:
       '@csstools/css-tokenizer': 3.0.4
 
   '@csstools/css-tokenizer@3.0.4': {}
+
+  '@dagrejs/dagre@3.0.0':
+    dependencies:
+      '@dagrejs/graphlib': 4.0.1
+
+  '@dagrejs/graphlib@4.0.1': {}
 
   '@date-fns/tz@1.4.1': {}
 
@@ -6303,9 +6313,9 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
-  '@playwright/test@1.60.0':
+  '@playwright/test@1.61.1':
     dependencies:
-      playwright: 1.60.0
+      playwright: 1.61.1
 
   '@prisma/instrumentation@7.6.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -9325,11 +9335,11 @@ snapshots:
       sonic-boom: 4.2.1
       thread-stream: 4.0.0
 
-  playwright-core@1.60.0: {}
+  playwright-core@1.61.1: {}
 
-  playwright@1.60.0:
+  playwright@1.61.1:
     dependencies:
-      playwright-core: 1.60.0
+      playwright-core: 1.61.1
     optionalDependencies:
       fsevents: 2.3.2
 

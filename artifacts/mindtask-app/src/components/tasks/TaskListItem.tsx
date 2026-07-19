@@ -48,7 +48,10 @@ export interface TaskListItemData {
   scheduleMode?: "ate" | "entre" | "em" | "sem_prazo" | "urgente" | null;
   overdue?: boolean;
   completedAt?: string | null;
-  cancelledAt?: string | null;
+  // "Bloqueada desde": último evento status_changed→blocked (activity log),
+  // servido pelo backend. Substitui a leitura de cancelled_at, que ficava vazia
+  // quando a tarefa era bloqueada pelo canvas (cards.ts não escreve a coluna).
+  blockedSince?: string | null;
   assignedTo?: string | null;
   assigneeName?: string | null;
   assigneeAvatarUrl?: string | null;
@@ -583,7 +586,7 @@ export function TaskListItem({
       );
     }
     if (dateColumnMode === "cancelled") {
-      const iso = localTask.cancelledAt ?? null;
+      const iso = localTask.blockedSince ?? null;
       return (
         <span className="text-xs text-muted-foreground">
           {iso ? formatDueDate(iso) : "—"}

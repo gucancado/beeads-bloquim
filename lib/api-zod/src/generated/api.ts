@@ -533,6 +533,26 @@ export const DeleteMapResponse = zod.object({
 });
 
 /**
+ * @summary Auto-arrange map cards (dagre, minimizes edge crossings)
+ */
+export const LayoutMapParams = zod.object({
+  workspaceId: zod.coerce.string().uuid(),
+  mapId: zod.coerce.string().uuid(),
+});
+
+export const LayoutMapResponse = zod.object({
+  cards: zod
+    .array(
+      zod.object({
+        id: zod.string().uuid(),
+        positionX: zod.number(),
+        positionY: zod.number(),
+      }),
+    )
+    .describe("Only the cards whose position actually changed."),
+});
+
+/**
  * @summary Create a card in the map
  */
 export const CreateCardParams = zod.object({
@@ -606,6 +626,9 @@ export const GetCardResponse = zod.object({
           pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
         })
         .nullish(),
+      ownerId: zod.string().uuid().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerAvatarUrl: zod.string().nullish(),
       dueDate: zod.date().nullish(),
       startAt: zod.date().nullish(),
       scheduleMode: zod
@@ -813,6 +836,9 @@ export const UpdateTaskStatusResponse = zod.object({
       pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
     })
     .nullish(),
+  ownerId: zod.string().uuid().nullish(),
+  ownerName: zod.string().nullish(),
+  ownerAvatarUrl: zod.string().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
@@ -848,6 +874,7 @@ export const UpdateTaskDetailsBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().optional(),
   assignedTo: zod.string().uuid().nullish(),
+  ownerId: zod.string().uuid().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
@@ -891,6 +918,9 @@ export const UpdateTaskDetailsResponse = zod.object({
       pronouns: zod.enum(["name_only", "ela_dela", "ele_dele", "elu_delu"]),
     })
     .nullish(),
+  ownerId: zod.string().uuid().nullish(),
+  ownerName: zod.string().nullish(),
+  ownerAvatarUrl: zod.string().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod
@@ -937,6 +967,9 @@ export const GetMyTasksResponseItem = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   assignedTo: zod.string().uuid().nullish(),
+  ownerId: zod.string().uuid().nullish(),
+  ownerName: zod.string().nullish(),
+  ownerAvatarUrl: zod.string().nullish(),
   dueDate: zod.date().nullish(),
   startAt: zod.date().nullish(),
   scheduleMode: zod

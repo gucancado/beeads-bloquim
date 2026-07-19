@@ -1,8 +1,8 @@
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, taskComments } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, subtasks, taskActivities, cardConnections, taskComments, attachments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
-import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne } from "drizzle-orm";
+import { eq, and, isNull, or, inArray, asc, sql, count, desc, isNotNull, not, ne, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
@@ -57,6 +57,10 @@ import {
 } from "../services/taskSubtasksService";
 import { duplicateTask } from "../services/taskDuplicateService";
 import { patchTaskStatus } from "../services/taskStatusService";
+import { parseSinceParam, parseUntilParam } from "../lib/queryDates";
+import { encodeCursor, decodeCursor } from "../lib/keysetCursor";
+import { computeHealth } from "../lib/workspaceHealth";
+import { computeThroughput } from "../lib/workspaceThroughput";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "blocked" | "draft";
 
@@ -71,10 +75,15 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
     if (assignees.length === 0) return undefined;
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "unassigned");
-    const parts = [];
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
+      const parts = [];
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
 
   const rows = await db
@@ -99,6 +108,190 @@ router.get("/counts", requireAuth, requireWorkspaceRole(["admin", "editor", "exe
   res.json(result);
 });
 
+router.get("/stats", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const { since: sinceRaw, until: untilRaw } = req.query as { since?: string; until?: string };
+  const since = parseSinceParam(sinceRaw);
+  const until = parseUntilParam(untilRaw);
+  if (since === "invalid" || until === "invalid") {
+    res.status(400).json({ error: "Validation error", message: "since/until devem ser ISO 8601 ou YYYY-MM-DD" });
+    return;
+  }
+  if (since && until && since > until) {
+    res.status(400).json({ error: "Validation error", message: "since deve ser <= until" });
+    return;
+  }
+
+  const notApprovalDraft = not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft")));
+  const baseWhere = and(eq(tasks.workspaceId, workspaceId), notApprovalDraft);
+  const openOnly = inArray(tasks.status, ["pending", "in_progress", "blocked"]);
+  const activeOnly = not(inArray(tasks.status, ["completed", "blocked", "draft"]));
+  // Drafts contam pelo owner, o resto pelo assignee — mesma regra do buildAssigneeFilter.
+  const assigneeBucket = sql<string | null>`CASE WHEN ${tasks.status} = 'draft' THEN ${tasks.ownerId} ELSE ${tasks.assignedTo} END`;
+
+  const [statusRows, priorityRows, [overdueRow], assigneeRows, planRows, [agingRow]] = await Promise.all([
+    db.select({ status: tasks.status, cnt: count() }).from(tasks).where(baseWhere).groupBy(tasks.status),
+    db.select({ priority: tasks.priority, cnt: count() }).from(tasks).where(baseWhere).groupBy(tasks.priority),
+    db.select({ cnt: sql<number>`count(*)::int` }).from(tasks).where(and(baseWhere, eq(tasks.overdue, true), activeOnly)),
+    db
+      .select({
+        userId: assigneeBucket,
+        total: sql<number>`count(*)::int`,
+        open: sql<number>`count(*) filter (where ${tasks.status} in ('pending','in_progress','blocked'))::int`,
+        overdue: sql<number>`count(*) filter (where ${tasks.overdue} = true and ${tasks.status} not in ('completed','blocked','draft'))::int`,
+      })
+      .from(tasks)
+      .where(baseWhere)
+      .groupBy(assigneeBucket),
+    db
+      .select({
+        mapId: tasks.mapId,
+        mapName: maps.name,
+        total: sql<number>`count(*)::int`,
+        completed: sql<number>`count(*) filter (where ${tasks.status} = 'completed')::int`,
+      })
+      .from(tasks)
+      .leftJoin(maps, eq(maps.id, tasks.mapId))
+      .where(and(baseWhere, isNotNull(tasks.mapId)))
+      .groupBy(tasks.mapId, maps.name),
+    db
+      .select({
+        d0_7: sql<number>`count(*) filter (where ${tasks.createdAt} >= now() - interval '7 days')::int`,
+        d8_30: sql<number>`count(*) filter (where ${tasks.createdAt} < now() - interval '7 days' and ${tasks.createdAt} >= now() - interval '30 days')::int`,
+        d31_90: sql<number>`count(*) filter (where ${tasks.createdAt} < now() - interval '30 days' and ${tasks.createdAt} >= now() - interval '90 days')::int`,
+        d90_plus: sql<number>`count(*) filter (where ${tasks.createdAt} < now() - interval '90 days')::int`,
+      })
+      .from(tasks)
+      .where(and(baseWhere, openOnly)),
+  ]);
+
+  // Nomes/classes dos assignees em query separada (groupBy é por expressão).
+  const assigneeIds = assigneeRows.map((r) => r.userId).filter((v): v is string => !!v);
+  const userRows = assigneeIds.length > 0
+    ? await db.select({ id: users.id, name: users.name, classes: users.classes }).from(users).where(inArray(users.id, assigneeIds))
+    : [];
+  const userById = new Map(userRows.map((u) => [u.id, u]));
+
+  // window: created por tasks.created_at; completed por activity log
+  // (status_changed → newStatus=completed), DISTINCT por task — imune ao
+  // reset de completedAt e a re-conclusões.
+  let window: { since: string | null; until: string | null; created: number; completed: number } | null = null;
+  if (since || until) {
+    const [[createdRow], [completedRow]] = await Promise.all([
+      db.select({ cnt: sql<number>`count(*)::int` }).from(tasks).where(and(
+        baseWhere,
+        since ? gte(tasks.createdAt, since) : undefined,
+        until ? lt(tasks.createdAt, until) : undefined,
+      )),
+      db
+        .select({ cnt: sql<number>`count(distinct ${taskActivities.taskId})::int` })
+        .from(taskActivities)
+        .innerJoin(tasks, eq(tasks.id, taskActivities.taskId))
+        .where(and(
+          eq(tasks.workspaceId, workspaceId),
+          notApprovalDraft,
+          eq(taskActivities.type, "status_changed"),
+          sql`${taskActivities.metadata}->>'newStatus' = 'completed'`,
+          since ? gte(taskActivities.createdAt, since) : undefined,
+          until ? lt(taskActivities.createdAt, until) : undefined,
+        )),
+    ]);
+    window = {
+      since: since ? since.toISOString() : null,
+      until: until ? until.toISOString() : null,
+      created: createdRow?.cnt ?? 0,
+      completed: completedRow?.cnt ?? 0,
+    };
+  }
+
+  const byStatus = { pending: 0, in_progress: 0, completed: 0, blocked: 0, draft: 0 } as Record<string, number>;
+  let total = 0;
+  for (const row of statusRows) {
+    total += Number(row.cnt);
+    if (row.status && row.status in byStatus) byStatus[row.status] = Number(row.cnt);
+  }
+  const byPriority = { low: 0, medium: 0, high: 0, critical: 0 } as Record<string, number>;
+  for (const row of priorityRows) {
+    if (row.priority && row.priority in byPriority) byPriority[row.priority] = Number(row.cnt);
+  }
+
+  res.json({
+    workspaceId,
+    total,
+    byStatus,
+    overdue: overdueRow?.cnt ?? 0,
+    byPriority,
+    byAssignee: assigneeRows.map((r) => ({
+      userId: r.userId,
+      name: r.userId ? (userById.get(r.userId)?.name ?? null) : null,
+      classes: r.userId ? (userById.get(r.userId)?.classes ?? []) : [],
+      total: r.total,
+      open: r.open,
+      overdue: r.overdue,
+    })),
+    byPlan: planRows,
+    aging: agingRow ?? { d0_7: 0, d8_30: 0, d31_90: 0, d90_plus: 0 },
+    window,
+  });
+});
+
+router.get("/health", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const health = await computeHealth(db, workspaceId);
+  res.json({ workspaceId, ...health });
+});
+
+router.get("/throughput", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
+  const { workspaceId } = req.params;
+  const q = req.query as { since?: string; until?: string; granularity?: string };
+  const granularity = q.granularity ?? "week";
+  if (!["day", "week", "month"].includes(granularity)) {
+    res.status(400).json({ error: "Validation error", message: "granularity aceita: day, week, month" });
+    return;
+  }
+  const sinceParsed = parseSinceParam(q.since);
+  const untilParsed = parseUntilParam(q.until);
+  if (sinceParsed === "invalid" || untilParsed === "invalid") {
+    res.status(400).json({ error: "Validation error", message: "since/until devem ser ISO 8601 ou YYYY-MM-DD" });
+    return;
+  }
+  const until = untilParsed ?? new Date();
+  const since = sinceParsed ?? new Date(until.getTime() - 56 * 24 * 60 * 60 * 1000);
+  if (since >= until) {
+    res.status(400).json({ error: "Validation error", message: "since deve ser < until" });
+    return;
+  }
+  const bucketMs = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 }[granularity as "day" | "week" | "month"];
+  if ((until.getTime() - since.getTime()) / bucketMs > 200) {
+    res.status(400).json({ error: "Validation error", message: "janela/granularity excede 200 buckets" });
+    return;
+  }
+
+  const gran = granularity as "day" | "week" | "month";
+  const prevUntil = since;
+  const prevSince = new Date(since.getTime() - (until.getTime() - since.getTime()));
+  const [current, previous] = await Promise.all([
+    computeThroughput(db, workspaceId, { since, until, granularity: gran }),
+    computeThroughput(db, workspaceId, { since: prevSince, until: prevUntil, granularity: gran }),
+  ]);
+
+  res.json({
+    workspaceId,
+    granularity: gran,
+    window: { since: since.toISOString(), until: until.toISOString() },
+    series: current.series,
+    leadTimeDays: current.leadTimeDays,
+    byAssignee: current.byAssignee,
+    previousPeriod: {
+      since: prevSince.toISOString(),
+      until: prevUntil.toISOString(),
+      created: previous.series.reduce((s, b) => s + b.created, 0),
+      completed: previous.series.reduce((s, b) => s + b.completed, 0),
+      leadTimeDays: previous.leadTimeDays,
+    },
+  });
+});
+
 router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
   const { status, assignedTo } = req.query as { status?: string; assignedTo?: string };
@@ -120,11 +313,78 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
     if (assignees.length === 0) return undefined;
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "unassigned");
-    const parts = [];
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
+      const parts = [];
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
+
+  const q = req.query as Record<string, string | undefined>;
+  const VALID_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+  type ValidPriority = (typeof VALID_PRIORITIES)[number];
+  const priorities = (q.priority ? q.priority.split(",").filter(Boolean) : []) as string[];
+  if (priorities.some((p) => !VALID_PRIORITIES.includes(p as ValidPriority))) {
+    res.status(400).json({ error: "Validation error", message: `priority aceita: ${VALID_PRIORITIES.join(", ")}` });
+    return;
+  }
+  const dateParams = {
+    createdSince: parseSinceParam(q.createdSince),
+    createdUntil: parseUntilParam(q.createdUntil),
+    completedSince: parseSinceParam(q.completedSince),
+    completedUntil: parseUntilParam(q.completedUntil),
+    dueAfter: parseSinceParam(q.dueAfter),
+    dueBefore: parseUntilParam(q.dueBefore),
+  };
+  const invalidDate = Object.entries(dateParams).find(([, v]) => v === "invalid");
+  if (invalidDate) {
+    res.status(400).json({ error: "Validation error", message: `${invalidDate[0]} deve ser ISO 8601 ou YYYY-MM-DD` });
+    return;
+  }
+  const dp = dateParams as Record<keyof typeof dateParams, Date | null>;
+  if (q.mapId && !/^[0-9a-f-]{36}$/i.test(q.mapId)) {
+    res.status(400).json({ error: "Validation error", message: "mapId inválido" });
+    return;
+  }
+  const keysetMode = q.cursor !== undefined || q.limit !== undefined;
+  const limit = Math.min(Math.max(parseInt(q.limit ?? "100", 10) || 100, 1), 200);
+  const cursor = q.cursor ? decodeCursor(q.cursor) : null;
+  if (q.cursor && !cursor) {
+    res.status(400).json({ error: "Validation error", message: "cursor inválido" });
+    return;
+  }
+
+  // pg timestamp tem µs; o cursor viaja em ms — truncar no SQL para a
+  // igualdade do desempate casar (bug-trap TIMESTAMPTZ µs × JS ms, ver
+  // workspaceActivities.ts). tasks.created_at é `timestamp` SEM tz: um JS
+  // Date interpolado cru dentro de `sql` cairia no serializador padrão do
+  // node-postgres (fuso LOCAL do processo), desalinhando a comparação.
+  // Serializar com `.toISOString()` ANTES de interpolar replica o
+  // `mapToDriverValue` que os helpers (eq/lt/gte) usariam.
+  const cursorCreatedAtIso = cursor?.createdAt.toISOString();
+  const cursorCond = cursor
+    ? or(
+        sql`date_trunc('milliseconds', ${tasks.createdAt}) < ${cursorCreatedAtIso}::timestamp`,
+        and(
+          sql`date_trunc('milliseconds', ${tasks.createdAt}) = ${cursorCreatedAtIso}::timestamp`,
+          lt(tasks.id, cursor.id),
+        ),
+      )
+    : undefined;
+  const filterConds = [
+    priorities.length > 0 ? inArray(tasks.priority, priorities as ValidPriority[]) : undefined,
+    q.mapId ? eq(tasks.mapId, q.mapId) : undefined,
+    dp.createdSince ? gte(tasks.createdAt, dp.createdSince) : undefined,
+    dp.createdUntil ? lt(tasks.createdAt, dp.createdUntil) : undefined,
+    dp.completedSince ? gte(tasks.completedAt, dp.completedSince) : undefined,
+    dp.completedUntil ? lt(tasks.completedAt, dp.completedUntil) : undefined,
+    dp.dueAfter ? gte(tasks.dueDate, dp.dueAfter) : undefined,
+    dp.dueBefore ? lt(tasks.dueDate, dp.dueBefore) : undefined,
+  ];
 
   const parentTasks = alias(tasks, "parent_tasks");
   const taskList = await db
@@ -143,6 +403,11 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
       overdue: tasks.overdue,
       completedAt: tasks.completedAt,
       cancelledAt: tasks.cancelledAt,
+      // "Bloqueada desde" vem do activity log (último status_changed→blocked),
+      // NÃO de tasks.cancelled_at: o bloqueio via canvas (cards.ts) grava o
+      // evento mas não a coluna, e a UI, lendo a coluna, mostrava data vazia.
+      // NULL quando nunca houve bloqueio → a UI renderiza "—".
+      blockedSince: sql<string | null>`(SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id = ${tasks.id} AND a.type = 'status_changed' AND a.metadata->>'newStatus' = 'blocked')`,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       isApprovalTask: tasks.isApprovalTask,
@@ -175,20 +440,42 @@ router.get("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"
         statuses.length > 0 ? inArray(tasks.status, statuses) : undefined,
         buildAssigneeFilter(),
         not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))),
+        ...filterConds,
+        cursorCond,
       )
     )
     .orderBy(
-      // "urgente" pin (condicional — ver pinUrgente acima): aplicado só quando
-      // o filtro de status é subset de {draft, pending, in_progress}.
-      ...(pinUrgente
-        ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
-        : []),
-      sql`${tasks.dueDate} ASC NULLS LAST`,
-      sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
-      asc(tasks.createdAt)
+      ...(keysetMode
+        ? [
+            // Modo keyset: ORDER BY precisa usar a MESMA chave truncada em ms
+            // que o predicado do cursor acima (date_trunc('milliseconds', ...)).
+            // O cursor só carrega precisão de ms, então ordenar pela coluna µs
+            // crua poderia derrubar uma linha na borda da página quando duas
+            // linhas caem no mesmo ms (ver workspaceActivities.ts).
+            sql`date_trunc('milliseconds', ${tasks.createdAt}) DESC`,
+            desc(tasks.id),
+          ]
+        : [
+            // Modo legado (sem cursor/limit): ordenação rica intacta.
+            // "urgente" pin (condicional — ver pinUrgente acima): aplicado só
+            // quando o filtro de status é subset de {draft, pending, in_progress}.
+            ...(pinUrgente
+              ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
+              : []),
+            sql`${tasks.dueDate} ASC NULLS LAST`,
+            sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
+            asc(tasks.createdAt),
+          ]),
     )
-    .limit(500);
+    .limit(keysetMode ? limit + 1 : 500);
 
+  if (keysetMode) {
+    const hasMore = taskList.length > limit;
+    const items = hasMore ? taskList.slice(0, limit) : taskList;
+    const last = items[items.length - 1];
+    res.json({ items, nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
+    return;
+  }
   res.json(taskList);
 });
 
@@ -217,7 +504,9 @@ const createTaskSchema = z.object({
   recurrenceConfig: recurrenceConfigSchema.nullable().optional(),
 });
 
-const updateTaskSchema = createTaskSchema.partial();
+const updateTaskSchema = createTaskSchema.partial().extend({
+  ownerId: z.string().uuid().nullable().optional(),
+});
 
 router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor"]), async (req: AuthRequest, res) => {
   const { workspaceId } = req.params;
@@ -255,6 +544,7 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
       isRecurring: isRecurring ?? false,
       recurrenceConfig: recurrenceConfig ?? null,
       createdBy: actorId,
+      ownerId: actorId,
     })
     .returning();
 
@@ -292,9 +582,12 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     return;
   }
 
-  const [assignee, members, taskSubtasks] = await Promise.all([
+  const [assignee, owner, members, taskSubtasks] = await Promise.all([
     task.assignedTo
       ? db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, task.assignedTo)).limit(1)
+      : Promise.resolve([]),
+    task.ownerId
+      ? db.select({ name: users.name, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, task.ownerId)).limit(1)
       : Promise.resolve([]),
     db
       .select({ userId: workspaceMembers.userId, name: users.name, role: workspaceMembers.role })
@@ -387,6 +680,8 @@ router.get("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "ex
     ...task,
     assigneeName: assignee[0]?.name ?? null,
     assigneeAvatarUrl: assignee[0]?.avatarUrl ?? null,
+    ownerName: (owner as { name: string; avatarUrl: string | null }[])[0]?.name ?? null,
+    ownerAvatarUrl: (owner as { name: string; avatarUrl: string | null }[])[0]?.avatarUrl ?? null,
     members,
     subtasks: taskSubtasks,
     parentTask,
@@ -415,6 +710,8 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
 
   const assigneeChanging = "assignedTo" in parsed.data && parsed.data.assignedTo !== existing.assignedTo;
   const newAssigneeId = assigneeChanging ? (parsed.data.assignedTo ?? null) : null;
+  const ownerChanging = "ownerId" in parsed.data && (parsed.data.ownerId ?? null) !== existing.ownerId;
+  const newOwnerId = ownerChanging ? (parsed.data.ownerId ?? null) : null;
   const priorityChanging = parsed.data.priority !== undefined && parsed.data.priority !== existing.priority;
   const safeExistingDueDate = existing.dueDate && !isNaN(existing.dueDate.getTime()) ? existing.dueDate : null;
   const dueDateChanging = "dueDate" in parsed.data && (parsed.data.dueDate ?? null) !== (safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null);
@@ -423,6 +720,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
   if ("assignedTo" in parsed.data) updateData.assignedTo = parsed.data.assignedTo ?? null;
+  if ("ownerId" in parsed.data) updateData.ownerId = parsed.data.ownerId ?? null;
   const touchesSchedule = "dueDate" in parsed.data || "startAt" in parsed.data || "scheduleMode" in parsed.data;
   if (touchesSchedule) {
     const sched = resolveSchedule(parsed.data, {
@@ -468,57 +766,105 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
     db.select({ name: users.name }).from(users).where(eq(users.id, actorId)).limit(1),
   ]);
 
-  if (assigneeChanging) {
-    const [oldAssignee, newAssignee] = await Promise.all([
-      existing.assignedTo
-        ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.assignedTo)).limit(1)
-        : Promise.resolve([]),
-      newAssigneeId
-        ? db.select({ name: users.name }).from(users).where(eq(users.id, newAssigneeId)).limit(1)
-        : Promise.resolve([]),
-    ]);
+  // Activity logging is a best-effort audit side-effect. The task update above
+  // has already committed; a failure here (e.g. an FK violation because the
+  // task row was deleted concurrently) must NOT turn a successful mutation into
+  // a 500. Log the real cause and carry on. See bug task 7903bc06-….
+  try {
+    if (assigneeChanging) {
+      const [oldAssignee, newAssignee] = await Promise.all([
+        existing.assignedTo
+          ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.assignedTo)).limit(1)
+          : Promise.resolve([]),
+        newAssigneeId
+          ? db.select({ name: users.name }).from(users).where(eq(users.id, newAssigneeId)).limit(1)
+          : Promise.resolve([]),
+      ]);
 
-    await recordTaskActivity({
-      taskId,
-      actorId,
-      type: "assignee_changed",
-      metadata: {
-        actorName: actorUser[0]?.name ?? null,
+      await recordTaskActivity({
+        taskId,
         actorId,
-        newAssigneeId,
-        oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
-        newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
-      },
-      source: req.user?.source ?? null,
-    });
-  }
+        type: "assignee_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          actorId,
+          newAssigneeId,
+          oldAssigneeName: (oldAssignee as { name: string }[])[0]?.name ?? null,
+          newAssigneeName: (newAssignee as { name: string }[])[0]?.name ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
 
-  if (priorityChanging) {
-    await recordTaskActivity({
-      taskId,
-      actorId,
-      type: "priority_changed",
-      metadata: {
-        actorName: actorUser[0]?.name ?? null,
-        oldPriority: existing.priority ?? null,
-        newPriority: parsed.data.priority ?? null,
-      },
-      source: req.user?.source ?? null,
-    });
-  }
+    if (ownerChanging) {
+      const [oldOwner, newOwner] = await Promise.all([
+        existing.ownerId
+          ? db.select({ name: users.name }).from(users).where(eq(users.id, existing.ownerId)).limit(1)
+          : Promise.resolve([]),
+        newOwnerId
+          ? db.select({ name: users.name }).from(users).where(eq(users.id, newOwnerId)).limit(1)
+          : Promise.resolve([]),
+      ]);
 
-  if (dueDateChanging) {
-    await recordTaskActivity({
-      taskId,
-      actorId,
-      type: "due_date_changed",
-      metadata: {
-        actorName: actorUser[0]?.name ?? null,
-        oldDueDate: safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null,
-        newDueDate: parsed.data.dueDate ?? null,
+      await recordTaskActivity({
+        taskId,
+        actorId,
+        type: "owner_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          actorId,
+          oldOwnerId: existing.ownerId ?? null,
+          newOwnerId,
+          oldOwnerName: (oldOwner as { name: string }[])[0]?.name ?? null,
+          newOwnerName: (newOwner as { name: string }[])[0]?.name ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
+
+    if (priorityChanging) {
+      await recordTaskActivity({
+        taskId,
+        actorId,
+        type: "priority_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          oldPriority: existing.priority ?? null,
+          newPriority: parsed.data.priority ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
+
+    if (dueDateChanging) {
+      await recordTaskActivity({
+        taskId,
+        actorId,
+        type: "due_date_changed",
+        metadata: {
+          actorName: actorUser[0]?.name ?? null,
+          oldDueDate: safeExistingDueDate ? safeExistingDueDate.toISOString().slice(0, 10) : null,
+          newDueDate: parsed.data.dueDate ?? null,
+        },
+        source: req.user?.source ?? null,
+      });
+    }
+  } catch (activityErr) {
+    const cause =
+      activityErr instanceof Error && activityErr.cause !== undefined
+        ? activityErr.cause
+        : undefined;
+    log.error(
+      {
+        taskId,
+        workspaceId,
+        err:
+          activityErr instanceof Error
+            ? { message: activityErr.message, stack: activityErr.stack, cause }
+            : { message: String(activityErr) },
       },
-      source: req.user?.source ?? null,
-    });
+      "task PATCH succeeded but activity logging failed (best-effort, swallowed)",
+    );
   }
 
   res.json({ ...updated, assigneeName: (assignee as { name: string }[])[0]?.name ?? null });
@@ -1058,11 +1404,26 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, requireWorkspac
     return;
   }
 
+  // Capture the filename before the soft-delete so the activity event can
+  // record it (soft-delete only sets deletedAt, so the row stays readable).
+  const [meta] = await db
+    .select({ filename: attachments.originalFilename })
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
+
   const deleted = await deleteTaskAttachment(taskId, attachmentId);
   if (!deleted) {
     res.status(404).json({ error: "Attachment not found" });
     return;
   }
+
+  await recordTaskActivity({
+    taskId,
+    actorId: req.user!.userId,
+    type: "attachment_removed",
+    metadata: { attachmentId, filename: meta?.filename ?? null },
+  });
 
   res.json({ success: true });
 });

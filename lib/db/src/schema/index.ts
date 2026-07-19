@@ -15,3 +15,4 @@ export * from "./strategyCycles";
 export * from "./strategyNodes";
 export * from "./strategyEntities";
 export * from "./strategyEdges";
+export * from "./meetings";

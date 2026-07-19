@@ -117,6 +117,15 @@ export const tasks = pgTable("tasks", {
   createdBy: uuid("created_by").references(() => users.id, {
     onDelete: "set null",
   }),
+  /**
+   * Dono da tarefa. Mutável (transferível). Default no INSERT = criador.
+   * Diferente de `created_by` (imutável, delete-auth) e `assigned_to`
+   * (responsável pela execução). Nullable: linhas pré-migration e dono
+   * deletado (FK `set null`).
+   */
+  ownerId: uuid("owner_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
@@ -126,6 +135,7 @@ export const tasks = pgTable("tasks", {
     table.dueDate,
   ),
   index("idx_tasks_assigned_to").on(table.assignedTo),
+  index("idx_tasks_owner_id").on(table.ownerId),
   index("idx_tasks_parent")
     .on(table.parentTaskId)
     .where(sql`${table.parentTaskId} IS NOT NULL`),
@@ -137,6 +147,11 @@ export const tasks = pgTable("tasks", {
   index("idx_tasks_map")
     .on(table.mapId)
     .where(sql`${table.mapId} IS NOT NULL`),
+  index("idx_tasks_workspace_created").on(
+    table.workspaceId,
+    table.createdAt,
+    table.id,
+  ),
 ]);
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({
@@ -182,6 +197,7 @@ export type Subtask = typeof subtasks.$inferSelect;
 export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   "task_created",
   "assignee_changed",
+  "owner_changed",
   "status_changed",
   "priority_changed",
   "due_date_changed",
@@ -209,6 +225,9 @@ export const taskActivityTypeEnum = pgEnum("task_activity_type", [
   // Attachment unlinked from a task without deleting the underlying file.
   // metadata: { attachmentId, filename }
   "attachment_unlinked",
+  // Attachment added to / removed from a task. metadata: { attachmentId, filename }
+  "attachment_added",
+  "attachment_removed",
 ]);
 
 export const taskActivities = pgTable("task_activities", {

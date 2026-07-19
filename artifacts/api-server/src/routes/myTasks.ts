@@ -1,11 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { Router, IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks } from "@workspace/db/schema";
+import { tasks, cards, maps, workspaces, workspaceMembers, users, taskActivities, taskComments, subtasks, attachments } from "@workspace/db/schema";
 import type { RecurrenceConfig } from "@workspace/db/schema";
-import { eq, and, or, asc, sql, inArray, isNull, count, not, gte, lt } from "drizzle-orm";
+import { eq, and, or, asc, sql, inArray, isNull, count, not, ne, gte, lt, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { requireStorage } from "../lib/featureFlags";
+import { sanitizeFilename, validateFileUpload } from "@workspace/storage";
 import { logger } from "../lib/logger";
+import { parseSinceParam, parseUntilParam } from "../lib/queryDates";
+import { encodeCursor, decodeCursor } from "../lib/keysetCursor";
 
 const log = logger.child({ module: "myTasks" });
 import { computeOverdue } from "../lib/overdue";
@@ -21,6 +26,7 @@ import {
   listTaskAttachments,
   deleteTaskAttachment,
   getTaskAttachmentForDownload,
+  createTaskAttachmentLink,
 } from "../services/taskAttachmentsService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
 import {
@@ -90,12 +96,16 @@ router.get("/counts", requireAuth, async (req: AuthRequest, res) => {
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
-
-    const parts = [];
-    if (hasMe) parts.push(eq(tasks.assignedTo, userId));
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
+      const parts = [];
+      if (hasMe) parts.push(eq(field, userId));
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
 
   const memberships = await db
@@ -184,13 +194,71 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const hasMe = assignees.includes("me");
     const hasUnassigned = assignees.includes("unassigned");
     const uuids = assignees.filter(a => a !== "me" && a !== "unassigned");
-
-    const parts = [];
-    if (hasMe) parts.push(eq(tasks.assignedTo, userId));
-    if (hasUnassigned) parts.push(isNull(tasks.assignedTo));
-    if (uuids.length > 0) parts.push(inArray(tasks.assignedTo, uuids));
-    return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    const scope = (field: typeof tasks.assignedTo | typeof tasks.ownerId) => {
+      const parts = [];
+      if (hasMe) parts.push(eq(field, userId));
+      if (hasUnassigned) parts.push(isNull(field));
+      if (uuids.length > 0) parts.push(inArray(field, uuids));
+      return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : or(...parts);
+    };
+    const assigneeBranch = and(ne(tasks.status, "draft"), scope(tasks.assignedTo));
+    const ownerBranch = and(eq(tasks.status, "draft"), scope(tasks.ownerId));
+    return or(assigneeBranch, ownerBranch);
   };
+
+  const q = req.query as Record<string, string | undefined>;
+  const VALID_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+  type ValidPriority = (typeof VALID_PRIORITIES)[number];
+  const priorities = (q.priority ? q.priority.split(",").filter(Boolean) : []) as string[];
+  if (priorities.some((p) => !VALID_PRIORITIES.includes(p as ValidPriority))) {
+    return res.status(400).json({ error: "Validation error", message: `priority aceita: ${VALID_PRIORITIES.join(", ")}` });
+  }
+  const dateParams = {
+    createdSince: parseSinceParam(q.createdSince),
+    createdUntil: parseUntilParam(q.createdUntil),
+    completedSince: parseSinceParam(q.completedSince),
+    completedUntil: parseUntilParam(q.completedUntil),
+    dueAfter: parseSinceParam(q.dueAfter),
+    dueBefore: parseUntilParam(q.dueBefore),
+  };
+  const invalidDate = Object.entries(dateParams).find(([, v]) => v === "invalid");
+  if (invalidDate) {
+    return res.status(400).json({ error: "Validation error", message: `${invalidDate[0]} deve ser ISO 8601 ou YYYY-MM-DD` });
+  }
+  const dp = dateParams as Record<keyof typeof dateParams, Date | null>;
+  const keysetMode = q.cursor !== undefined || q.limit !== undefined;
+  const limit = Math.min(Math.max(parseInt(q.limit ?? "100", 10) || 100, 1), 200);
+  const cursor = q.cursor ? decodeCursor(q.cursor) : null;
+  if (q.cursor && !cursor) {
+    return res.status(400).json({ error: "Validation error", message: "cursor inválido" });
+  }
+
+  // pg timestamp tem µs; o cursor viaja em ms — truncar no SQL para a
+  // igualdade do desempate casar (bug-trap TIMESTAMPTZ µs × JS ms, ver
+  // workspaceActivities.ts). tasks.created_at é `timestamp` SEM tz: um JS
+  // Date interpolado cru dentro de `sql` cairia no serializador padrão do
+  // node-postgres (fuso LOCAL do processo), desalinhando a comparação.
+  // Serializar com `.toISOString()` ANTES de interpolar replica o
+  // `mapToDriverValue` que os helpers (eq/lt/gte) usariam.
+  const cursorCreatedAtIso = cursor?.createdAt.toISOString();
+  const cursorCond = cursor
+    ? or(
+        sql`date_trunc('milliseconds', ${tasks.createdAt}) < ${cursorCreatedAtIso}::timestamp`,
+        and(
+          sql`date_trunc('milliseconds', ${tasks.createdAt}) = ${cursorCreatedAtIso}::timestamp`,
+          lt(tasks.id, cursor.id),
+        ),
+      )
+    : undefined;
+  const filterConds = [
+    priorities.length > 0 ? inArray(tasks.priority, priorities as ValidPriority[]) : undefined,
+    dp.createdSince ? gte(tasks.createdAt, dp.createdSince) : undefined,
+    dp.createdUntil ? lt(tasks.createdAt, dp.createdUntil) : undefined,
+    dp.completedSince ? gte(tasks.completedAt, dp.completedSince) : undefined,
+    dp.completedUntil ? lt(tasks.completedAt, dp.completedUntil) : undefined,
+    dp.dueAfter ? gte(tasks.dueDate, dp.dueAfter) : undefined,
+    dp.dueBefore ? lt(tasks.dueDate, dp.dueBefore) : undefined,
+  ];
 
   const memberships = await db
     .select({ workspaceId: workspaceMembers.workspaceId })
@@ -223,6 +291,11 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       status: tasks.status,
       completedAt: tasks.completedAt,
       cancelledAt: tasks.cancelledAt,
+      // "Bloqueada desde" vem do activity log (último status_changed→blocked),
+      // NÃO de tasks.cancelled_at: o bloqueio via canvas (cards.ts) grava o
+      // evento mas não a coluna, e a UI, lendo a coluna, mostrava data vazia.
+      // NULL quando nunca houve bloqueio → a UI renderiza "—".
+      blockedSince: sql<string | null>`(SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id = ${tasks.id} AND a.type = 'status_changed' AND a.metadata->>'newStatus' = 'blocked')`,
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       overdue: tasks.overdue,
@@ -257,20 +330,41 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         buildStatusFilter(),
         buildAssigneeFilter(),
         not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))),
+        ...filterConds,
+        cursorCond,
       )
     )
     .orderBy(
-      // "urgente" pin (condicional — ver pinUrgente acima): aplicado só quando
-      // o filtro de status é subset de {draft, pending, in_progress}.
-      ...(pinUrgente
-        ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
-        : []),
-      sql`${tasks.dueDate} ASC NULLS LAST`,
-      sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
-      asc(tasks.createdAt)
+      ...(keysetMode
+        ? [
+            // Modo keyset: ORDER BY precisa usar a MESMA chave truncada em ms
+            // que o predicado do cursor acima (date_trunc('milliseconds', ...)).
+            // O cursor só carrega precisão de ms, então ordenar pela coluna µs
+            // crua poderia derrubar uma linha na borda da página quando duas
+            // linhas caem no mesmo ms (ver workspaceActivities.ts).
+            sql`date_trunc('milliseconds', ${tasks.createdAt}) DESC`,
+            desc(tasks.id),
+          ]
+        : [
+            // Modo legado (sem cursor/limit): ordenação rica intacta.
+            // "urgente" pin (condicional — ver pinUrgente acima): aplicado só
+            // quando o filtro de status é subset de {draft, pending, in_progress}.
+            ...(pinUrgente
+              ? [sql`CASE WHEN ${tasks.scheduleMode} = 'urgente' THEN 0 ELSE 1 END ASC`]
+              : []),
+            sql`${tasks.dueDate} ASC NULLS LAST`,
+            sql`CASE ${tasks.priority} WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ASC`,
+            asc(tasks.createdAt),
+          ]),
     )
-    .limit(500);
+    .limit(keysetMode ? limit + 1 : 500);
 
+  if (keysetMode) {
+    const hasMore = taskList.length > limit;
+    const items = hasMore ? taskList.slice(0, limit) : taskList;
+    const last = items[items.length - 1];
+    return res.json({ items, nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
+  }
   return res.json(taskList);
 });
 
@@ -328,6 +422,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     isRecurring: isRecurring ?? false,
     recurrenceConfig: recurrenceConfig ?? null,
     createdBy: userId,
+    ownerId: userId,
   }).returning();
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
@@ -928,6 +1023,105 @@ router.get("/:taskId/attachments", requireAuth, async (req: AuthRequest, res) =>
 // client now calls POST /api/storage/uploads/request-url which both creates
 // the attachment row AND returns a presigned URL in a single call.
 
+const standaloneRequestUrlSchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive(),
+  kind: z.enum(["standard", "deliverable"]).optional(),
+});
+
+/**
+ * Standalone counterpart of POST /storage/uploads/request-url. Issues a
+ * presigned upload URL for a workspace-less task and pre-creates the paired
+ * attachments + task_attachments rows (workspace_id NULL) via the shared
+ * `createTaskAttachmentLink` helper. Same response shape as the storage route.
+ *
+ * bucket is always "attachments"; entityKind is always "task". The storage key
+ * uses a workspace-free scheme since standalone tasks have no workspace id.
+ */
+router.post(
+  "/:taskId/attachments/request-url",
+  requireAuth,
+  requireStorage,
+  async (req: AuthRequest, res) => {
+    const userId = req.user!.userId;
+    const { taskId } = req.params;
+
+    const denied = await authorizePersonalTaskAccess(taskId, userId);
+    if (denied) return res.status(denied.status).json(denied.body);
+
+    const parsed = standaloneRequestUrlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "validation_failed",
+        message: "Invalid upload request payload",
+        details: parsed.error.issues,
+      });
+    }
+
+    const { filename, contentType, sizeBytes, kind } = parsed.data;
+
+    const validation = validateFileUpload({
+      filename,
+      mimeType: contentType,
+      sizeBytes,
+    });
+    if (validation) {
+      return res.status(400).json({ error: validation.code, message: validation.message });
+    }
+
+    const bucket = "attachments" as const;
+    const attachmentId = randomUUID();
+    const safeName = sanitizeFilename(filename);
+    // Workspace-free storage key: standalone tasks have no workspace id.
+    const storagePath = `standalone/task/${taskId}/${attachmentId}-${safeName}`;
+
+    const storage = getStorage();
+    let signed;
+    try {
+      signed = await storage.createUploadUrl({ bucket, storagePath, contentType });
+    } catch (err) {
+      log.error({ err, storagePath, bucket }, "createUploadUrl failed");
+      return res.status(502).json({ error: "storage_error", message: "Failed to create upload URL" });
+    }
+
+    try {
+      await createTaskAttachmentLink({
+        attachmentId,
+        workspaceId: null,
+        bucket,
+        storagePath,
+        fileName: safeName,
+        mimeType: contentType,
+        fileSize: sizeBytes,
+        uploadedBy: userId,
+        taskId,
+        kind,
+      });
+    } catch (err) {
+      log.error({ err, attachmentId }, "failed to insert attachment row");
+      return res.status(500).json({ error: "db_error", message: "Failed to register attachment" });
+    }
+
+    await recordTaskActivity({
+      taskId,
+      actorId: userId,
+      type: "attachment_added",
+      metadata: { attachmentId, filename: safeName },
+    });
+
+    return res.status(201).json({
+      attachmentId,
+      bucket,
+      storagePath,
+      uploadUrl: signed.uploadUrl,
+      method: signed.method,
+      headers: signed.headers,
+      expiresAt: signed.expiresAt.toISOString(),
+    });
+  },
+);
+
 router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const { taskId, attachmentId } = req.params;
@@ -935,8 +1129,23 @@ router.delete("/:taskId/attachments/:attachmentId", requireAuth, async (req: Aut
   const denied = await authorizePersonalTaskAccess(taskId, userId);
   if (denied) return res.status(denied.status).json(denied.body);
 
+  // Capture the filename before the soft-delete so the activity event can
+  // record it (the row is still readable since soft-delete only sets deletedAt).
+  const [meta] = await db
+    .select({ filename: attachments.originalFilename })
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
+
   const deleted = await deleteTaskAttachment(taskId, attachmentId);
   if (!deleted) return res.status(404).json({ error: "Attachment not found" });
+
+  await recordTaskActivity({
+    taskId,
+    actorId: userId,
+    type: "attachment_removed",
+    metadata: { attachmentId, filename: meta?.filename ?? null },
+  });
 
   return res.json({ success: true });
 });

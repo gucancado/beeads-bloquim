@@ -10,6 +10,7 @@ import myTasksRouter from "./myTasks";
 import tasksSearchRouter from "./tasksSearch";
 import commentsRouter, { taskRouter as taskCommentsRouter } from "./comments";
 import workspaceTasksRouter from "./workspaceTasks";
+import workspaceActivitiesRouter from "./workspaceActivities";
 import recentMapsRouter from "./recentMaps";
 import mapsSearchRouter from "./mapsSearch";
 import storageRouter from "./storage";
@@ -21,7 +22,9 @@ import strategyRouter from "./strategy";
 import taskTemplatesRouter from "./taskTemplates";
 import taskLinksRouter from "./taskLinks";
 import googleCalendarRouter from "./integrations/google-calendar";
+import meetingsRouter from "./meetings";
 import { meRouter as ssoMeRouter, publicRouter as ssoPublicRouter } from "./sso";
+import { internalRouter } from "./internal";
 
 const router: IRouter = Router();
 
@@ -29,6 +32,7 @@ router.use(healthRouter);
 router.use("/auth", authRouter);
 router.use("/auth/me", ssoMeRouter);
 router.use("/public", ssoPublicRouter);
+router.use("/internal", internalRouter);
 router.use("/users", usersRouter);
 router.use("/workspaces", workspacesRouter);
 router.use("/workspaces/:workspaceId/maps", mapsRouter);
@@ -39,6 +43,7 @@ router.use("/workspaces/:workspaceId/maps/:mapId/text-elements", textElementsRou
 router.use("/workspaces/:workspaceId/maps/:mapId/shapes", shapesRouter);
 router.use("/workspaces/:workspaceId/strategy", strategyRouter);
 router.use("/workspaces/:workspaceId/tasks", workspaceTasksRouter);
+router.use("/workspaces/:workspaceId/activities", workspaceActivitiesRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskCommentsRouter);
 router.use("/workspaces/:workspaceId/tasks/:taskId", taskLinksRouter);
 router.use("/my-tasks", myTasksRouter);
@@ -49,6 +54,7 @@ router.use("/maps/search", mapsSearchRouter);
 router.use("/sidebar", sidebarRouter);
 router.use("/preferences", preferencesRouter);
 router.use("/integrations/google-calendar", googleCalendarRouter);
+router.use("/meetings", meetingsRouter);
 router.use(storageRouter);
 
 export default router;

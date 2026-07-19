@@ -43,12 +43,16 @@ export function errorHandler(
 
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
+  // Drizzle wraps the driver error as `Error: Failed query: …` and stashes the
+  // real Postgres error (FK violation, constraint, etc.) on `.cause`. Surface
+  // it so 500s aren't blind. (Bug task 7903bc06-… debugged without this.)
+  const cause = err instanceof Error && err.cause !== undefined ? err.cause : undefined;
   logger.error(
     {
       reqId: req.id,
       method: req.method,
       path: req.originalUrl ?? req.path,
-      err: { message, stack },
+      err: { message, stack, cause },
     },
     "unhandled request error",
   );

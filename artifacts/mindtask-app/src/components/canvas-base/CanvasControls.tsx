@@ -1,11 +1,16 @@
 import { Controls, ControlButton, useReactFlow } from "reactflow";
+import { Wand2 } from "lucide-react";
 
 /**
  * Controles de zoom/enquadrar do canvas — genéricos, compartilhados pelos modos
  * action e strategy (Fase 1 do Mapa Estratégico). Renderizado dentro do
  * <ReactFlow>, então usa useReactFlow() diretamente.
+ *
+ * `onAutoLayout` é opcional e específico do modo action (reorganiza o grafo de
+ * cards/aprovação). O canvas strategy é grafo livre com floating edges — não
+ * passa a prop, então o botão "reorganizar" não aparece lá.
  */
-export function CanvasControls() {
+export function CanvasControls({ onAutoLayout }: { onAutoLayout?: () => void }) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   return (
     <Controls className="bg-card border border-border shadow-md rounded-xl overflow-hidden" showZoom={false} showFitView={false} showInteractive={false}>
@@ -18,6 +23,11 @@ export function CanvasControls() {
       <ControlButton title="enquadrar" onClick={() => fitView()}>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M5.333 16c0-5.891 4.776-10.667 10.667-10.667S26.667 10.109 26.667 16 21.891 26.667 16 26.667 5.333 21.891 5.333 16zM16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" /></svg>
       </ControlButton>
+      {onAutoLayout && (
+        <ControlButton title="reorganizar" onClick={onAutoLayout}>
+          <Wand2 />
+        </ControlButton>
+      )}
     </Controls>
   );
 }

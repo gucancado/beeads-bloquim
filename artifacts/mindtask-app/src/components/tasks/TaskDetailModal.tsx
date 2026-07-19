@@ -27,6 +27,7 @@ import { ApprovalTaskView } from "@/components/tasks/ApprovalTaskView";
 import { AttachmentsSection } from "@/components/tasks/AttachmentsSection";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
 import { AssigneeAvatarPicker } from "@/components/tasks/AssigneeAvatarPicker";
+import { OwnerAvatarPicker } from "@/components/tasks/OwnerAvatarPicker";
 import { ApprovalSection } from "@/components/tasks/approval/ApprovalSection";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { AutosaveIndicator } from "@/components/ui/autosave-indicator";
@@ -75,6 +76,7 @@ interface UpdateTaskPayload {
   title?: string;
   description?: string | null;
   assignedTo?: string | null;
+  ownerId?: string;
   priority?: string;
   dueDate?: string | null;
   startAt?: string | null;
@@ -299,6 +301,7 @@ export function TaskDetailModal({
     title, setTitle,
     description, setDescription,
     assignedTo, setAssignedTo,
+    ownerId, setOwnerId,
     priority, setPriority,
     dueDate, setDueDate,
     startAt, setStartAt,
@@ -411,23 +414,26 @@ export function TaskDetailModal({
     );
   };
 
-  const saveCardTaskDetails = (overrides: { priority?: string; assignedTo?: string; dueDate?: string; startAt?: string; scheduleMode?: ScheduleModeValue } = {}) => {
+  const saveCardTaskDetails = (overrides: { priority?: string; assignedTo?: string; ownerId?: string; dueDate?: string; startAt?: string; scheduleMode?: ScheduleModeValue } = {}) => {
     if (!cardId || !mapId || !card?.task) return;
     const p = (overrides.priority ?? priority) as TaskPriority;
     const a = overrides.assignedTo ?? assignedTo;
     const d = overrides.dueDate ?? dueDate;
     const s = overrides.startAt ?? startAt;
     const m = overrides.scheduleMode ?? scheduleMode;
+    const data: Record<string, unknown> = {
+      title,
+      priority: p,
+      assignedTo: a === "unassigned" ? null : a,
+      dueDate: d ? d + "T12:00:00.000Z" : null,
+      startAt: s ? s + "T12:00:00.000Z" : null,
+      scheduleMode: m,
+    };
+    if (overrides.ownerId !== undefined) data.ownerId = overrides.ownerId;
     updateTaskDetailsMut.mutate(
       {
-        workspaceId: effectiveWorkspaceId, mapId, cardId, data: {
-          title,
-          priority: p,
-          assignedTo: a === "unassigned" ? null : a,
-          dueDate: d ? d + "T12:00:00.000Z" : null,
-          startAt: s ? s + "T12:00:00.000Z" : null,
-          scheduleMode: m,
-        }
+        workspaceId: effectiveWorkspaceId, mapId, cardId,
+        data: data as Parameters<typeof updateTaskDetailsMut.mutate>[0]["data"],
       },
       { onSuccess: () => invalidateCard() }
     );
@@ -787,6 +793,20 @@ export function TaskDetailModal({
                       });
                     }
                   }}
+                  ownerSlot={
+                    isEditing && !isStandalone ? (
+                      <OwnerAvatarPicker
+                        ownerId={ownerId}
+                        members={members}
+                        onSelect={v => {
+                          setOwnerId(v);
+                          markDirty();
+                          if (isCardMode) saveCardTaskDetails({ ownerId: v });
+                          else if (resolvedTaskId) saveMutation.mutate({ body: { ownerId: v }, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+                        }}
+                      />
+                    ) : null
+                  }
                   leftSlot={
                     isEditing ? (
                       <TaskAssociationChips

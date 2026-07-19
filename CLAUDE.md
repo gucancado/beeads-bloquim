@@ -217,7 +217,7 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | user_google_calendar_accounts | Contas Google Calendar vinculadas |
 | user_calendar_preferences | Preferências de calendário |
 
-**Enums relevantes**: task_status (pending, in_progress, completed, overdue, blocked, draft), task_priority (low, medium, high, critical), card_visual_status, workspace_role (admin, editor, executor), approval_status, approval_mode (sequential, parallel), schedule_mode (ate, entre, em, sem_prazo, urgente), attachment_kind (standard, deliverable), task_activity_type (task_created, assignee_changed, status_changed, priority_changed, due_date_changed, approval_comment, task_approved, task_rejected, task_duplicated, checklist_items_added, task_moved)
+**Enums relevantes**: task_status (pending, in_progress, completed, overdue, blocked, draft), task_priority (low, medium, high, critical), card_visual_status, workspace_role (admin, editor, executor), approval_status, approval_mode (sequential, parallel), schedule_mode (ate, entre, em, sem_prazo, urgente), attachment_kind (standard, deliverable), task_activity_type (task_created, assignee_changed, owner_changed, status_changed, priority_changed, due_date_changed, approval_comment, task_approved, task_rejected, task_duplicated, checklist_items_added, task_moved)
 
 ### Modalidades de prazo (`schedule_mode`)
 - `ate` — só `dueDate` (fazer até).
