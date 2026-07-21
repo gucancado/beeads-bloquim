@@ -81,7 +81,11 @@ describe("WorkerMeetingClient", () => {
     expect(calls[0].init.method).toBe("POST");
     expect(calls[0].init.headers["X-Panel-Token"]).toBe("PANELTOK");
     expect(calls[0].init.headers["X-Acting-User"]).toBe("user-1");
-    expect(JSON.parse(calls[0].init.body)).toEqual({ pattern: "weekly.*", workspaceId: "ws-1", projectSlug: "proj-x" });
+    // Body vai em snake_case (contrato do worker W4: req.body.workspace_id / project_slug).
+    const titleRuleBody = JSON.parse(calls[0].init.body);
+    expect(titleRuleBody).toEqual({ pattern: "weekly.*", workspace_id: "ws-1", project_slug: "proj-x" });
+    expect(titleRuleBody).not.toHaveProperty("workspaceId");
+    expect(titleRuleBody).not.toHaveProperty("projectSlug");
   });
 
   it("upsertTitleRule resolve com resposta 204/sem body (não exige JSON)", async () => {

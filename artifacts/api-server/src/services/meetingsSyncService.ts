@@ -228,8 +228,11 @@ async function upsertOccurrence(
 
   // 4. Row nova: decide pelo método de atribuição.
   const attr = await deps.resolveAttribution({ title: event.summary, attendees: toAttrAttendees(event.attendees) });
-  const resolved = attr.method === "domain" || attr.method === "title";
-  const triage = attr.method === "none" && attr.unresolved_domains.length > 0;
+  // Exige workspace_id p/ resolver (alinha com o caminho de update). Se method for
+  // domain/title mas workspace_id vier null (violação de contrato), cai no não-resolvido:
+  // needs_triage se houver unresolved_domains, senão skip.
+  const resolved = (attr.method === "domain" || attr.method === "title") && !!attr.workspace_id;
+  const triage = !resolved && attr.unresolved_domains.length > 0;
 
   if (attr.method === "internal") {
     report.skippedInternal++;

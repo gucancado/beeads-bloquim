@@ -127,8 +127,10 @@ export class WorkerMeetingClient {
     actingUser: string,
     a: { pattern: string; workspaceId: string; projectSlug?: string | null },
   ): Promise<void> {
+    // O worker (W4) lê o body em snake_case (req.body.workspace_id / project_slug);
+    // a assinatura pública fica camelCase, mas o BODY enviado casa o contrato do worker.
     await this.reqVoid(actingUser, "POST", "/attribution/title-rules", {
-      pattern: a.pattern, workspaceId: a.workspaceId, projectSlug: a.projectSlug ?? null,
+      pattern: a.pattern, workspace_id: a.workspaceId, project_slug: a.projectSlug ?? null,
     });
   }
 

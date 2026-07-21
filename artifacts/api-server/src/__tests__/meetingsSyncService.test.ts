@@ -374,4 +374,28 @@ describe("runMeetingsSync", () => {
     expect(bRows[0].workspaceId).toBe(b.ws.id);
     expect(bRows[0].attributionMethod).toBe("domain");
   });
+
+  it("11. method domain mas workspace_id null (violação de contrato) → needs_triage (nunca scheduled c/ workspace null)", async () => {
+    const { account } = await seed("NullWs");
+    const P = randomUUID().slice(0, 8);
+    const events = [
+      ev({ id: `${P}-e`, iCalUID: `${P}-u`, summary: "Broken attr", hangoutLink: "https://meet.google.com/nnn-wwww-null", startDateTime: T1, endDateTime: T1END }),
+    ];
+    const report = await runMeetingsSync(
+      deps({
+        listAccounts: async () => [{ id: account.id, userId: account.userId }],
+        listEvents: async () => events,
+        // Contrato violado: domain sem workspace_id, mas com domínio pendente.
+        resolveAttribution: async () => ({ workspace_id: null, project_slug: null, method: "domain", unresolved_domains: ["x.com"] }),
+      }),
+    );
+    // Não conta como created (não vira scheduled); cai em triage por causa do unresolved.
+    expect(report.created).toBe(0);
+    expect(report.triaged).toBe(1);
+    const rows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("needs_triage");
+    expect(rows[0].workspaceId).toBeNull();
+    expect(rows[0].attributionMethod).toBeNull();
+  });
 });
