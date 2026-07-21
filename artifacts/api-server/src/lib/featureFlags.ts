@@ -27,6 +27,18 @@ export function isMeetingsEnabled(): boolean {
   return Boolean(process.env.WORKER_URL && process.env.WORKER_PANEL_TOKEN);
 }
 
+/**
+ * Gate dos crons de agenda de reuniões (sync GCal→meetings + dispatch da
+ * coleta). Estrito (`=== "true"`, sem toLowerCase) e composto: só liga quando a
+ * flag da agenda está explicitamente ligada E a integração de reuniões E o
+ * Google Calendar estão habilitados (mesma flag `requireGoogleCalendar` exige).
+ * Default OFF.
+ */
+export function isMeetingsAgendaEnabled(): boolean {
+  if (process.env.MEETINGS_AGENDA_ENABLED !== "true") return false;
+  return isMeetingsEnabled() && isGoogleCalendarEnabled();
+}
+
 export function requireStorage(
   _req: Request,
   res: Response,

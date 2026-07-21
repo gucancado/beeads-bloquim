@@ -1,9 +1,11 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { registerAndLogin, deleteUser, deleteWorkspaces } from "./helpers";
 import { db } from "@workspace/db";
 import { meetings, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { extractMeetCode } from "../routes/meetings";
+import { isMeetingsAgendaEnabled } from "../lib/featureFlags";
+import { startScheduler } from "../scheduler";
 
 describe("extractMeetCode", () => {
   it("extrai de URL e de código cru", () => {
@@ -80,5 +82,83 @@ describe("GET /api/meetings sem workspaceId — lista da agenda", () => {
     expect(codes).toContain("aaa-bbbb-ccc"); // do workspace do usuário — some hoje (bug)
     expect(codes).toContain("ddd-eeee-fff"); // standalone
     expect(codes).not.toContain("ggg-hhhh-iii"); // workspace alheio: não pode vazar
+  });
+});
+
+// B6: gate + wiring dos crons de agenda no scheduler. O gate é estrito e
+// composto; com ele OFF (default) o startScheduler não pode acoplar nenhum
+// interval de agenda nem quebrar o boot.
+describe("agenda de reuniões — gate MEETINGS_AGENDA_ENABLED + wiring do scheduler", () => {
+  const GATE_ENVS = [
+    "MEETINGS_AGENDA_ENABLED",
+    "MEETINGS_ENABLED",
+    "WORKER_URL",
+    "WORKER_PANEL_TOKEN",
+    "GOOGLE_CALENDAR_ENABLED",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REDIRECT_URI",
+  ] as const;
+  let saved: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    saved = {};
+    for (const k of GATE_ENVS) saved[k] = process.env[k];
+  });
+  afterEach(() => {
+    for (const k of GATE_ENVS) {
+      const v = saved[k];
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  function enableAll() {
+    process.env.MEETINGS_AGENDA_ENABLED = "true";
+    process.env.MEETINGS_ENABLED = "true";
+    process.env.WORKER_URL = "http://worker.invalid";
+    process.env.WORKER_PANEL_TOKEN = "t";
+    process.env.GOOGLE_CALENDAR_ENABLED = "true";
+    process.env.GOOGLE_CLIENT_ID = "cid";
+    process.env.GOOGLE_CLIENT_SECRET = "csecret";
+    process.env.GOOGLE_OAUTH_REDIRECT_URI = "https://app.invalid/cb";
+  }
+
+  it("default OFF: sem a flag, o gate é false mesmo com tudo o mais habilitado", () => {
+    enableAll();
+    delete process.env.MEETINGS_AGENDA_ENABLED;
+    expect(isMeetingsAgendaEnabled()).toBe(false);
+  });
+
+  it("gate estrito: 'TRUE'/'1' não ligam (só '===\"true\"')", () => {
+    enableAll();
+    process.env.MEETINGS_AGENDA_ENABLED = "TRUE";
+    expect(isMeetingsAgendaEnabled()).toBe(false);
+    process.env.MEETINGS_AGENDA_ENABLED = "1";
+    expect(isMeetingsAgendaEnabled()).toBe(false);
+  });
+
+  it("composto: exige reuniões E Google Calendar, não só a flag da agenda", () => {
+    enableAll();
+    delete process.env.MEETINGS_ENABLED; // reuniões off
+    expect(isMeetingsAgendaEnabled()).toBe(false);
+    enableAll();
+    delete process.env.GOOGLE_CALENDAR_ENABLED; // gcal off
+    expect(isMeetingsAgendaEnabled()).toBe(false);
+  });
+
+  it("liga só com agenda + reuniões + Google Calendar todos habilitados", () => {
+    enableAll();
+    expect(isMeetingsAgendaEnabled()).toBe(true);
+  });
+
+  it("boot com gate OFF: startScheduler não quebra e não acopla crons de agenda", () => {
+    delete process.env.MEETINGS_AGENDA_ENABLED; // default OFF
+    const spy = vi.spyOn(global, "setInterval");
+    expect(() => startScheduler()).not.toThrow();
+    // Só os 2 intervals base (overdue + activate); nenhum de agenda com o gate OFF.
+    expect(spy).toHaveBeenCalledTimes(2);
+    for (const r of spy.mock.results) clearInterval(r.value as ReturnType<typeof setInterval>);
+    spy.mockRestore();
   });
 });

@@ -3,6 +3,9 @@ import { tasks, cards } from "@workspace/db/schema";
 import { eq, and, lt, lte, ne, isNotNull, notExists, inArray } from "drizzle-orm";
 import { getTodayLocal } from "./lib/overdue";
 import { tryActivateTask } from "./services/taskActivation";
+import { isMeetingsAgendaEnabled } from "./lib/featureFlags";
+import { runMeetingsSync } from "./services/meetingsSyncService";
+import { runMeetingsDispatch } from "./services/meetingsDispatchService";
 import { logger } from "./lib/logger";
 
 const schedulerLogger = logger.child({ module: "scheduler" });
@@ -138,6 +141,14 @@ export async function cleanupOrphanTasks() {
   );
 }
 
+/** Lê um intervalo em ms de env, com default e validação (positivo finito). */
+function envIntervalMs(name: string, defaultMs: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return defaultMs;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : defaultMs;
+}
+
 export function startScheduler() {
   const onErr = (err: unknown) =>
     schedulerLogger.error({ err }, "scheduler task failed");
@@ -150,4 +161,19 @@ export function startScheduler() {
   setInterval(() => syncOverdueFlags().catch(onErr), 5 * 60 * 1000);
   setInterval(() => activateScheduledTasks().catch(onErr), 5 * 60 * 1000);
   schedulerLogger.info({ intervalMs: 5 * 60 * 1000 }, "overdue sync started");
+
+  // Crons da agenda de reuniões — atrás de gate estrito (default OFF): sync
+  // GCal→meetings e dispatch da coleta. Só sobem com MEETINGS_AGENDA_ENABLED +
+  // reuniões + Google Calendar habilitados.
+  const SYNC_MS = envIntervalMs("MEETINGS_AGENDA_SYNC_INTERVAL_MS", 900_000);
+  const DISPATCH_MS = envIntervalMs("MEETINGS_AGENDA_DISPATCH_INTERVAL_MS", 60_000);
+  if (isMeetingsAgendaEnabled()) {
+    runMeetingsSync().catch(onErr);
+    setInterval(() => runMeetingsSync().catch(onErr), SYNC_MS);
+    setInterval(() => runMeetingsDispatch().catch(onErr), DISPATCH_MS);
+    schedulerLogger.info(
+      { syncMs: SYNC_MS, dispatchMs: DISPATCH_MS },
+      "meetings agenda crons started",
+    );
+  }
 }
