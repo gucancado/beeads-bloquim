@@ -1,3 +1,7 @@
+import { eq } from "drizzle-orm";
+import { db } from "@workspace/db";
+import { meetings, type Meeting } from "@workspace/db/schema";
+
 export type WorkerCollection = {
   id: string;
   status: string;
@@ -13,10 +17,18 @@ export type WorkerCollection = {
   workspace_id?: string | null;
 };
 
+export type AttributionResult = {
+  workspace_id: string | null;
+  project_slug: string | null;
+  method: string;
+  unresolved_domains: string[];
+};
+
 export type MeetingStatus = "collecting" | "transcribed" | "failed" | "canceled";
 
 export function workerStatusToMeeting(status: string): MeetingStatus {
   switch (status) {
+    case "queued":
     case "collecting":
     case "stopping":
       return "collecting";
@@ -27,6 +39,13 @@ export function workerStatusToMeeting(status: string): MeetingStatus {
     default:
       return "failed";
   }
+}
+
+export const MEET_CODE_RE = /[a-z]{3}-[a-z]{4}-[a-z]{3}/;
+
+export function extractMeetCode(input: string): string | null {
+  const m = (input ?? "").trim().match(MEET_CODE_RE);
+  return m ? m[0] : null;
 }
 
 export class WorkerConflictError extends Error {}
@@ -51,7 +70,7 @@ export class WorkerMeetingClient {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
-  private async req(actingUser: string, method: string, path: string, body?: unknown): Promise<WorkerCollection> {
+  private async req<T = WorkerCollection>(actingUser: string, method: string, path: string, body?: unknown): Promise<T> {
     const r = await this.fetchFn(`${this.baseUrl}${path}`, {
       method,
       headers: {
@@ -72,11 +91,31 @@ export class WorkerMeetingClient {
       }
       throw new WorkerError(r.status, data.message ?? data.error ?? `HTTP ${r.status}`);
     }
-    return (await r.json()) as WorkerCollection;
+    return (await r.json()) as T;
   }
 
-  create(actingUser: string, a: { meetCode: string; workspaceId: string | null }) {
-    return this.req(actingUser, "POST", "/meetings-collect", { meetCode: a.meetCode, workspaceId: a.workspaceId });
+  create(actingUser: string, a: { meetCode: string; workspaceId: string | null; title?: string | null; expiresAt?: string | null }) {
+    return this.req(actingUser, "POST", "/meetings-collect", {
+      meetCode: a.meetCode, workspaceId: a.workspaceId, title: a.title, expiresAt: a.expiresAt,
+    });
+  }
+
+  resolveAttribution(
+    actingUser: string,
+    a: { title: string | null; attendees: Array<{ email: string; name?: string }> },
+  ): Promise<AttributionResult> {
+    return this.req<AttributionResult>(actingUser, "POST", "/attribution/resolve", {
+      title: a.title, attendees: a.attendees,
+    });
+  }
+
+  async upsertTitleRule(
+    actingUser: string,
+    a: { pattern: string; workspaceId: string; projectSlug?: string | null },
+  ): Promise<void> {
+    await this.req<unknown>(actingUser, "POST", "/attribution/title-rules", {
+      pattern: a.pattern, workspaceId: a.workspaceId, projectSlug: a.projectSlug ?? null,
+    });
   }
 
   get(actingUser: string, workerId: string) {
@@ -103,4 +142,28 @@ export function getWorkerClient(): WorkerMeetingClient {
   }
   cached = new WorkerMeetingClient(baseUrl, token);
   return cached;
+}
+
+// Sincroniza uma reunião "collecting" com o estado do worker (poll-through). Usa
+// row.createdBy como acting user — a mesma função serve a rota (GET/:id, stop) e o
+// cron do B5, que não tem um requester. Worker indisponível: devolve a row intacta.
+export async function syncMeetingFromWorker(row: Meeting): Promise<Meeting> {
+  if (row.status !== "collecting" || !row.workerMeetingId) return row;
+  let worker;
+  try {
+    worker = await getWorkerClient().get(row.createdBy ?? "", row.workerMeetingId);
+  } catch {
+    return row; // worker indisponível: devolve o que temos
+  }
+  const mapped = workerStatusToMeeting(worker.status);
+  const patch: Record<string, unknown> = { status: mapped, updatedAt: new Date() };
+  if (worker.episode_id != null) patch.episodeId = worker.episode_id;
+  if (worker.failure_reason != null) patch.failureReason = worker.failure_reason;
+  if (mapped === "transcribed") {
+    if (worker.participants) patch.participants = worker.participants;
+    if (worker.occurred_at) patch.occurredAt = new Date(worker.occurred_at);
+    if (worker.duration_seconds != null) patch.durationSeconds = worker.duration_seconds;
+  }
+  const [updated] = await db.update(meetings).set(patch).where(eq(meetings.id, row.id)).returning();
+  return updated;
 }

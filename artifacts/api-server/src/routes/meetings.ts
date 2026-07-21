@@ -6,15 +6,12 @@ import { meetings, workspaceMembers, maps } from "@workspace/db/schema";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireMeetings } from "../lib/featureFlags";
 import {
-  getWorkerClient, workerStatusToMeeting, WorkerConflictError, AttributionFrozenError,
+  getWorkerClient, WorkerConflictError, AttributionFrozenError,
+  extractMeetCode, syncMeetingFromWorker,
 } from "../services/meetingCollectorService";
 
-const MEET_RE = /[a-z]{3}-[a-z]{4}-[a-z]{3}/;
-
-export function extractMeetCode(input: string): string | null {
-  const m = (input ?? "").trim().match(MEET_RE);
-  return m ? m[0] : null;
-}
+// Re-export para compat com imports existentes (extractMeetCode mora no service agora).
+export { extractMeetCode };
 
 const router: IRouter = Router();
 router.use(requireMeetings);
@@ -60,7 +57,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }).returning();
 
   try {
-    const worker = await getWorkerClient().create(userId, { meetCode, workspaceId });
+    const worker = await getWorkerClient().create(userId, { meetCode, workspaceId, title: row.title });
     const [updated] = await db.update(meetings)
       .set({ workerMeetingId: worker.id, updatedAt: new Date() })
       .where(eq(meetings.id, row.id)).returning();
@@ -89,7 +86,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   // sem workspace: tudo que o usuário legitimamente vê — standalone criadas por
   // ele + reuniões dos workspaces onde é membro. A agenda (my-tasks) é uma visão
   // cross-workspace e chama sem parâmetro; filtrar só standalone aqui esconderia
-  // da UI toda reunião com workspace (e travaria o poll-through do syncFromWorker).
+  // da UI toda reunião com workspace (e travaria o poll-through do syncMeetingFromWorker).
   const myWorkspaces = db.select({ id: workspaceMembers.workspaceId })
     .from(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   const rows = await db.select().from(meetings)
@@ -101,24 +98,6 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   return res.json(rows);
 });
 
-async function syncFromWorker(userId: string, row: typeof meetings.$inferSelect) {
-  if (row.status !== "collecting" || !row.workerMeetingId) return row;
-  let worker;
-  try { worker = await getWorkerClient().get(userId, row.workerMeetingId); }
-  catch { return row; } // worker indisponível: devolve o que temos
-  const mapped = workerStatusToMeeting(worker.status);
-  const patch: Record<string, unknown> = { status: mapped, updatedAt: new Date() };
-  if (worker.episode_id != null) patch.episodeId = worker.episode_id;
-  if (worker.failure_reason != null) patch.failureReason = worker.failure_reason;
-  if (mapped === "transcribed") {
-    if (worker.participants) patch.participants = worker.participants;
-    if (worker.occurred_at) patch.occurredAt = new Date(worker.occurred_at);
-    if (worker.duration_seconds != null) patch.durationSeconds = worker.duration_seconds;
-  }
-  const [updated] = await db.update(meetings).set(patch).where(eq(meetings.id, row.id)).returning();
-  return updated;
-}
-
 // GET /api/meetings/:id (poll-through)
 router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
@@ -129,7 +108,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   } else if (row.createdBy !== userId) {
     return res.status(403).json({ message: "Sem permissão" });
   }
-  const synced = await syncFromWorker(userId, row);
+  const synced = await syncMeetingFromWorker(row);
   return res.json(synced);
 });
 
@@ -201,12 +180,12 @@ router.post("/:id/stop", requireAuth, async (req: AuthRequest, res) => {
   if (!row.workerMeetingId) return res.status(400).json({ message: "Reunião sem coleta ativa" });
   try {
     // stop() dispara stopBot + import inline no worker. A resposta do /stop é magra (só
-    // status + episode_id), então re-sincronizamos via syncFromWorker (worker.get()) para
+    // status + episode_id), então re-sincronizamos via syncMeetingFromWorker (worker.get()) para
     // preencher participants/occurredAt/durationSeconds. Sem isso, a reunião encerrada pelo
     // botão perderia esses campos: o GET/:id posterior pula o sync quando status != "collecting".
-    // `row` ainda está "collecting" aqui (buscado antes do stop), então syncFromWorker prossegue.
+    // `row` ainda está "collecting" aqui (buscado antes do stop), então syncMeetingFromWorker prossegue.
     await getWorkerClient().stop(userId, row.workerMeetingId);
-    const synced = await syncFromWorker(userId, row);
+    const synced = await syncMeetingFromWorker(row);
     return res.json(synced);
   } catch {
     return res.status(502).json({ message: "Falha ao encerrar a coleta" });

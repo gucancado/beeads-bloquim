@@ -17,6 +17,7 @@ describe("workerStatusToMeeting", () => {
   it("mapeia status worker → bloquim", () => {
     expect(workerStatusToMeeting("collecting")).toBe("collecting");
     expect(workerStatusToMeeting("stopping")).toBe("collecting");
+    expect(workerStatusToMeeting("queued")).toBe("collecting");
     expect(workerStatusToMeeting("imported")).toBe("transcribed");
     expect(workerStatusToMeeting("failed")).toBe("failed");
     expect(workerStatusToMeeting("canceled")).toBe("canceled");
@@ -33,6 +34,39 @@ describe("WorkerMeetingClient", () => {
     expect(calls[0].init.headers["X-Panel-Token"]).toBe("PANELTOK");
     expect(calls[0].init.headers["X-Acting-User"]).toBe("user-1");
     expect(JSON.parse(calls[0].init.body)).toEqual({ meetCode: "abc-defg-hij", workspaceId: "ws-1" });
+  });
+
+  it("create envia title e expiresAt no body", async () => {
+    const calls: any[] = [];
+    const client = new WorkerMeetingClient("http://worker.local", "T", fakeFetch(200, { id: "w1", status: "collecting", meet_code: "abc-defg-hij" }, calls) as any);
+    await client.create("user-1", { meetCode: "abc-defg-hij", workspaceId: "ws-1", title: "Weekly Sync", expiresAt: "2026-07-20T15:00:00Z" });
+    expect(JSON.parse(calls[0].init.body)).toEqual({
+      meetCode: "abc-defg-hij", workspaceId: "ws-1", title: "Weekly Sync", expiresAt: "2026-07-20T15:00:00Z",
+    });
+  });
+
+  it("resolveAttribution faz POST em /attribution/resolve com headers e retorna o JSON", async () => {
+    const calls: any[] = [];
+    const body = { workspace_id: "ws-9", project_slug: "proj-x", method: "attendee_domain", unresolved_domains: ["gmail.com"] };
+    const client = new WorkerMeetingClient("http://worker.local", "PANELTOK", fakeFetch(200, body, calls) as any);
+    const out = await client.resolveAttribution("user-1", { title: "Sync", attendees: [{ email: "a@acme.com", name: "A" }] });
+    expect(out).toEqual(body);
+    expect(calls[0].url).toBe("http://worker.local/attribution/resolve");
+    expect(calls[0].init.method).toBe("POST");
+    expect(calls[0].init.headers["X-Panel-Token"]).toBe("PANELTOK");
+    expect(calls[0].init.headers["X-Acting-User"]).toBe("user-1");
+    expect(JSON.parse(calls[0].init.body)).toEqual({ title: "Sync", attendees: [{ email: "a@acme.com", name: "A" }] });
+  });
+
+  it("upsertTitleRule faz POST em /attribution/title-rules com headers", async () => {
+    const calls: any[] = [];
+    const client = new WorkerMeetingClient("http://worker.local", "PANELTOK", fakeFetch(200, {}, calls) as any);
+    await client.upsertTitleRule("user-1", { pattern: "weekly.*", workspaceId: "ws-1", projectSlug: "proj-x" });
+    expect(calls[0].url).toBe("http://worker.local/attribution/title-rules");
+    expect(calls[0].init.method).toBe("POST");
+    expect(calls[0].init.headers["X-Panel-Token"]).toBe("PANELTOK");
+    expect(calls[0].init.headers["X-Acting-User"]).toBe("user-1");
+    expect(JSON.parse(calls[0].init.body)).toEqual({ pattern: "weekly.*", workspaceId: "ws-1", projectSlug: "proj-x" });
   });
 
   it("create 409 → WorkerConflictError", async () => {
