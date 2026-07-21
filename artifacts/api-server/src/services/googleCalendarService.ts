@@ -1,5 +1,9 @@
 import { createHmac } from "node:crypto";
+import { db } from "@workspace/db";
+import { userGoogleCalendarAccounts } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { encrypt, decrypt } from "../lib/encryption";
 
 const log = logger.child({ module: "googleCalendarService" });
 
@@ -177,15 +181,103 @@ export async function listCalendars(accessToken: string): Promise<GoogleCalendar
   return data.items ?? [];
 }
 
+export interface GoogleCalendarAttendee {
+  email: string;
+  displayName?: string;
+  responseStatus?: string;
+}
+
 export interface GoogleCalendarEvent {
   id: string;
-  summary?: string;
+  iCalUID: string | null;
+  recurringEventId: string | null;
+  originalStartTime: string | null;
+  summary: string | null;
   description?: string;
   location?: string;
+  hangoutLink: string | null;
+  attendees: GoogleCalendarAttendee[];
   start: { dateTime?: string; date?: string; timeZone?: string };
   end: { dateTime?: string; date?: string; timeZone?: string };
+  startDateTime: string | null;
+  endDateTime: string | null;
   htmlLink?: string;
   status?: string;
+}
+
+/**
+ * Pure mapper: normalizes a raw Google Calendar event payload into
+ * `GoogleCalendarEvent`. Exported for unit testing. Defensive against
+ * missing/mistyped fields so a malformed item never throws the whole sync.
+ * All-day events (start.date only, no dateTime) yield startDateTime/endDateTime
+ * `null` and are ignored downstream by the meetings sync.
+ */
+export function mapGoogleEvent(raw: unknown): GoogleCalendarEvent {
+  const e = (raw ?? {}) as Record<string, unknown>;
+  const startObj = (e.start ?? {}) as { dateTime?: string; date?: string; timeZone?: string };
+  const endObj = (e.end ?? {}) as { dateTime?: string; date?: string; timeZone?: string };
+  const originalStart = e.originalStartTime as { dateTime?: string } | undefined;
+
+  const attendeesRaw = Array.isArray(e.attendees) ? e.attendees : [];
+  const attendees: GoogleCalendarAttendee[] = attendeesRaw
+    .filter((a): a is Record<string, unknown> => !!a && typeof (a as Record<string, unknown>).email === "string")
+    .map((a) => {
+      const mapped: GoogleCalendarAttendee = { email: a.email as string };
+      if (typeof a.displayName === "string") mapped.displayName = a.displayName;
+      if (typeof a.responseStatus === "string") mapped.responseStatus = a.responseStatus;
+      return mapped;
+    });
+
+  return {
+    id: typeof e.id === "string" ? e.id : "",
+    iCalUID: typeof e.iCalUID === "string" ? e.iCalUID : null,
+    recurringEventId: typeof e.recurringEventId === "string" ? e.recurringEventId : null,
+    originalStartTime: typeof originalStart?.dateTime === "string" ? originalStart.dateTime : null,
+    summary: typeof e.summary === "string" ? e.summary : null,
+    description: typeof e.description === "string" ? e.description : undefined,
+    location: typeof e.location === "string" ? e.location : undefined,
+    hangoutLink: typeof e.hangoutLink === "string" ? e.hangoutLink : null,
+    attendees,
+    start: startObj,
+    end: endObj,
+    startDateTime: typeof startObj.dateTime === "string" ? startObj.dateTime : null,
+    endDateTime: typeof endObj.dateTime === "string" ? endObj.dateTime : null,
+    htmlLink: typeof e.htmlLink === "string" ? e.htmlLink : undefined,
+    status: typeof e.status === "string" ? e.status : undefined,
+  };
+}
+
+/**
+ * Returns a valid access token for the user's Google Calendar connection,
+ * refreshing (and persisting the refreshed token) when the stored one is near
+ * expiry. Returns `null` when the user has no connection; throws
+ * `GoogleAuthError` when a refresh attempt fails.
+ */
+export async function getValidAccessToken(userId: string): Promise<string | null> {
+  const [account] = await db
+    .select()
+    .from(userGoogleCalendarAccounts)
+    .where(eq(userGoogleCalendarAccounts.userId, userId))
+    .limit(1);
+  if (!account) return null;
+
+  const now = Date.now();
+  const expiresAt = account.expiresAt instanceof Date ? account.expiresAt.getTime() : new Date(account.expiresAt).getTime();
+  if (expiresAt - 30_000 > now) {
+    return decrypt(account.accessTokenEncrypted);
+  }
+
+  const refreshToken = decrypt(account.refreshTokenEncrypted);
+  const refreshed = await refreshAccessToken(refreshToken);
+  await db
+    .update(userGoogleCalendarAccounts)
+    .set({
+      accessTokenEncrypted: encrypt(refreshed.accessToken),
+      expiresAt: refreshed.expiresAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(userGoogleCalendarAccounts.userId, userId));
+  return refreshed.accessToken;
 }
 
 export async function listEvents(
@@ -212,6 +304,8 @@ export async function listEvents(
   if (!res.ok) {
     throw new GoogleApiError(`events failed: ${res.status}`, res.status);
   }
-  const data = await res.json() as { items: GoogleCalendarEvent[] };
-  return (data.items ?? []).filter(e => e.status !== "cancelled");
+  const data = await res.json() as { items?: unknown[] };
+  return (data.items ?? [])
+    .filter((e): e is Record<string, unknown> => !!e && (e as Record<string, unknown>).status !== "cancelled")
+    .map(mapGoogleEvent);
 }

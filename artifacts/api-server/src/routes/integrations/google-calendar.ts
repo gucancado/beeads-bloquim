@@ -11,10 +11,10 @@ import {
   buildAuthUrl,
   verifyState,
   exchangeCodeForTokens,
-  refreshAccessToken,
   revokeToken,
   listCalendars,
   listEvents,
+  getValidAccessToken,
   GoogleAuthError,
   type GoogleCalendarEvent,
 } from "../../services/googleCalendarService";
@@ -72,30 +72,6 @@ interface TodayEvent {
   allDay: boolean;
   start: string;
   end: string;
-}
-
-async function getValidAccessToken(userId: string): Promise<{ accessToken: string; account: typeof userGoogleCalendarAccounts.$inferSelect } | null> {
-  const [account] = await db.select().from(userGoogleCalendarAccounts).where(eq(userGoogleCalendarAccounts.userId, userId)).limit(1);
-  if (!account) return null;
-
-  const now = Date.now();
-  const expiresAt = account.expiresAt instanceof Date ? account.expiresAt.getTime() : new Date(account.expiresAt).getTime();
-  if (expiresAt - 30_000 > now) {
-    return { accessToken: decrypt(account.accessTokenEncrypted), account };
-  }
-
-  const refreshToken = decrypt(account.refreshTokenEncrypted);
-  const refreshed = await refreshAccessToken(refreshToken);
-  const [updated] = await db
-    .update(userGoogleCalendarAccounts)
-    .set({
-      accessTokenEncrypted: encrypt(refreshed.accessToken),
-      expiresAt: refreshed.expiresAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(userGoogleCalendarAccounts.userId, userId))
-    .returning();
-  return { accessToken: refreshed.accessToken, account: updated };
 }
 
 router.get("/auth-url", requireAuth, (req: AuthRequest, res) => {
@@ -234,10 +210,10 @@ router.post("/disconnect", requireAuth, async (req: AuthRequest, res) => {
 router.get("/calendars", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   try {
-    const tokenInfo = await getValidAccessToken(userId);
-    if (!tokenInfo) return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
+    const accessToken = await getValidAccessToken(userId);
+    if (!accessToken) return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
 
-    const remoteCalendars = await listCalendars(tokenInfo.accessToken);
+    const remoteCalendars = await listCalendars(accessToken);
     const prefs = await db.select().from(userCalendarPreferences).where(eq(userCalendarPreferences.userId, userId));
     const prefsByCalendarId = new Map(prefs.map(p => [p.googleCalendarId, p]));
 
@@ -323,8 +299,8 @@ router.get("/today-events", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
-    const tokenInfo = await getValidAccessToken(userId);
-    if (!tokenInfo) {
+    const accessToken = await getValidAccessToken(userId);
+    if (!accessToken) {
       return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
     }
 
@@ -342,7 +318,7 @@ router.get("/today-events", requireAuth, async (req: AuthRequest, res) => {
     const allEvents: TodayEvent[] = [];
     for (const pref of enabledPrefs) {
       try {
-        const events = await listEvents(tokenInfo.accessToken, pref.googleCalendarId, startISO, endISO, tz);
+        const events = await listEvents(accessToken, pref.googleCalendarId, startISO, endISO, tz);
         for (const ev of events) {
           allEvents.push(toTodayEvent(ev, pref));
         }
