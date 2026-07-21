@@ -70,7 +70,9 @@ export class WorkerMeetingClient {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
-  private async req<T = WorkerCollection>(actingUser: string, method: string, path: string, body?: unknown): Promise<T> {
+  // Faz a requisição e trata os erros; devolve a Response crua no sucesso (o
+  // caller decide se lê JSON ou ignora o body). Centraliza o mapeamento 409.
+  private async rawReq(actingUser: string, method: string, path: string, body?: unknown): Promise<Response> {
     const r = await this.fetchFn(`${this.baseUrl}${path}`, {
       method,
       headers: {
@@ -91,7 +93,19 @@ export class WorkerMeetingClient {
       }
       throw new WorkerError(r.status, data.message ?? data.error ?? `HTTP ${r.status}`);
     }
+    return r;
+  }
+
+  private async req<T = WorkerCollection>(actingUser: string, method: string, path: string, body?: unknown): Promise<T> {
+    const r = await this.rawReq(actingUser, method, path, body);
     return (await r.json()) as T;
+  }
+
+  // Variante para endpoints que resolvem sem body útil (ex.: 204 ou 201 sem
+  // JSON). Não exige parse: consome/ignora o corpo e só depende de res.ok.
+  private async reqVoid(actingUser: string, method: string, path: string, body?: unknown): Promise<void> {
+    const r = await this.rawReq(actingUser, method, path, body);
+    await r.text().catch(() => undefined);
   }
 
   create(actingUser: string, a: { meetCode: string; workspaceId: string | null; title?: string | null; expiresAt?: string | null }) {
@@ -113,7 +127,7 @@ export class WorkerMeetingClient {
     actingUser: string,
     a: { pattern: string; workspaceId: string; projectSlug?: string | null },
   ): Promise<void> {
-    await this.req<unknown>(actingUser, "POST", "/attribution/title-rules", {
+    await this.reqVoid(actingUser, "POST", "/attribution/title-rules", {
       pattern: a.pattern, workspaceId: a.workspaceId, projectSlug: a.projectSlug ?? null,
     });
   }
@@ -144,14 +158,16 @@ export function getWorkerClient(): WorkerMeetingClient {
   return cached;
 }
 
-// Sincroniza uma reunião "collecting" com o estado do worker (poll-through). Usa
-// row.createdBy como acting user — a mesma função serve a rota (GET/:id, stop) e o
-// cron do B5, que não tem um requester. Worker indisponível: devolve a row intacta.
-export async function syncMeetingFromWorker(row: Meeting): Promise<Meeting> {
+// Sincroniza uma reunião "collecting" com o estado do worker (poll-through). O
+// acting-user (só auditoria no worker) resolve como actingUser ?? row.createdBy ??
+// 'system:meetings-sync' — nunca string vazia: a rota (GET/:id, stop) passa o
+// requester, o cron do B5 pode dar um override, e rows de agenda (createdBy null)
+// caem no default de sistema. Worker indisponível: devolve a row intacta.
+export async function syncMeetingFromWorker(row: Meeting, actingUser?: string): Promise<Meeting> {
   if (row.status !== "collecting" || !row.workerMeetingId) return row;
   let worker;
   try {
-    worker = await getWorkerClient().get(row.createdBy ?? "", row.workerMeetingId);
+    worker = await getWorkerClient().get(actingUser ?? row.createdBy ?? "system:meetings-sync", row.workerMeetingId);
   } catch {
     return row; // worker indisponível: devolve o que temos
   }
