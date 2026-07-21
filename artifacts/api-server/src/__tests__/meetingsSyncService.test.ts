@@ -102,15 +102,26 @@ describe("runMeetingsSync", () => {
         attendees: [{ email: "x@acme.com", displayName: "X" }],
       }),
     ];
+    let captured: Parameters<SyncDeps["listEvents"]> | null = null;
     const report = await runMeetingsSync(
       deps({
         listAccounts: async () => [{ id: account.id, userId: account.userId }],
-        listEvents: async () => events,
+        listEvents: async (...args) => {
+          captured = args;
+          return events;
+        },
         resolveAttribution: async () => ({ workspace_id: ws.id, project_slug: "p", method: "domain", unresolved_domains: [] }),
       }),
     );
     expect(report.created).toBe(1);
     expect(report.seen).toBe(1);
+    // Call-shape do listEvents: janela de 14d + timezone fixa. Uma regressão na
+    // janela ou na TZ passaria despercebida sem este assert.
+    expect(captured).not.toBeNull();
+    const [, , timeMin, timeMax, tz] = captured!;
+    expect(tz).toBe("America/Sao_Paulo");
+    expect(timeMin).toBe(NOW.toISOString());
+    expect(timeMax).toBe(new Date(NOW.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString());
     const rows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
     expect(rows).toHaveLength(1);
     const m = rows[0];
@@ -172,6 +183,9 @@ describe("runMeetingsSync", () => {
     expect(rows[0].status).toBe("needs_triage");
     expect(rows[0].workspaceId).toBeNull();
     expect(rows[0].title).toBe("A");
+    // needs_triage nunca carrega attributionMethod: só é setado ao resolver
+    // ('domain'/'title'); 'manual' viria da triagem humana, não daqui.
+    expect(rows[0].attributionMethod).toBeNull();
   });
 
   it("4. recorrente: 3 ocorrências (mesmo iCalUID, starts distintos) → 3 rows com gcalRecurringEventId", async () => {
@@ -319,5 +333,45 @@ describe("runMeetingsSync", () => {
     expect(report.created).toBe(0);
     const rows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
     expect(rows).toHaveLength(0);
+  });
+
+  it("10. erro na conta A (token revogado) não derruba a conta B → B ainda sincroniza/reconcilia", async () => {
+    const a = await seed("Fail");
+    const b = await seed("OK");
+    const P = randomUUID().slice(0, 8);
+    const bEvent = ev({
+      id: `${P}-b`,
+      iCalUID: `${P}-ub`,
+      summary: "B call",
+      hangoutLink: "https://meet.google.com/bok-bbbb-bbb",
+      startDateTime: T1,
+      endDateTime: T1END,
+    });
+    const report = await runMeetingsSync(
+      deps({
+        listAccounts: async () => [
+          { id: a.account.id, userId: a.account.userId },
+          { id: b.account.id, userId: b.account.userId },
+        ],
+        // Conta A explode no boundary por-conta; B segue normalmente.
+        getAccessToken: async (userId) => {
+          if (userId === a.account.userId) throw new Error("token revogado");
+          return "tok";
+        },
+        listEvents: async () => [bEvent],
+        resolveAttribution: async () => ({ workspace_id: b.ws.id, project_slug: "p", method: "domain", unresolved_domains: [] }),
+      }),
+    );
+    expect(report.created).toBe(1);
+    expect(report.seen).toBe(1);
+    // Conta A não deixou nenhuma row (falhou antes de qualquer fetch).
+    const aRows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, a.account.id));
+    expect(aRows).toHaveLength(0);
+    // Conta B sincronizou/reconciliou de fato.
+    const bRows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, b.account.id));
+    expect(bRows).toHaveLength(1);
+    expect(bRows[0].status).toBe("scheduled");
+    expect(bRows[0].workspaceId).toBe(b.ws.id);
+    expect(bRows[0].attributionMethod).toBe("domain");
   });
 });
