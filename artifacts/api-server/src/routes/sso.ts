@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { workspaces, workspaceMembers, workspaceAgents } from "@workspace/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { getColorByIndex } from "@workspace/db/colorPalette";
 
 export const meRouter: IRouter = Router();
 export const publicRouter: IRouter = Router();
@@ -63,9 +64,17 @@ publicRouter.get("/workspaces", requireAuth, async (req: AuthRequest, res) => {
       id: workspaces.id,
       name: workspaces.name,
       hidden: workspaces.hidden,
+      colorIndex: workspaces.colorIndex,
     })
     .from(workspaces)
     .where(and(inArray(workspaces.id, ids), eq(workspaces.hidden, false)));
 
-  res.json(rows);
+  // Resolve o índice pra hex aqui: mantém a paleta de 16 cores como fonte
+  // única no Bloquim — consumidores (painel) não duplicam a tabela de cores.
+  res.json(
+    rows.map(({ colorIndex, ...workspace }) => ({
+      ...workspace,
+      color: getColorByIndex(colorIndex),
+    })),
+  );
 });
