@@ -157,6 +157,30 @@ export async function requireMapInWorkspace(
 }
 
 /**
+ * Validates that :mapId is a `kind='action'` map. Cards/connections only live
+ * on action maps; the strategy canvas (kind='strategy') shares shapes/text by
+ * map_id but must keep `cards` empty (§5.2). Run AFTER requireMapInWorkspace.
+ */
+export async function requireActionMap(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const mapId = String(req.params.mapId); // já validado por requireMapInWorkspace (roda antes)
+  const [row] = await db
+    .select({ kind: maps.kind })
+    .from(maps)
+    .where(eq(maps.id, mapId))
+    .limit(1);
+
+  if (!row || row.kind !== "action") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  next();
+}
+
+/**
  * Validates that :connectionId belongs to :mapId, and :mapId belongs to
  * :workspaceId. Run AFTER requireWorkspaceRole.
  */
