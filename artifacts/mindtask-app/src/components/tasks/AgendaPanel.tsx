@@ -4,33 +4,28 @@ import { ChevronDown, ChevronRight, Loader2, AlertCircle, RefreshCw } from "luci
 import { useGoogleCalendarStatus, useTodayEvents, type TodayEvent } from "@/hooks/useGoogleCalendar";
 import { Button } from "@beeads/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMeetings } from "@/components/meetings/useMeetings";
+import { useUpcomingMeetings, type Meeting } from "@/components/meetings/useMeetings";
 import { MeetingItem } from "@/components/meetings/MeetingItem";
-
-function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-}
+import { TriageDialog } from "@/components/meetings/TriageDialog";
 
 export function AgendaPanel() {
   const [expanded, setExpanded] = useState(false);
   const { data: status, isLoading: statusLoading, isFetched: statusFetched } = useGoogleCalendarStatus();
   const isConnected = !!status?.connected;
   const { data, isLoading: eventsLoading, error, refetch, isFetching } = useTodayEvents(expanded && isConnected);
-  const { data: meetingsData } = useMeetings();
+  const { data: upcoming } = useUpcomingMeetings();
+  const meetings = upcoming ?? [];
+  const [triageTarget, setTriageTarget] = useState<Meeting | null>(null);
   const qc = useQueryClient();
 
   const reauthRequired = (error as (Error & { status?: number }) | undefined)?.status === 401;
 
-  const events = data?.events ?? [];
+  // Dedup: um evento do Google que já virou reunião sincronizada (gcalEventId)
+  // não deve aparecer também na lista de eventos do calendário.
+  const syncedEventIds = new Set(meetings.map(m => m.gcalEventId).filter(Boolean) as string[]);
+  const events = (data?.events ?? []).filter(e => !syncedEventIds.has(e.id));
   const allDay = events.filter(e => e.allDay);
   const timed = events.filter(e => !e.allDay);
-  // A agenda é do dia: a rota devolve o histórico todo, então filtramos aqui —
-  // "hoje" é semântica desta tela, não da API. Coleta em andamento fica visível
-  // mesmo virando o dia, senão o botão de encerrar sumiria no meio da reunião.
-  const meetings = (meetingsData ?? []).filter(m => m.status === "collecting" || isToday(m.occurredAt));
 
   // Abre a agenda automaticamente quando há uma reunião coletando (feedback pós "nova reunião").
   const hasCollecting = meetings.some(m => m.status === "collecting");
@@ -70,9 +65,9 @@ export function AgendaPanel() {
       {expanded && (
         <div className="px-1 space-y-4">
           {meetings.length > 0 && (
-            <Section label="reuniões">
+            <Section label="próximas reuniões">
               <div className="space-y-2">
-                {meetings.map(m => <MeetingItem key={m.id} meeting={m} />)}
+                {meetings.map(m => <MeetingItem key={m.id} meeting={m} onTriage={setTriageTarget} />)}
               </div>
             </Section>
           )}
@@ -139,6 +134,8 @@ export function AgendaPanel() {
           )}
         </div>
       )}
+
+      <TriageDialog meeting={triageTarget} open={triageTarget !== null} onOpenChange={(o) => { if (!o) setTriageTarget(null); }} />
     </div>
   );
 }
