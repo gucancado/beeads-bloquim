@@ -2,7 +2,9 @@ import { Loader2, Check, X, Square } from "lucide-react";
 import { type Meeting, useMeetingPoll, useStopMeeting } from "./useMeetings";
 
 // Barra de status à esquerda da linha (mesmo padrão visual do EventRow da agenda).
-const STATUS_BAR: Record<Meeting["status"], string> = {
+// Parcial: os status novos da agenda (scheduled/needs_triage/missed) só chegam a
+// esta linha na F2, que define a aparência deles — aqui usamos o fallback neutro.
+const STATUS_BAR: Partial<Record<Meeting["status"], string>> = {
   collecting: "bg-amber-500",
   transcribed: "bg-emerald-500",
   failed: "bg-red-500",
@@ -40,7 +42,7 @@ export function MeetingItem({ meeting }: { meeting: Meeting }) {
 
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-transparent border border-transparent hover:border-border/60 transition-colors">
-      <span className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${STATUS_BAR[m.status]}`} />
+      <span className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${STATUS_BAR[m.status] ?? "bg-slate-400"}`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <p className="text-sm font-medium truncate">{title}</p>
