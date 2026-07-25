@@ -27,6 +27,7 @@ export function TriageDialog({ meeting, open, onOpenChange }: {
   }, [open, meeting]);
 
   if (!meeting) return null;
+  const isPending = triage.isPending || discard.isPending;
   const visibleWorkspaces = (workspaces ?? []).filter((w: { hidden: boolean }) => !w.hidden);
   const start = meeting.scheduledStartAt ? new Date(meeting.scheduledStartAt).toLocaleString("pt-BR") : "";
   const guests = (meeting.attendees ?? []).map(a => a.displayName ?? a.email).join(", ");
@@ -55,9 +56,9 @@ export function TriageDialog({ meeting, open, onOpenChange }: {
             {guests && <p className="text-xs text-muted-foreground truncate">convidados: {guests}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label className="lowercase">workspace</Label>
+            <Label htmlFor="triage-workspace" className="lowercase">workspace</Label>
             <Select value={workspaceId} onValueChange={(v) => setWorkspaceId(v ?? "")}>
-              <SelectTrigger><SelectValue placeholder="escolha o cliente" /></SelectTrigger>
+              <SelectTrigger id="triage-workspace"><SelectValue placeholder="escolha o cliente" /></SelectTrigger>
               <SelectContent>
                 {visibleWorkspaces.map((w: { id: string; name: string }) => (
                   <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
@@ -66,16 +67,16 @@ export function TriageDialog({ meeting, open, onOpenChange }: {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="lowercase">regra de título (opcional)</Label>
-            <Input value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="ex.: ludi ateliê" />
+            <Label htmlFor="triage-pattern" className="lowercase">regra de título (opcional)</Label>
+            <Input id="triage-pattern" value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="ex.: ludi ateliê" />
             <p className="text-[11px] text-muted-foreground">
               Enxugue pro nome do cliente — as próximas reuniões com esse trecho no título resolvem sozinhas.
             </p>
           </div>
         </div>
         <DialogFooter className="flex items-center justify-between gap-2">
-          <Button variant="ghost" onClick={onDiscard} disabled={discard.isPending} className="lowercase">descartar</Button>
-          <Button onClick={submit} disabled={!workspaceId || triage.isPending} className="lowercase">atribuir</Button>
+          <Button variant="ghost" onClick={onDiscard} disabled={isPending} className="lowercase">descartar</Button>
+          <Button onClick={submit} disabled={!workspaceId || isPending} className="lowercase">atribuir</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
