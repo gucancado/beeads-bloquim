@@ -19,11 +19,25 @@ describe("triagem de reuniões (needs_triage)", () => {
   const wsIds: string[] = [];
   const meetingIds: string[] = [];
   const gcalIds: string[] = [];
+  // Captura os valores pristinos ANTES de qualquer teste mutar (o corpo do describe
+  // roda na coleta, antes dos it/seed), pra restaurar em afterAll sem vazar estado
+  // pros outros arquivos do mesmo processo Vitest.
+  const ENV_KEYS = ["MEETINGS_ENABLED", "WORKER_URL", "WORKER_PANEL_TOKEN"] as const;
+  const savedEnv: Record<string, string | undefined> = {};
+  for (const k of ENV_KEYS) savedEnv[k] = process.env[k];
+
   afterAll(async () => {
-    for (const id of meetingIds) await db.delete(meetings).where(eq(meetings.id, id));
-    for (const id of gcalIds) await db.delete(userGoogleCalendarAccounts).where(eq(userGoogleCalendarAccounts.id, id));
-    await deleteWorkspaces(wsIds);
-    for (const id of userIds) await deleteUser(id);
+    try {
+      for (const id of meetingIds) await db.delete(meetings).where(eq(meetings.id, id));
+      for (const id of gcalIds) await db.delete(userGoogleCalendarAccounts).where(eq(userGoogleCalendarAccounts.id, id));
+      await deleteWorkspaces(wsIds);
+      for (const id of userIds) await deleteUser(id);
+    } finally {
+      for (const k of ENV_KEYS) {
+        if (savedEnv[k] === undefined) delete process.env[k];
+        else process.env[k] = savedEnv[k];
+      }
+    }
   });
 
   async function seed() {

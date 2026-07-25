@@ -77,7 +77,7 @@ export function useTriageMeeting(id: string) {
       invalidateAgenda(qc);
       toast({
         title: "Reunião atribuída",
-        description: res.titleRuleCreated ? "Regra criada — as próximas resolvem sozinhas." : "Regra não criada (worker indisponível).",
+        description: res.titleRuleCreated ? "Regra criada — as próximas resolvem sozinhas." : "Atribuído sem criar regra de título.",
       });
     },
     onError: (e: any) => toast({ title: "Erro na triagem", description: e?.message, variant: "destructive" }),

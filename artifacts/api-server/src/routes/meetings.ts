@@ -131,6 +131,11 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
 
   const rows = await db.select().from(meetings).where(and(
     inArray(meetings.status, ["scheduled", "needs_triage", "collecting"]),
+    // Espelho em SQL-list da visibilidade de canActOnMeeting: standalone-do-user /
+    // membro-do-workspace / dono-da-agenda-de-uma-needs_triage. É lista (não o helper
+    // async por-row) de propósito — chamar o helper aqui seria N+1. Não é
+    // over-disclosure: needs_triage sempre tem workspaceId null, então toda branch
+    // ainda exige criador / membership / posse-do-calendar.
     or(
       and(eq(meetings.createdBy, userId), isNull(meetings.workspaceId)),
       inArray(meetings.workspaceId, myWorkspaces),
@@ -247,9 +252,14 @@ router.patch("/:id/collect", requireAuth, async (req: AuthRequest, res) => {
   if (row.status !== "scheduled" && row.status !== "needs_triage") {
     return res.status(400).json({ error: "collect_toggle_not_allowed", message: "Só dá pra alterar a coleta de reuniões agendadas." });
   }
+  // UPDATE condicionado ao status (fecha o TOCTOU entre o SELECT acima e este write:
+  // a row pode ter virado collecting/terminal nesse meio-tempo). !updated → 400.
   const [updated] = await db.update(meetings)
     .set({ collectEnabled: parsed.data.collectEnabled, updatedAt: new Date() })
-    .where(eq(meetings.id, row.id)).returning();
+    .where(and(eq(meetings.id, row.id), inArray(meetings.status, ["scheduled", "needs_triage"]))).returning();
+  if (!updated) {
+    return res.status(400).json({ error: "collect_toggle_not_allowed", message: "Só dá pra alterar a coleta de reuniões agendadas." });
+  }
   return res.json(updated);
 });
 
@@ -267,8 +277,10 @@ router.post("/:id/triage", requireAuth, async (req: AuthRequest, res) => {
   if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
   const [row] = await db.select().from(meetings).where(eq(meetings.id, req.params.id as string));
   if (!row) return res.status(404).json({ message: "Reunião não encontrada" });
-  if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser atribuídas." });
+  // Autorização ANTES de revelar estado: quem não pode agir na row leva 403 sem
+  // aprender o status dela (senão o 409 "not_triageable" vazaria existência/estado).
   if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
+  if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser atribuídas." });
   if (!(await assertMembership(userId, parsed.data.workspaceId))) return res.status(403).json({ message: "Você não é membro deste workspace" });
 
   // UPDATE atômico condicionado ao status: fecha a janela TOCTOU entre o SELECT
@@ -299,8 +311,9 @@ router.post("/:id/discard", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const [row] = await db.select().from(meetings).where(eq(meetings.id, req.params.id as string));
   if (!row) return res.status(404).json({ message: "Reunião não encontrada" });
-  if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser descartadas." });
+  // Autorização ANTES de revelar estado (mesmo motivo do triage): 403 sem vazar o status.
   if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
+  if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser descartadas." });
   // UPDATE atômico condicionado ao status (fecha o TOCTOU do SELECT acima).
   const [updated] = await db.update(meetings)
     .set({ status: "canceled", updatedAt: new Date() })
