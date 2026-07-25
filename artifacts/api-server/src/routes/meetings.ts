@@ -251,6 +251,55 @@ router.patch("/:id/collect", requireAuth, async (req: AuthRequest, res) => {
   return res.json(updated);
 });
 
+// POST /api/meetings/:id/triage — atribui o workspace de uma needs_triage (vira
+// scheduled/manual) e, best-effort, cria a title rule no worker pra a próxima
+// reunião do cliente resolver sozinha. A atribuição local nunca é desfeita por
+// falha do worker (a regra é otimização, a atribuição é o efeito garantido).
+const triageSchema = z.object({
+  workspaceId: z.string().uuid(),
+  titleRulePattern: z.string().optional(),
+});
+router.post("/:id/triage", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const parsed = triageSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+  const [row] = await db.select().from(meetings).where(eq(meetings.id, req.params.id as string));
+  if (!row) return res.status(404).json({ message: "Reunião não encontrada" });
+  if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser atribuídas." });
+  if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
+  if (!(await assertMembership(userId, parsed.data.workspaceId))) return res.status(403).json({ message: "Você não é membro deste workspace" });
+
+  const [updated] = await db.update(meetings).set({
+    workspaceId: parsed.data.workspaceId, status: "scheduled", attributionMethod: "manual", updatedAt: new Date(),
+  }).where(eq(meetings.id, row.id)).returning();
+
+  let titleRuleCreated = false;
+  const pattern = parsed.data.titleRulePattern?.trim() ?? "";
+  if (pattern.length >= 3) {
+    try {
+      await getWorkerClient().upsertTitleRule(userId, { pattern, workspaceId: parsed.data.workspaceId });
+      titleRuleCreated = true;
+    } catch {
+      titleRuleCreated = false; // best-effort: a atribuição já está gravada
+    }
+  }
+  return res.json({ meeting: updated, titleRuleCreated });
+});
+
+// POST /api/meetings/:id/discard — opção secundária da triagem: descarta a
+// reunião (terminal canceled). O sync não ressuscita row terminal → sai da fila.
+router.post("/:id/discard", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const [row] = await db.select().from(meetings).where(eq(meetings.id, req.params.id as string));
+  if (!row) return res.status(404).json({ message: "Reunião não encontrada" });
+  if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser descartadas." });
+  if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
+  const [updated] = await db.update(meetings)
+    .set({ status: "canceled", updatedAt: new Date() })
+    .where(eq(meetings.id, row.id)).returning();
+  return res.json(updated);
+});
+
 // POST /api/meetings/:id/stop
 router.post("/:id/stop", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
