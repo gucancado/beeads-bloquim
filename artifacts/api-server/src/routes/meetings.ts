@@ -232,6 +232,25 @@ router.patch("/:id/association", requireAuth, async (req: AuthRequest, res) => {
   return res.json(updated);
 });
 
+// PATCH /api/meetings/:id/collect — opt-out por reunião (liga/desliga a gravação).
+const collectSchema = z.object({ collectEnabled: z.boolean() });
+router.patch("/:id/collect", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const parsed = collectSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten() });
+  // req.params.id é inferido como string | string[] (dívida do mergeParams); cast como nas outras rotas (cards.ts).
+  const [row] = await db.select().from(meetings).where(eq(meetings.id, req.params.id as string));
+  if (!row) return res.status(404).json({ message: "Reunião não encontrada" });
+  if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
+  if (row.status !== "scheduled" && row.status !== "needs_triage") {
+    return res.status(400).json({ error: "collect_toggle_not_allowed", message: "Só dá pra alterar a coleta de reuniões agendadas." });
+  }
+  const [updated] = await db.update(meetings)
+    .set({ collectEnabled: parsed.data.collectEnabled, updatedAt: new Date() })
+    .where(eq(meetings.id, row.id)).returning();
+  return res.json(updated);
+});
+
 // POST /api/meetings/:id/stop
 router.post("/:id/stop", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
