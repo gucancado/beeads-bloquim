@@ -1,8 +1,8 @@
 import { Router, IRouter } from "express";
 import { z } from "zod/v4";
-import { and, eq, or, isNull, inArray, desc } from "drizzle-orm";
+import { and, eq, or, isNull, inArray, desc, asc } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { meetings, workspaceMembers, maps } from "@workspace/db/schema";
+import { meetings, workspaceMembers, maps, userGoogleCalendarAccounts, type Meeting } from "@workspace/db/schema";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireMeetings } from "../lib/featureFlags";
 import {
@@ -27,6 +27,24 @@ async function assertMembership(userId: string, workspaceId: string): Promise<bo
   const [m] = await db.select().from(workspaceMembers)
     .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
   return !!m;
+}
+
+/**
+ * Autorização unificada pra agir sobre uma reunião. Rows de agenda têm
+ * createdBy null (não foram criadas por um user), então a visibilidade vem do
+ * workspace (quando atribuída) ou do dono da agenda conectada que a originou
+ * (needs_triage, ainda sem workspace).
+ */
+export async function canActOnMeeting(userId: string, row: Meeting): Promise<boolean> {
+  if (row.workspaceId) return assertMembership(userId, row.workspaceId);
+  if (row.createdBy === userId) return true;
+  if (row.sourceAccountId) {
+    const [acc] = await db.select({ id: userGoogleCalendarAccounts.id })
+      .from(userGoogleCalendarAccounts)
+      .where(and(eq(userGoogleCalendarAccounts.id, row.sourceAccountId), eq(userGoogleCalendarAccounts.userId, userId)));
+    return !!acc;
+  }
+  return false;
 }
 
 // POST /api/meetings
@@ -96,6 +114,53 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     ))
     .orderBy(desc(meetings.createdAt));
   return res.json(rows);
+});
+
+// GET /api/meetings/upcoming — próximas da janela sincronizada (seção "próximas" da agenda).
+// Cross-workspace: standalone do user + reuniões dos workspaces dele + needs_triage
+// da agenda conectada dele. Dedup de recorrência = só a próxima ocorrência por série.
+router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const now = new Date();
+  const myWorkspaces = db.select({ id: workspaceMembers.workspaceId })
+    .from(workspaceMembers).where(eq(workspaceMembers.userId, userId));
+  const myGcalAccounts = db.select({ id: userGoogleCalendarAccounts.id })
+    .from(userGoogleCalendarAccounts).where(eq(userGoogleCalendarAccounts.userId, userId));
+
+  const rows = await db.select().from(meetings).where(and(
+    inArray(meetings.status, ["scheduled", "needs_triage", "collecting"]),
+    or(
+      and(eq(meetings.createdBy, userId), isNull(meetings.workspaceId)),
+      inArray(meetings.workspaceId, myWorkspaces),
+      and(eq(meetings.status, "needs_triage"), inArray(meetings.sourceAccountId, myGcalAccounts)),
+    ),
+  )).orderBy(asc(meetings.scheduledStartAt));
+
+  // Janela: scheduled/needs_triage só se ainda não terminaram; collecting sempre (pinada).
+  const live = rows.filter(r =>
+    r.status === "collecting" || (r.scheduledEndAt != null && r.scheduledEndAt >= now)
+  );
+
+  // Dedup de série: só a ocorrência de menor scheduledStartAt por gcalRecurringEventId.
+  // collecting e avulsas (sem recurringEventId) passam sempre.
+  const bySeries = new Map<string, Meeting>();
+  const out: Meeting[] = [];
+  for (const r of live) {
+    if (r.status === "collecting" || !r.gcalRecurringEventId) { out.push(r); continue; }
+    const prev = bySeries.get(r.gcalRecurringEventId);
+    const rStart = r.scheduledStartAt?.getTime() ?? Infinity;
+    const pStart = prev?.scheduledStartAt?.getTime() ?? Infinity;
+    if (!prev || rStart < pStart) bySeries.set(r.gcalRecurringEventId, r);
+  }
+  out.push(...bySeries.values());
+
+  // Ordenação final: collecting primeiro, depois por início.
+  out.sort((a, b) => {
+    if (a.status === "collecting" && b.status !== "collecting") return -1;
+    if (b.status === "collecting" && a.status !== "collecting") return 1;
+    return (a.scheduledStartAt?.getTime() ?? 0) - (b.scheduledStartAt?.getTime() ?? 0);
+  });
+  return res.json(out);
 });
 
 // GET /api/meetings/:id (poll-through)
