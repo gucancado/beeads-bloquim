@@ -43,6 +43,13 @@ describe("triagem de reuniões (needs_triage)", () => {
     return { agent, user, ws, acc };
   }
 
+  // Segundo user isolado (agent próprio), sem membership nem source-account da seed.
+  async function seedOutsider() {
+    const { agent, user } = await registerAndLogin("Outsider");
+    userIds.push(user.id);
+    return { agent, user };
+  }
+
   it("atribui workspace, vira scheduled/manual e cria a title rule", async () => {
     upsertTitleRule.mockReset().mockResolvedValue(undefined);
     const { agent, user, ws, acc } = await seed();
@@ -73,6 +80,12 @@ describe("triagem de reuniões (needs_triage)", () => {
     expect(r.status).toBe(200);
     expect(r.body.titleRuleCreated).toBe(false);
     expect(r.body.meeting.status).toBe("scheduled"); // atribuição não foi desfeita
+
+    // Prova de persistência: relê a row e confirma que a atribuição sobreviveu à falha do worker.
+    const [after] = await db.select().from(meetings).where(eq(meetings.id, m.id));
+    expect(after.workspaceId).toBe(ws.id);
+    expect(after.status).toBe("scheduled");
+    expect(after.attributionMethod).toBe("manual");
   });
 
   it("sem titleRulePattern: atribui sem chamar o worker", async () => {
@@ -85,6 +98,62 @@ describe("triagem de reuniões (needs_triage)", () => {
     const r = await agent.post(`/api/meetings/${m.id}/triage`).send({ workspaceId: ws.id });
     expect(r.status).toBe(200);
     expect(r.body.titleRuleCreated).toBe(false);
+    expect(upsertTitleRule).not.toHaveBeenCalled();
+  });
+
+  it("titleRulePattern com espaços que trima >=3: chama o worker com o pattern TRIMADO", async () => {
+    upsertTitleRule.mockReset().mockResolvedValue(undefined);
+    const { agent, user, ws, acc } = await seed();
+    const [m] = await db.insert(meetings).values({
+      workspaceId: null, sourceAccountId: acc.id, meetCode: "tri-ghij-klm", status: "needs_triage", occurredAt: new Date(),
+    }).returning();
+    meetingIds.push(m.id);
+    const r = await agent.post(`/api/meetings/${m.id}/triage`).send({ workspaceId: ws.id, titleRulePattern: "  ludi ateliê  " });
+    expect(r.status).toBe(200);
+    expect(r.body.titleRuleCreated).toBe(true);
+    expect(upsertTitleRule).toHaveBeenCalledWith(user.id, { pattern: "ludi ateliê", workspaceId: ws.id });
+  });
+
+  it("titleRulePattern que trima <3: não chama o worker, titleRuleCreated:false", async () => {
+    upsertTitleRule.mockReset();
+    const { agent, ws, acc } = await seed();
+    const [m] = await db.insert(meetings).values({
+      workspaceId: null, sourceAccountId: acc.id, meetCode: "tri-nopq-rst", status: "needs_triage", occurredAt: new Date(),
+    }).returning();
+    meetingIds.push(m.id);
+    const r = await agent.post(`/api/meetings/${m.id}/triage`).send({ workspaceId: ws.id, titleRulePattern: "  ab  " });
+    expect(r.status).toBe(200);
+    expect(r.body.titleRuleCreated).toBe(false);
+    expect(r.body.meeting.status).toBe("scheduled"); // atribuição acontece mesmo sem regra
+    expect(upsertTitleRule).not.toHaveBeenCalled();
+  });
+
+  it("403: triagem por quem NÃO pode agir na row (não é dono da agenda nem membro)", async () => {
+    upsertTitleRule.mockReset();
+    const { ws, acc } = await seed();
+    const { agent: outsider } = await seedOutsider();
+    const [m] = await db.insert(meetings).values({
+      workspaceId: null, sourceAccountId: acc.id, meetCode: "tri-uvwx-yz1", status: "needs_triage", occurredAt: new Date(),
+    }).returning();
+    meetingIds.push(m.id);
+    const r = await outsider.post(`/api/meetings/${m.id}/triage`).send({ workspaceId: ws.id });
+    expect(r.status).toBe(403);
+    expect(upsertTitleRule).not.toHaveBeenCalled();
+  });
+
+  it("403: pode agir na row mas NÃO é membro do workspace alvo", async () => {
+    upsertTitleRule.mockReset();
+    const { agent, acc } = await seed();
+    // workspace de outro dono, sem membership do usuário da seed → alvo proibido.
+    const { user: other } = await seedOutsider();
+    const [ws2] = await db.insert(workspaces).values({ name: "WS Alheio", createdBy: other.id }).returning();
+    wsIds.push(ws2.id);
+    const [m] = await db.insert(meetings).values({
+      workspaceId: null, sourceAccountId: acc.id, meetCode: "tri-2345-678", status: "needs_triage", occurredAt: new Date(),
+    }).returning();
+    meetingIds.push(m.id);
+    const r = await agent.post(`/api/meetings/${m.id}/triage`).send({ workspaceId: ws2.id });
+    expect(r.status).toBe(403);
     expect(upsertTitleRule).not.toHaveBeenCalled();
   });
 
@@ -109,5 +178,30 @@ describe("triagem de reuniões (needs_triage)", () => {
     const r = await agent.post(`/api/meetings/${m.id}/discard`).send();
     expect(r.status).toBe(200);
     expect(r.body.status).toBe("canceled");
+  });
+
+  it("403: discard por quem NÃO pode agir na row", async () => {
+    const { acc } = await seed();
+    const { agent: outsider } = await seedOutsider();
+    const [m] = await db.insert(meetings).values({
+      workspaceId: null, sourceAccountId: acc.id, meetCode: "dis-cccc-ddd", status: "needs_triage", occurredAt: new Date(),
+    }).returning();
+    meetingIds.push(m.id);
+    const r = await outsider.post(`/api/meetings/${m.id}/discard`).send();
+    expect(r.status).toBe(403);
+    // não descartou: segue needs_triage.
+    const [after] = await db.select().from(meetings).where(eq(meetings.id, m.id));
+    expect(after.status).toBe("needs_triage");
+  });
+
+  it("rejeita discard de row que não é needs_triage", async () => {
+    const { agent, ws } = await seed();
+    const [m] = await db.insert(meetings).values({
+      workspaceId: ws.id, meetCode: "sch-cccc-ddd", status: "scheduled", occurredAt: new Date(),
+    }).returning();
+    meetingIds.push(m.id);
+    const r = await agent.post(`/api/meetings/${m.id}/discard`).send();
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe("not_triageable");
   });
 });

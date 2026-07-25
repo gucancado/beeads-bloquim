@@ -9,12 +9,14 @@ import {
   getWorkerClient, WorkerConflictError, AttributionFrozenError,
   extractMeetCode, syncMeetingFromWorker,
 } from "../services/meetingCollectorService";
+import { logger } from "../lib/logger";
 
 // Re-export para compat com imports existentes (extractMeetCode mora no service agora).
 export { extractMeetCode };
 
 const router: IRouter = Router();
 router.use(requireMeetings);
+const log = logger.child({ module: "meetings" });
 
 const createSchema = z.object({
   meetUrlOrCode: z.string().min(1),
@@ -269,9 +271,13 @@ router.post("/:id/triage", requireAuth, async (req: AuthRequest, res) => {
   if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
   if (!(await assertMembership(userId, parsed.data.workspaceId))) return res.status(403).json({ message: "Você não é membro deste workspace" });
 
+  // UPDATE atômico condicionado ao status: fecha a janela TOCTOU entre o SELECT
+  // acima e este write (duas triagens concorrentes não se atropelam). !updated =
+  // outra request já saiu de needs_triage.
   const [updated] = await db.update(meetings).set({
     workspaceId: parsed.data.workspaceId, status: "scheduled", attributionMethod: "manual", updatedAt: new Date(),
-  }).where(eq(meetings.id, row.id)).returning();
+  }).where(and(eq(meetings.id, row.id), eq(meetings.status, "needs_triage"))).returning();
+  if (!updated) return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser atribuídas." });
 
   let titleRuleCreated = false;
   const pattern = parsed.data.titleRulePattern?.trim() ?? "";
@@ -279,8 +285,9 @@ router.post("/:id/triage", requireAuth, async (req: AuthRequest, res) => {
     try {
       await getWorkerClient().upsertTitleRule(userId, { pattern, workspaceId: parsed.data.workspaceId });
       titleRuleCreated = true;
-    } catch {
+    } catch (err) {
       titleRuleCreated = false; // best-effort: a atribuição já está gravada
+      log.warn({ err, meetingId: row.id, workspaceId: parsed.data.workspaceId }, "triage: upsertTitleRule falhou (atribuição preservada)");
     }
   }
   return res.json({ meeting: updated, titleRuleCreated });
@@ -294,9 +301,11 @@ router.post("/:id/discard", requireAuth, async (req: AuthRequest, res) => {
   if (!row) return res.status(404).json({ message: "Reunião não encontrada" });
   if (row.status !== "needs_triage") return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser descartadas." });
   if (!(await canActOnMeeting(userId, row))) return res.status(403).json({ message: "Sem permissão" });
+  // UPDATE atômico condicionado ao status (fecha o TOCTOU do SELECT acima).
   const [updated] = await db.update(meetings)
     .set({ status: "canceled", updatedAt: new Date() })
-    .where(eq(meetings.id, row.id)).returning();
+    .where(and(eq(meetings.id, row.id), eq(meetings.status, "needs_triage"))).returning();
+  if (!updated) return res.status(409).json({ error: "not_triageable", message: "Só reuniões em triagem podem ser descartadas." });
   return res.json(updated);
 });
 
