@@ -12,6 +12,8 @@ const END_IN_WINDOW = new Date(NOW.getTime() + 55 * 60_000); // termina em 55min
 const START_FUTURE = new Date(NOW.getTime() + 60 * 60_000); // começa em 1h
 const END_FUTURE = new Date(NOW.getTime() + 120 * 60_000); // termina em 2h
 const AFTER_END = new Date(END_IN_WINDOW.getTime() + 60_000); // 1min após o fim da janela
+const LONG_AGO = new Date(NOW.getTime() - 60 * 60_000); // 1h atrás: fora do backoff de retry
+const JUST_NOW = new Date(NOW.getTime() - 60_000); // 1min atrás: dentro do backoff
 
 // bloquim_test é compartilhado: limpamos tudo que cada caso semeou.
 const reg = { meetingIds: [] as string[], wsIds: [] as string[], userIds: [] as string[] };
@@ -34,6 +36,9 @@ async function seedMeeting(o: {
   title?: string | null;
   scheduledStartAt?: Date | null;
   scheduledEndAt?: Date | null;
+  failureReason?: string | null;
+  episodeId?: number | null;
+  updatedAt?: Date;
 }): Promise<Meeting> {
   const [m] = await db
     .insert(meetings)
@@ -46,6 +51,9 @@ async function seedMeeting(o: {
       title: o.title ?? "Reunião",
       scheduledStartAt: o.scheduledStartAt ?? null,
       scheduledEndAt: o.scheduledEndAt ?? null,
+      failureReason: o.failureReason ?? null,
+      episodeId: o.episodeId ?? null,
+      ...(o.updatedAt ? { updatedAt: o.updatedAt } : {}),
     })
     .returning();
   reg.meetingIds.push(m.id);
@@ -222,5 +230,156 @@ describe("runMeetingsDispatch", () => {
     expect(report.missed).toBe(0);
     expect(calls).toHaveLength(0);
     expect((await reload(m.id)).status).toBe("scheduled");
+  });
+
+  it("7. failed AINDA na janela (fora do backoff) → re-tenta: volta a collecting com worker novo", async () => {
+    const { ws } = await seedWs();
+    const m = await seedMeeting({
+      workspaceId: ws.id,
+      status: "failed",
+      meetCode: "ret-ryyy-aaa",
+      workerMeetingId: "worker-velho",
+      failureReason: "vexa_failed",
+      scheduledStartAt: START_IN_WINDOW,
+      scheduledEndAt: END_IN_WINDOW,
+      updatedAt: LONG_AGO,
+    });
+    const calls: Array<Parameters<DispatchDeps["createCollection"]>[0]> = [];
+    const report = await runMeetingsDispatch({
+      now: () => NOW,
+      createCollection: async (a) => {
+        calls.push(a);
+        return { id: "worker-novo" };
+      },
+      syncFromWorker: async (r) => r,
+    });
+
+    expect(report.retried).toBe(1);
+    expect(report.dispatched).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].meetCode).toBe("ret-ryyy-aaa");
+    expect(calls[0].expiresAt).toBe(END_IN_WINDOW.toISOString());
+    const row = await reload(m.id);
+    expect(row.status).toBe("collecting");
+    expect(row.workerMeetingId).toBe("worker-novo");
+    expect(row.failureReason).toBeNull();
+  });
+
+  it("8. failed na janela mas DENTRO do backoff → não re-tenta ainda", async () => {
+    const { ws } = await seedWs();
+    const m = await seedMeeting({
+      workspaceId: ws.id,
+      status: "failed",
+      meetCode: "bac-koff-bbb",
+      workerMeetingId: "worker-velho",
+      scheduledStartAt: START_IN_WINDOW,
+      scheduledEndAt: END_IN_WINDOW,
+      updatedAt: JUST_NOW,
+    });
+    const calls: unknown[] = [];
+    const report = await runMeetingsDispatch({
+      now: () => NOW,
+      createCollection: async (a) => {
+        calls.push(a);
+        return { id: "nope" };
+      },
+      syncFromWorker: async (r) => r,
+    });
+    expect(report.retried).toBe(0);
+    expect(calls).toHaveLength(0);
+    expect((await reload(m.id)).status).toBe("failed");
+  });
+
+  it("9. failed com a janela já vencida → não re-tenta (terminal de verdade)", async () => {
+    const { ws } = await seedWs();
+    const m = await seedMeeting({
+      workspaceId: ws.id,
+      status: "failed",
+      meetCode: "ven-cidd-ccc",
+      workerMeetingId: "worker-velho",
+      scheduledStartAt: new Date(NOW.getTime() - 120 * 60_000),
+      scheduledEndAt: new Date(NOW.getTime() - 60 * 60_000),
+      updatedAt: LONG_AGO,
+    });
+    const calls: unknown[] = [];
+    const report = await runMeetingsDispatch({
+      now: () => NOW,
+      createCollection: async (a) => {
+        calls.push(a);
+        return { id: "nope" };
+      },
+      syncFromWorker: async (r) => r,
+    });
+    expect(report.retried).toBe(0);
+    expect(calls).toHaveLength(0);
+    expect((await reload(m.id)).status).toBe("failed");
+  });
+
+  it("10. failed que já tem episodeId → não re-tenta (evitaria 2º episódio)", async () => {
+    const { ws } = await seedWs();
+    const m = await seedMeeting({
+      workspaceId: ws.id,
+      status: "failed",
+      meetCode: "epi-sodd-ddd",
+      workerMeetingId: "worker-velho",
+      episodeId: 4242,
+      scheduledStartAt: START_IN_WINDOW,
+      scheduledEndAt: END_IN_WINDOW,
+      updatedAt: LONG_AGO,
+    });
+    const calls: unknown[] = [];
+    const report = await runMeetingsDispatch({
+      now: () => NOW,
+      createCollection: async (a) => {
+        calls.push(a);
+        return { id: "nope" };
+      },
+      syncFromWorker: async (r) => r,
+    });
+    expect(report.retried).toBe(0);
+    expect(calls).toHaveLength(0);
+    expect((await reload(m.id)).status).toBe("failed");
+  });
+
+  it("11. retry cujo worker lança → segue failed e o backoff é armado (não re-tenta no tick seguinte)", async () => {
+    const { ws } = await seedWs();
+    const m = await seedMeeting({
+      workspaceId: ws.id,
+      status: "failed",
+      meetCode: "arm-adoo-eee",
+      workerMeetingId: "worker-velho",
+      scheduledStartAt: START_IN_WINDOW,
+      scheduledEndAt: new Date(NOW.getTime() + 55 * 60_000),
+      updatedAt: LONG_AGO,
+    });
+    let calls = 0;
+    const throwing: DispatchDeps["createCollection"] = async () => {
+      calls++;
+      throw new Error("worker fora do ar");
+    };
+
+    const r1 = await runMeetingsDispatch({ now: () => NOW, createCollection: throwing, syncFromWorker: async (r) => r });
+    expect(r1.retried).toBe(0);
+    expect(r1.errors).toBe(1);
+    expect(calls).toBe(1);
+    expect((await reload(m.id)).status).toBe("failed");
+
+    // Tick 1min depois: o backoff foi armado no erro → nem tenta.
+    const r2 = await runMeetingsDispatch({
+      now: () => new Date(NOW.getTime() + 60_000),
+      createCollection: throwing,
+      syncFromWorker: async (r) => r,
+    });
+    expect(r2.errors).toBe(0);
+    expect(calls).toBe(1);
+
+    // Passado o backoff, tenta de novo enquanto a janela estiver aberta.
+    const r3 = await runMeetingsDispatch({
+      now: () => new Date(NOW.getTime() + 11 * 60_000),
+      createCollection: throwing,
+      syncFromWorker: async (r) => r,
+    });
+    expect(r3.errors).toBe(1);
+    expect(calls).toBe(2);
   });
 });

@@ -4,6 +4,7 @@ import {
   meetings,
   userCalendarPreferences,
   userGoogleCalendarAccounts,
+  type Meeting,
   type MeetingAttendee,
 } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
@@ -97,6 +98,35 @@ function toStoredAttendees(list: GoogleCalendarAttendee[]): MeetingAttendee[] {
 
 function toAttrAttendees(list: GoogleCalendarAttendee[]): Array<{ email: string; name?: string }> {
   return list.map((a) => (a.displayName ? { email: a.email, name: a.displayName } : { email: a.email }));
+}
+
+// Remarcar uma ocorrência no Google Calendar NÃO muda o originalStartTime — só o
+// start. A chave (iCalUID, originalStart) continua achando a row da data antiga;
+// se ela já estiver num status terminal, sem reabrir aqui a reunião nova nunca
+// entra na fila do dispatch e some em silêncio.
+//
+// Só estes dois status reabrem:
+//   - failed  → a coleta daquele dia falhou; a nova data merece nova tentativa.
+//   - missed  → a janela passou sem disparo; idem.
+// Ficam de fora, de propósito:
+//   - collecting  → coleta em andamento; o poller é dono do estado.
+//   - transcribed → já tem episódio; reabrir duplicaria a transcrição.
+//   - canceled    → os dois escritores do status são indistinguíveis na row: o
+//     reconcileAccount (evento sumiu da agenda) e o POST /meetings/:id/discard
+//     (descarte manual na triagem). Ressuscitar um descarte humano é o erro mais
+//     caro dos dois, e o /discard depende explicitamente de terminal ser terminal
+//     ("o sync não ressuscita row terminal → sai da fila"). Custo aceito: se um
+//     canceled do reconcile reaparecer com o MESMO originalStart, ele não volta.
+const REOPENABLE_STATUSES = new Set<Meeting["status"]>(["failed", "missed"]);
+
+function canReopenOccurrence(existing: Pick<Meeting, "status" | "episodeId">, startAt: Date, now: Date): boolean {
+  if (!REOPENABLE_STATUSES.has(existing.status)) return false;
+  // episode_id preso numa row failed = o worker chegou a criar episódio; recoletar
+  // geraria um segundo. Mesma razão do transcribed, checada pelo dado e não pelo status.
+  if (existing.episodeId != null) return false;
+  // Só ocorrência FUTURA reabre: data passada não ressuscita (o dispatch só a
+  // marcaria missed de novo, e a UI voltaria a mostrá-la como agendada).
+  return startAt.getTime() > now.getTime();
 }
 
 type Occurrence = {
@@ -199,8 +229,11 @@ async function upsertOccurrence(
     .limit(1);
 
   if (existing) {
-    // 3. Só mexe em rows ainda "abertas" pela agenda. terminal/collecting: intocado.
-    if (existing.status !== "scheduled" && existing.status !== "needs_triage") return;
+    // 3. Só mexe em rows ainda "abertas" pela agenda...
+    const isOpen = existing.status === "scheduled" || existing.status === "needs_triage";
+    // ...ou numa terminal cuja ocorrência foi remarcada pra frente (ver REOPENABLE_STATUSES).
+    const reopening = !isOpen && canReopenOccurrence(existing, startAt, deps.now());
+    if (!isOpen && !reopening) return;
 
     const patch: Record<string, unknown> = {
       scheduledStartAt: startAt,
@@ -211,6 +244,31 @@ async function upsertOccurrence(
       meetUrl: event.hangoutLink,
       updatedAt: new Date(),
     };
+    if (reopening) {
+      patch.status = "scheduled";
+      // A row passa a representar a ocorrência na data nova. occurredAt vai junto
+      // porque a UI mostra occurredAt em status terminal (MeetingItem) — mantê-lo
+      // na data velha exibiria o dia errado se a nova tentativa também falhar.
+      patch.occurredAt = startAt;
+      // Obrigatório: a fase 1 do dispatch exige isNull(workerMeetingId). Sem isso a
+      // row volta a scheduled e segue invisível — o mesmo bug com outra cara.
+      patch.workerMeetingId = null;
+      // failureReason era da tentativa antiga; some da row → fica no log abaixo.
+      patch.failureReason = null;
+      log.warn(
+        {
+          meetingId: existing.id,
+          previousStatus: existing.status,
+          previousFailureReason: existing.failureReason,
+          previousWorkerMeetingId: existing.workerMeetingId,
+          gcalIcalUid: iCalUid,
+          originalStartAt: originalStart.toISOString(),
+          fromScheduledStartAt: existing.scheduledStartAt?.toISOString() ?? null,
+          toScheduledStartAt: startAt.toISOString(),
+        },
+        "ocorrência remarcada: row terminal reaberta como scheduled",
+      );
+    }
     // needs_triage: re-resolve (o título pode ter passado a casar uma regra).
     // NÃO sobrescreve sourceAccountId (a row pode ser de outra conta — dedup).
     if (existing.status === "needs_triage") {

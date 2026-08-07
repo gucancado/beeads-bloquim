@@ -11,7 +11,12 @@ const NOW = new Date("2026-07-20T12:00:00Z");
 const T1 = "2026-07-21T14:00:00-03:00";
 const T1END = "2026-07-21T15:00:00-03:00";
 const T2 = "2026-07-22T14:00:00-03:00";
+const T2END = "2026-07-22T15:00:00-03:00";
 const T3 = "2026-07-23T14:00:00-03:00";
+// Ocorrência já vencida (antes de NOW) — usada nos casos de reabertura.
+const PAST = "2026-07-19T14:00:00-03:00";
+const PAST_EARLIER = "2026-07-19T10:00:00-03:00";
+const PAST_EARLIER_END = "2026-07-19T11:00:00-03:00";
 
 // bloquim_test é compartilhado: limpamos tudo que cada caso semeou.
 const reg = { userIds: [] as string[], wsIds: [] as string[], accountIds: [] as string[] };
@@ -34,6 +39,45 @@ async function seed(name = "Sync") {
   reg.wsIds.push(ws.id);
   reg.accountIds.push(account.id);
   return { user, ws, account };
+}
+
+// Row de ocorrência já existente num status qualquer — atalho pros casos de
+// reabertura (o caminho normal só produz scheduled/needs_triage).
+async function seedRow(o: {
+  accountId: string;
+  workspaceId: string | null;
+  uid: string;
+  originalStart: string;
+  start: string;
+  end: string;
+  status: "failed" | "missed" | "canceled" | "transcribed" | "collecting";
+  meetCode?: string;
+  workerMeetingId?: string | null;
+  failureReason?: string | null;
+  episodeId?: number | null;
+}) {
+  const [m] = await db
+    .insert(meetings)
+    .values({
+      workspaceId: o.workspaceId,
+      status: o.status,
+      collectEnabled: true,
+      title: "Série",
+      meetCode: o.meetCode ?? "kbk-dqtv-foi",
+      meetUrl: `https://meet.google.com/${o.meetCode ?? "kbk-dqtv-foi"}`,
+      occurredAt: new Date(o.originalStart),
+      gcalIcalUid: o.uid,
+      gcalCalendarId: "primary",
+      sourceAccountId: o.accountId,
+      gcalOriginalStartAt: new Date(o.originalStart),
+      scheduledStartAt: new Date(o.start),
+      scheduledEndAt: new Date(o.end),
+      workerMeetingId: o.workerMeetingId ?? null,
+      failureReason: o.failureReason ?? null,
+      episodeId: o.episodeId ?? null,
+    })
+    .returning();
+  return m;
 }
 
 afterEach(async () => {
@@ -397,5 +441,202 @@ describe("runMeetingsSync", () => {
     expect(rows[0].status).toBe("needs_triage");
     expect(rows[0].workspaceId).toBeNull();
     expect(rows[0].attributionMethod).toBeNull();
+  });
+
+  it("12. ocorrência com coleta `failed` remarcada pro futuro → reabre em scheduled na data nova", async () => {
+    const { ws, account } = await seed();
+    const P = randomUUID().slice(0, 8);
+    const uid = `${P}-remarcada`;
+    const attr = async () => ({ workspace_id: ws.id, project_slug: "p", method: "domain", unresolved_domains: [] });
+    const base = { id: `${P}-e`, iCalUID: uid, summary: "Chianca", hangoutLink: "https://meet.google.com/kbk-dqtv-foi" };
+    const original = ev({ ...base, startDateTime: T1, endDateTime: T1END });
+    // Remarcar NÃO muda o originalStartTime (chave da ocorrência) — só o start.
+    const moved = ev({ ...base, originalStartTime: T1, startDateTime: T2, endDateTime: T2END });
+    const listAccounts = async () => [{ id: account.id, userId: account.userId }];
+
+    await runMeetingsSync(deps({ listAccounts, listEvents: async () => [original], resolveAttribution: attr }));
+    // A coleta daquele dia falhou (worker reportou vexa_failed).
+    await db
+      .update(meetings)
+      .set({ status: "failed", failureReason: "vexa_failed", workerMeetingId: "worker-1" })
+      .where(eq(meetings.gcalIcalUid, uid));
+
+    const r2 = await runMeetingsSync(deps({ listAccounts, listEvents: async () => [moved], resolveAttribution: attr }));
+
+    expect(r2.updated).toBe(1);
+    expect(r2.canceled).toBe(0);
+    const rows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
+    expect(rows).toHaveLength(1);
+    const m = rows[0];
+    expect(m.status).toBe("scheduled");
+    expect(m.scheduledStartAt?.getTime()).toBe(new Date(T2).getTime());
+    expect(m.scheduledEndAt?.getTime()).toBe(new Date(T2END).getTime());
+    expect(m.occurredAt.getTime()).toBe(new Date(T2).getTime());
+    // A chave da ocorrência não muda — é o que liga a row ao evento remarcado.
+    expect(m.gcalOriginalStartAt?.getTime()).toBe(new Date(T1).getTime());
+    // Sem limpar estes dois, o dispatch (isNull(workerMeetingId)) nunca redispara.
+    expect(m.workerMeetingId).toBeNull();
+    expect(m.failureReason).toBeNull();
+  });
+
+  it("13. ocorrência `missed` remarcada pro futuro → reabre em scheduled na data nova", async () => {
+    const { ws, account } = await seed();
+    const P = randomUUID().slice(0, 8);
+    const uid = `${P}-missed`;
+    await seedRow({
+      accountId: account.id,
+      workspaceId: ws.id,
+      uid,
+      originalStart: PAST,
+      start: PAST,
+      end: PAST,
+      status: "missed",
+      meetCode: "mis-sedd-aaa",
+    });
+    const moved = ev({
+      id: `${P}-e`,
+      iCalUID: uid,
+      summary: "Série",
+      hangoutLink: "https://meet.google.com/mis-sedd-aaa",
+      originalStartTime: PAST,
+      startDateTime: T2,
+      endDateTime: T2END,
+    });
+    const r = await runMeetingsSync(
+      deps({
+        listAccounts: async () => [{ id: account.id, userId: account.userId }],
+        listEvents: async () => [moved],
+        resolveAttribution: async () => ({ workspace_id: ws.id, project_slug: "p", method: "domain", unresolved_domains: [] }),
+      }),
+    );
+    expect(r.updated).toBe(1);
+    const [m] = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
+    expect(m.status).toBe("scheduled");
+    expect(m.scheduledStartAt?.getTime()).toBe(new Date(T2).getTime());
+  });
+
+  it("14. transcribed / collecting / canceled remarcadas pro futuro → NÃO reabrem", async () => {
+    const { ws, account } = await seed();
+    const P = randomUUID().slice(0, 8);
+    const cases = [
+      { status: "transcribed" as const, uid: `${P}-tr`, code: "trr-aaaa-aaa" },
+      { status: "collecting" as const, uid: `${P}-co`, code: "coo-bbbb-bbb" },
+      { status: "canceled" as const, uid: `${P}-ca`, code: "caa-cccc-ccc" },
+    ];
+    for (const c of cases) {
+      await seedRow({
+        accountId: account.id,
+        workspaceId: ws.id,
+        uid: c.uid,
+        originalStart: PAST,
+        start: PAST,
+        end: PAST,
+        status: c.status,
+        meetCode: c.code,
+        workerMeetingId: c.status === "transcribed" || c.status === "collecting" ? "worker-x" : null,
+      });
+    }
+    const events = cases.map((c) =>
+      ev({
+        id: `${P}-${c.status}`,
+        iCalUID: c.uid,
+        summary: "Série",
+        hangoutLink: `https://meet.google.com/${c.code}`,
+        originalStartTime: PAST,
+        startDateTime: T2,
+        endDateTime: T2END,
+      }),
+    );
+    const r = await runMeetingsSync(
+      deps({
+        listAccounts: async () => [{ id: account.id, userId: account.userId }],
+        listEvents: async () => events,
+        resolveAttribution: async () => ({ workspace_id: ws.id, project_slug: "p", method: "domain", unresolved_domains: [] }),
+      }),
+    );
+    expect(r.updated).toBe(0);
+    const rows = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
+    const byUid = Object.fromEntries(rows.map((x) => [x.gcalIcalUid, x]));
+    for (const c of cases) {
+      expect(byUid[c.uid].status).toBe(c.status);
+      expect(byUid[c.uid].scheduledStartAt?.getTime()).toBe(new Date(PAST).getTime());
+    }
+  });
+
+  it("15. ocorrência `failed` remarcada pro PASSADO → NÃO reabre (não ressuscita reunião vencida)", async () => {
+    const { ws, account } = await seed();
+    const P = randomUUID().slice(0, 8);
+    const uid = `${P}-passado`;
+    await seedRow({
+      accountId: account.id,
+      workspaceId: ws.id,
+      uid,
+      originalStart: PAST,
+      start: PAST,
+      end: PAST,
+      status: "failed",
+      meetCode: "pas-sadd-ooo",
+      failureReason: "vexa_failed",
+      workerMeetingId: "worker-1",
+    });
+    const movedToPast = ev({
+      id: `${P}-e`,
+      iCalUID: uid,
+      summary: "Série",
+      hangoutLink: "https://meet.google.com/pas-sadd-ooo",
+      originalStartTime: PAST,
+      startDateTime: PAST_EARLIER,
+      endDateTime: PAST_EARLIER_END,
+    });
+    const r = await runMeetingsSync(
+      deps({
+        listAccounts: async () => [{ id: account.id, userId: account.userId }],
+        listEvents: async () => [movedToPast],
+        resolveAttribution: async () => ({ workspace_id: ws.id, project_slug: "p", method: "domain", unresolved_domains: [] }),
+      }),
+    );
+    expect(r.updated).toBe(0);
+    const [m] = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
+    expect(m.status).toBe("failed");
+    expect(m.scheduledStartAt?.getTime()).toBe(new Date(PAST).getTime());
+    expect(m.failureReason).toBe("vexa_failed");
+  });
+
+  it("16. `failed` que já tem episodeId → NÃO reabre (evitaria 2ª transcrição do mesmo episódio)", async () => {
+    const { ws, account } = await seed();
+    const P = randomUUID().slice(0, 8);
+    const uid = `${P}-episodio`;
+    await seedRow({
+      accountId: account.id,
+      workspaceId: ws.id,
+      uid,
+      originalStart: PAST,
+      start: PAST,
+      end: PAST,
+      status: "failed",
+      meetCode: "epi-sodd-iii",
+      episodeId: 4242,
+      workerMeetingId: "worker-1",
+    });
+    const moved = ev({
+      id: `${P}-e`,
+      iCalUID: uid,
+      summary: "Série",
+      hangoutLink: "https://meet.google.com/epi-sodd-iii",
+      originalStartTime: PAST,
+      startDateTime: T2,
+      endDateTime: T2END,
+    });
+    const r = await runMeetingsSync(
+      deps({
+        listAccounts: async () => [{ id: account.id, userId: account.userId }],
+        listEvents: async () => [moved],
+        resolveAttribution: async () => ({ workspace_id: ws.id, project_slug: "p", method: "domain", unresolved_domains: [] }),
+      }),
+    );
+    expect(r.updated).toBe(0);
+    const [m] = await db.select().from(meetings).where(eq(meetings.sourceAccountId, account.id));
+    expect(m.status).toBe("failed");
+    expect(m.episodeId).toBe(4242);
   });
 });
