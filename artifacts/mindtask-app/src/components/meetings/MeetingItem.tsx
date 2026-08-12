@@ -17,7 +17,12 @@ const STATUS_BAR: Record<Meeting["status"], string> = {
 // sabe emitir; qualquer código novo cai no fallback e aparece como veio, em vez
 // de sumir — é diagnóstico, não decoração.
 const FAILURE_LABEL: Record<string, string> = {
-  not_admitted: "o bot não foi admitido na reunião",
+  silent_room: "ninguém falou na sala",
+  // Legado: até 2026-08-12 o worker emitia `not_admitted` pra ESTA mesma
+  // condição (zero fala no tempo limite). Rows antigas seguem no banco e a
+  // causa real delas é ambígua — sala muda OU bot barrado de fato, antes de o
+  // bot autenticado existir. Texto vago de propósito.
+  not_admitted: "sem transcrição (sala muda ou bot barrado)",
   stopped_empty: "ninguém falou",
   vexa_send_failed: "falha ao acionar o bot",
   vexa_failed: "falha na transcrição",
