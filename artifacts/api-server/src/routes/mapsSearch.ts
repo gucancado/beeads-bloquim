@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { maps, workspaces, workspaceMembers } from "@workspace/db/schema";
 import { and, eq, ilike, desc, sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { actionMapsScope } from "../services/mapsScope";
 
 const router: IRouter = Router();
 
@@ -42,6 +43,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     .where(
       and(
         ilike(maps.name, `%${q}%`),
+        actionMapsScope,
         // hidden=true só para admins do workspace correspondente
         sql`(${maps.hidden} = false OR ${workspaceMembers.role} = 'admin')`,
       ),

@@ -1,8 +1,16 @@
-import { pgTable, text, timestamp, uuid, boolean, primaryKey, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, boolean, primaryKey, index, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { workspaces } from "./workspaces";
 import { users } from "./users";
+
+/**
+ * Tipo de mapa (Mapa Estratégico §6.1). `action` é o plano de ação atual
+ * (default — preserva semântica). `strategy` é o canvas estratégico, no máximo
+ * um por workspace (índice único parcial abaixo), criado lazy.
+ */
+export const mapKindEnum = pgEnum("map_kind", ["action", "strategy"]);
 
 export const maps = pgTable("maps", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -10,6 +18,7 @@ export const maps = pgTable("maps", {
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  kind: mapKindEnum("kind").notNull().default("action"),
   hidden: boolean("hidden").notNull().default(false),
   createdBy: uuid("created_by")
     .notNull()
@@ -18,10 +27,15 @@ export const maps = pgTable("maps", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_maps_workspace").on(table.workspaceId),
+  // No máximo 1 mapa strategy por workspace (§6.1).
+  uniqueIndex("maps_one_strategy_per_ws")
+    .on(table.workspaceId)
+    .where(sql`${table.kind} = 'strategy'`),
 ]);
 
 export const insertMapSchema = createInsertSchema(maps).omit({
   id: true,
+  kind: true,
   createdBy: true,
   createdAt: true,
   updatedAt: true,

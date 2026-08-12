@@ -4,6 +4,7 @@ import { workspaces, workspaceMembers, maps, userWorkspaceOrder } from "@workspa
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
+import { actionMapsScope } from "../services/mapsScope";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -36,7 +37,7 @@ router.get("/workspaces", requireAuth, async (req: AuthRequest, res) => {
     db
       .select()
       .from(maps)
-      .where(and(inArray(maps.workspaceId, workspaceIds), eq(maps.hidden, false))),
+      .where(and(inArray(maps.workspaceId, workspaceIds), eq(maps.hidden, false), actionMapsScope)),
   ]);
 
   const orderMap = new Map(savedOrders.map((o) => [o.workspaceId, o.sortOrder]));

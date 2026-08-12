@@ -6,6 +6,7 @@ import { requireAuth } from "../middlewares/auth";
 import {
   requireWorkspaceRole,
   requireMapInWorkspace,
+  requireActionMap,
   requireConnectionInMap,
 } from "../middlewares/permissions";
 import { z } from "zod";
@@ -24,6 +25,7 @@ router.post(
   requireAuth,
   requireWorkspaceRole(["admin", "editor"]),
   requireMapInWorkspace,
+  requireActionMap,
   async (req, res) => {
     const parsed = createConnectionSchema.safeParse(req.body);
     if (!parsed.success) {

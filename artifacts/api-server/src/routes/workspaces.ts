@@ -4,6 +4,7 @@ import { workspaces, workspaceMembers, users, maps, cards, tasks } from "@worksp
 import { eq, and, inArray, sql, ne } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 import { requireWorkspaceRole } from "../middlewares/permissions";
+import { actionMapsScope } from "../services/mapsScope";
 import { invalidateRole, invalidateWorkspace } from "../lib/permissionsCache";
 import { z } from "zod";
 
@@ -191,7 +192,7 @@ router.get("/:workspaceId", requireAuth, requireWorkspaceRole(["admin", "editor"
     .innerJoin(users, eq(workspaceMembers.userId, users.id))
     .where(eq(workspaceMembers.workspaceId, workspaceId));
 
-  const mapList = await db.select().from(maps).where(eq(maps.workspaceId, workspaceId));
+  const mapList = await db.select().from(maps).where(and(eq(maps.workspaceId, workspaceId), actionMapsScope));
 
   const userMembership = members.find((m) => m.userId === req.user!.userId);
 
@@ -406,7 +407,7 @@ router.get("/:workspaceId/dashboard", requireAuth, requireWorkspaceRole(["admin"
   const [totalMapsResult] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(maps)
-    .where(eq(maps.workspaceId, workspaceId));
+    .where(and(eq(maps.workspaceId, workspaceId), actionMapsScope));
 
   const [totalCardsResult] = await db
     .select({ count: sql<number>`count(*)::int` })

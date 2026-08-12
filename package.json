@@ -6,10 +6,12 @@
     "preinstall": "node scripts/check-pnpm.cjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test:e2e": "playwright test"
   },
   "private": true,
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "prettier": "^3.8.3",
     "typescript": "~5.9.2"
   },

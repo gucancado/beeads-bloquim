@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { usePositionHistory, NodePositionSnapshot } from "@/hooks/usePositionHistory";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
+import { ReactFlow, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
@@ -18,7 +18,7 @@ import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConn
 import { useUpload } from "@workspace/object-storage-web";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import type { ShapeResponse } from "@workspace/api-client-react";
-import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes, Wand2 } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Type, Users, Image, Shapes } from "lucide-react";
 import { Button } from "@beeads/ui";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@beeads/ui";
 import { Link } from "wouter";
@@ -26,6 +26,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { usePresenceChannel } from "@/realtime/usePresenceChannel";
 import { PresenceCursorsOverlay } from "@/realtime/PresenceCursorsOverlay";
+import { sampleBezier, edgeIntersectsNodeBBox } from "@/components/canvas-base/geometry";
+import { CanvasToolbar } from "@/components/canvas-base/CanvasToolbar";
+import { CanvasDrawGhosts } from "@/components/canvas-base/CanvasDrawGhosts";
+import { CanvasControls } from "@/components/canvas-base/CanvasControls";
 
 interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   sourceHandle?: string;
@@ -303,64 +307,10 @@ function buildEdgeFromConn(
   };
 }
 
-/**
- * Sample N points along a cubic bezier curve.
- */
-function sampleBezier(
-  p0x: number, p0y: number,
-  p1x: number, p1y: number,
-  p2x: number, p2y: number,
-  p3x: number, p3y: number,
-  samples: number,
-): Array<[number, number]> {
-  const pts: Array<[number, number]> = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples;
-    const mt = 1 - t;
-    const x = mt * mt * mt * p0x + 3 * mt * mt * t * p1x + 3 * mt * t * t * p2x + t * t * t * p3x;
-    const y = mt * mt * mt * p0y + 3 * mt * mt * t * p1y + 3 * mt * t * t * p2y + t * t * t * p3y;
-    pts.push([x, y]);
-  }
-  return pts;
-}
-
-/**
- * Check if a bezier edge (defined by source/target positions) intersects the bounding box of a node.
- * Uses ReactFlow's default bezier control point offset heuristic.
- */
-function edgeIntersectsNodeBBox(
-  sourceX: number, sourceY: number,
-  targetX: number, targetY: number,
-  nodeCenterX: number, nodeCenterY: number,
-  nodeWidth: number, nodeHeight: number,
-): boolean {
-  // Default bezier: source handle points right, target handle points left
-  const offset = Math.abs(targetX - sourceX) * 0.5;
-  const cp1x = sourceX + offset;
-  const cp1y = sourceY;
-  const cp2x = targetX - offset;
-  const cp2y = targetY;
-
-  const halfW = nodeWidth / 2;
-  const halfH = nodeHeight / 2;
-  const minX = nodeCenterX - halfW;
-  const maxX = nodeCenterX + halfW;
-  const minY = nodeCenterY - halfH;
-  const maxY = nodeCenterY + halfH;
-
-  const pts = sampleBezier(sourceX, sourceY, cp1x, cp1y, cp2x, cp2y, targetX, targetY, 40);
-  for (const [px, py] of pts) {
-    if (px >= minX && px <= maxX && py >= minY && py <= maxY) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView, setCenter } = useReactFlow();
+  const { getViewport, setViewport, screenToFlowPosition, fitView, setCenter } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const [cardGhost, setCardGhost] = useState<{ x: number; y: number } | null>(null);
@@ -2729,36 +2679,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           </div>
         </div>
 
-        {textGhost && (
-          <div
-            className="pointer-events-none fixed z-overlay border-2 border-dashed border-blue-400 bg-blue-50/70 dark:bg-blue-950/50 rounded-lg"
-            style={{ left: textGhost.x - 100, top: textGhost.y - 40, width: 200, height: 80 }}
-          />
-        )}
-
-        {shapeGhost && (shapeGhost.w > 2 || (shapeTool === 'line' && shapeGhost.h > 2)) && (
-          <div className="pointer-events-none fixed z-overlay-backdrop" style={{ left: shapeGhost.x, top: shapeGhost.y, width: Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0), height: Math.max(shapeGhost.h, 4) }}>
-            <svg width={Math.max(shapeGhost.w, shapeTool === 'line' ? 1 : 0)} height={Math.max(shapeGhost.h, 4)} style={{ overflow: 'visible' }}>
-              {shapeTool === 'rect' && (
-                <rect x={1} y={1} width={shapeGhost.w - 2} height={Math.max(shapeGhost.h - 2, 2)} rx={4} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
-              )}
-              {shapeTool === 'ellipse' && (
-                <ellipse cx={shapeGhost.w / 2} cy={Math.max(shapeGhost.h, 4) / 2} rx={shapeGhost.w / 2 - 1} ry={Math.max(shapeGhost.h, 4) / 2 - 1} stroke="#6366f1" strokeWidth={2} strokeDasharray="6 4" fill="#6366f120" />
-              )}
-              {shapeTool === 'line' && (() => {
-                const gw = Math.max(shapeGhost.rawAbsW ?? shapeGhost.w, 1);
-                const rawH = shapeGhost.rawAbsH ?? shapeGhost.h;
-                const gDxSign = shapeGhost.dxSign ?? 1;
-                const gDySign = shapeGhost.dySign ?? 1;
-                const lx1 = gDxSign > 0 ? 0 : gDxSign < 0 ? gw : 0;
-                const lx2 = gDxSign > 0 ? gw : gDxSign < 0 ? 0 : 0;
-                const ly1 = gDySign > 0 ? 0 : gDySign < 0 ? rawH : 0;
-                const ly2 = gDySign > 0 ? rawH : gDySign < 0 ? 0 : 0;
-                return <line x1={lx1} y1={ly1} x2={lx2} y2={ly2} stroke="#6366f1" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />;
-              })()}
-            </svg>
-          </div>
-        )}
+        <CanvasDrawGhosts textGhost={textGhost} shapeGhost={shapeGhost} shapeTool={shapeTool} />
 
         {cardGhost && (
           <div
@@ -2823,7 +2744,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           );
         })}
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+        <CanvasToolbar>
           <Button
             onMouseDown={handleCardButtonMouseDown}
             disabled={createCardMut.isPending}
@@ -2901,7 +2822,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               </div>
             )}
           </div>
-        </div>
+        </CanvasToolbar>
 
         {shapeTool && (
           <div
@@ -2965,20 +2886,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             className="w-full h-full"
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="hsl(var(--muted-foreground) / 0.15)" />
-            <Controls className="bg-card border border-border shadow-md rounded-xl overflow-hidden" showZoom={false} showFitView={false} showInteractive={false}>
-              <ControlButton title="aproximar" onClick={() => zoomIn()}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M32 18.133H18.133V32h-4.266V18.133H0v-4.266h13.867V0h4.266v13.867H32z" /></svg>
-              </ControlButton>
-              <ControlButton title="afastar" onClick={() => zoomOut()}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M32 18.133H0v-4.266h32z" /></svg>
-              </ControlButton>
-              <ControlButton title="enquadrar" onClick={() => fitView()}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M5.333 16c0-5.891 4.776-10.667 10.667-10.667S26.667 10.109 26.667 16 21.891 26.667 16 26.667 5.333 21.891 5.333 16zM16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" /></svg>
-              </ControlButton>
-              <ControlButton title="reorganizar" onClick={handleAutoLayout}>
-                <Wand2 />
-              </ControlButton>
-            </Controls>
+            <CanvasControls onAutoLayout={handleAutoLayout} />
             <PresenceCursorsOverlay peers={presencePeers} />
           </ReactFlow>
           {isImageDragOver && (
