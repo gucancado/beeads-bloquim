@@ -1,3 +1,5 @@
+import type { NodeChange, XYPosition } from 'reactflow';
+
 export interface ApprovalGroupCardInput {
   id: string;
   taskId?: string | null;
@@ -41,4 +43,65 @@ export function buildApprovalGroupIndex(cards: ApprovalGroupCardInput[]): Approv
     for (const id of memberIds) index.set(id, memberIds);
   }
   return index;
+}
+
+type PositionChange = Extract<NodeChange, { type: 'position' }>;
+
+/**
+ * Expande NodeChanges de posição: quando um membro de grupo rígido se move,
+ * gera changes com o MESMO delta pros demais membros. Ids já presentes nas
+ * changes originais (seleção contendo vários membros) não recebem propagação.
+ * Change de posição sem `position` (evento de fim de drag do ReactFlow) só
+ * replica a flag `dragging`, pra nenhum membro ficar preso em dragging=true.
+ */
+export function expandPositionChanges(
+  changes: NodeChange[],
+  getPosition: (id: string) => XYPosition | undefined,
+  groupIndex: ApprovalGroupIndex,
+): NodeChange[] {
+  const explicitIds = new Set<string>();
+  for (const ch of changes) {
+    if (ch.type === 'position') explicitIds.add(ch.id);
+  }
+
+  const propagated: PositionChange[] = [];
+  const propagatedIds = new Set<string>();
+
+  for (const ch of changes) {
+    if (ch.type !== 'position') continue;
+    const memberIds = groupIndex.get(ch.id);
+    if (!memberIds) continue;
+
+    if (!ch.position) {
+      if (ch.dragging === undefined) continue;
+      for (const memberId of memberIds) {
+        if (memberId === ch.id || explicitIds.has(memberId) || propagatedIds.has(memberId)) continue;
+        propagatedIds.add(memberId);
+        propagated.push({ id: memberId, type: 'position', dragging: ch.dragging });
+      }
+      continue;
+    }
+
+    const origin = getPosition(ch.id);
+    if (!origin) continue;
+    const dx = ch.position.x - origin.x;
+    const dy = ch.position.y - origin.y;
+
+    for (const memberId of memberIds) {
+      if (memberId === ch.id || explicitIds.has(memberId) || propagatedIds.has(memberId)) continue;
+      const memberPos = getPosition(memberId);
+      if (!memberPos) continue;
+      const next = { x: memberPos.x + dx, y: memberPos.y + dy };
+      propagatedIds.add(memberId);
+      propagated.push({
+        id: memberId,
+        type: 'position',
+        position: next,
+        positionAbsolute: next,
+        dragging: ch.dragging,
+      });
+    }
+  }
+
+  return propagated.length ? [...changes, ...propagated] : changes;
 }
