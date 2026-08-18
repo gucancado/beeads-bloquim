@@ -20,7 +20,7 @@ const chipClass =
 export function TaskAssociationChips({
   effectiveWorkspaceId,
   taskMapId,
-  propWorkspaceId,
+  workspaceDisabled = false,
   userWorkspaces,
   workspaceMaps,
   onWorkspaceChange,
@@ -29,7 +29,8 @@ export function TaskAssociationChips({
 }: {
   effectiveWorkspaceId: string;
   taskMapId: string | null;
-  propWorkspaceId: string | undefined;
+  /** Locked only where the task's workspace is structural (a card lives in a map of that workspace). */
+  workspaceDisabled?: boolean;
   userWorkspaces: WorkspaceChipOption[] | undefined;
   workspaceMaps: MapChipOption[] | undefined;
   onWorkspaceChange: (newWsId: string | null) => void;
@@ -40,7 +41,7 @@ export function TaskAssociationChips({
   const currentMap = workspaceMaps?.find((m) => m.id === (taskMapId ?? "")) ?? null;
   const hasWorkspace = !!effectiveWorkspaceId;
   const wsColor = getColorByIndex(currentWorkspace?.colorIndex ?? null);
-  const wsDisabled = !!propWorkspaceId;
+  const wsDisabled = workspaceDisabled;
 
   return (
     <div className="flex items-center gap-1 min-w-0 flex-wrap">

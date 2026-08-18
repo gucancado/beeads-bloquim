@@ -261,11 +261,12 @@ export function TaskDetailModal({
 
   const taskIdResolved: string | undefined = isCardMode ? (card?.task?.id ?? undefined) : (resolvedTaskId ?? undefined);
 
-  // isStandalone is derived from the PROP, not effectiveWorkspaceId.
-  // effectiveWorkspaceId can change mid-flight (once taskWorkspaceId resolves),
-  // which would switch the query key and trigger a 403 workspace fetch for
-  // users who are assigned a task but not workspace members.
-  const isStandalone = !propWorkspaceId;
+  // isStandalone follows the task's CURRENT workspace, not the prop the modal was
+  // opened with. A task created from "Minhas tarefas" starts standalone and becomes
+  // a workspace task the moment the user picks a workspace in the modal — from then
+  // on every read/write has to go through /api/workspaces/:wsId/tasks/:taskId,
+  // because the /api/my-tasks/* routes answer 403 for tasks that have a workspace.
+  const isStandalone = !effectiveWorkspaceId;
 
   const {
     subtasks,
@@ -495,6 +496,7 @@ export function TaskDetailModal({
 
   interface StatusMutationInput {
     newStatus: string;
+    previousStatus: string;
     taskId: string;
     standalone: boolean;
     wsId: string;
@@ -522,7 +524,12 @@ export function TaskDetailModal({
         queryClient.invalidateQueries({ queryKey: [`task-activities`, wsId, taskId] });
       }
     },
-    onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
+    // The status pills are optimistic — put the previous status back when the
+    // request fails, so the modal never shows a status the server did not accept.
+    onError: (_err, { previousStatus }) => {
+      setStatus(previousStatus);
+      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+    },
   });
 
   invalidateTaskRef.current = invalidateTask;
@@ -546,11 +553,13 @@ export function TaskDetailModal({
   const handleStatusChange = (newStatus: string) => {
     if (!isEditing) return;
     if (!isCardMode && !resolvedTaskId) return;
+    const rollbackStatus = status;
     setStatus(newStatus);
     markDirty();
     if (isCardMode) handleCardStatusChange(newStatus);
     else statusMutation.mutate({
       newStatus,
+      previousStatus: rollbackStatus,
       taskId: resolvedTaskId!,
       standalone: isStandalone,
       wsId: effectiveWorkspaceId,
@@ -562,18 +571,20 @@ export function TaskDetailModal({
   const handleConcluir = () => {
     if (!isEditing || !resolvedTaskId) return;
     markDirty();
+    const rollbackStatus = status;
     const previousStatus = isCardMode
       ? (card?.task?.previousStatus ?? "pending")
       : (task?.previousStatus ?? "pending");
     if (status === "completed") {
       setStatus(previousStatus);
       if (isCardMode) handleCardStatusChange(previousStatus);
-      else statusMutation.mutate({ newStatus: previousStatus, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
+      else statusMutation.mutate({ newStatus: previousStatus, previousStatus: rollbackStatus, taskId: resolvedTaskId, standalone: isStandalone, wsId: effectiveWorkspaceId });
     } else {
       setStatus("completed");
       if (isCardMode) handleCardStatusChange("completed");
       else statusMutation.mutate({
         newStatus: "completed",
+        previousStatus: rollbackStatus,
         taskId: resolvedTaskId,
         standalone: isStandalone,
         wsId: effectiveWorkspaceId,
@@ -812,7 +823,7 @@ export function TaskDetailModal({
                       <TaskAssociationChips
                         effectiveWorkspaceId={effectiveWorkspaceId}
                         taskMapId={isCardMode ? (mapId ?? null) : taskMapId}
-                        propWorkspaceId={propWorkspaceId}
+                        workspaceDisabled={isCardMode}
                         userWorkspaces={userWorkspaces}
                         workspaceMaps={workspaceMaps}
                         onWorkspaceChange={changeWorkspace}
