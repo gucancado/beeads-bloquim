@@ -50,7 +50,7 @@ Grupo rígido implementado **sem** mudar o modelo de posições (absolutas no ba
 ## Efeitos colaterais aceitos
 
 - Grupo de N membros gera N PATCHes `/cards` por drag (padrão já existente no `onSelectionDragStop`).
-- Movimento por setas do teclado move o grupo ao vivo mas não persiste — igual ao comportamento atual de qualquer card (fora de escopo).
+- Movimento por setas do teclado move o grupo ao vivo mas não persiste — igual ao comportamento atual de qualquer card (fora de escopo). Consequência: como o caminho do teclado não seta `nodeDragActiveRef` (não há drag real), o próximo poll de 3s reconstrói o join node a partir das posições do SERVIDOR — o join "volta" pro lugar antigo enquanto os cards ficam onde o teclado os moveu, até algo persistir (drag, seleção ou reorganizar).
 - Arranjos intra-grupo historicamente "espalhados" (por drags antigos persistidos via seleção) não são normalizados — ficam rígidos como estão; "reorganizar" arruma.
 
 ## Testes

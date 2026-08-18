@@ -18,7 +18,9 @@ export interface ApprovalGroupCardInput {
  * CONTRATO de ordem do array (consumidores dependem disso):
  * `[cardPai, ...cardsDeAprovação, joinId?]` — pai é sempre o índice 0 e o
  * join, quando existe, é sempre o último. `join-` é namespace reservado de
- * nós virtuais (ids de card são UUIDs, sem colisão possível).
+ * nós virtuais (ids de card são UUIDs, sem colisão possível). O MESMO array
+ * é compartilhado por referência entre todas as chaves do grupo — tratar
+ * como read-only; nunca mutar in-place.
  */
 export type ApprovalGroupIndex = Map<string, string[]>;
 

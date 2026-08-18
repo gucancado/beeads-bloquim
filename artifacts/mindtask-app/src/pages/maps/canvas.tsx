@@ -362,6 +362,17 @@ function edgeIntersectsNodeBBox(
   return false;
 }
 
+// nodeDragActiveRef guarda o timestamp (ms) do último onNodeDragStart /
+// onSelectionDragStart, e 0 quando não há drag em curso. Self-heal: se um
+// stop handler nunca disparar (ex.: node desmontado no meio do drag por outro
+// usuário apagando o card), o guard expira sozinho após NODE_DRAG_ACTIVE_TIMEOUT_MS
+// em vez de congelar o rebuild dos join nodes pro resto da sessão.
+const NODE_DRAG_ACTIVE_TIMEOUT_MS = 10000;
+
+function isNodeDragActive(startedAt: number): boolean {
+  return startedAt !== 0 && Date.now() - startedAt < NODE_DRAG_ACTIVE_TIMEOUT_MS;
+}
+
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
@@ -407,7 +418,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const connectPointerMoveRef = useRef<((ev: PointerEvent) => void) | null>(null);
   const { pushSnapshot, undo, redo } = usePositionHistory();
   const dragStartSnapshotRef = useRef<NodePositionSnapshot | null>(null);
-  const nodeDragActiveRef = useRef(false);
+  const nodeDragActiveRef = useRef(0);
 
   const search = useSearch();
   const canvasBasePath = `/workspaces/${workspaceId}/maps/${mapId}`;
@@ -925,7 +936,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         const freshJoinNodes = rebuiltJoinNodes.map(jn => {
           const existing = prev.find(n => n.id === jn.id);
           if (!existing) return jn;
-          if (nodeDragActiveRef.current || pendingUpdatesRef.current.has(jn.id)) {
+          if (isNodeDragActive(nodeDragActiveRef.current) || pendingUpdatesRef.current.has(jn.id)) {
             return { ...jn, position: existing.position };
           }
           return jn;
@@ -1460,7 +1471,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDragStart = useCallback(
     (_event: React.MouseEvent, _node: Node) => {
-      nodeDragActiveRef.current = true;
+      nodeDragActiveRef.current = Date.now();
       if (dragStartSnapshotRef.current) return;
       const snapshot: NodePositionSnapshot = {};
       for (const n of nodesRef.current) {
@@ -1473,7 +1484,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onSelectionDragStart = useCallback(
     (_event: React.MouseEvent, _selectedNodes: Node[]) => {
-      nodeDragActiveRef.current = true;
+      nodeDragActiveRef.current = Date.now();
       if (dragStartSnapshotRef.current) return;
       const snapshot: NodePositionSnapshot = {};
       for (const n of nodesRef.current) {
@@ -1547,7 +1558,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      nodeDragActiveRef.current = false;
+      nodeDragActiveRef.current = 0;
       const dragSnapshot = dragStartSnapshotRef.current;
       let moved = true;                       // sem snapshot → mantém o comportamento atual
       if (dragSnapshot) {
@@ -1603,11 +1614,16 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         return;
       }
 
-      // Always save position
-      updateCardMut.mutate({
-        workspaceId, mapId, cardId: node.id,
-        data: { positionX: node.position.x, positionY: node.position.y },
-      });
+      // Persiste a posição só quando houve arraste de fato — clique sem
+      // delta (ReactFlow v11 dispara o stop mesmo assim) não deve reescrever
+      // a posição do pai enquanto o resto do grupo (aprovações/join) fica
+      // intocado, o que separaria o bloco que a tela mostra junto.
+      if (moved) {
+        updateCardMut.mutate({
+          workspaceId, mapId, cardId: node.id,
+          data: { positionX: node.position.x, positionY: node.position.y },
+        });
+      }
 
       // Se o card tem aprovações, o grupo se moveu junto — persiste os demais.
       // Só quando houve arraste de fato (ver comentário do approvalnode acima).
@@ -1726,7 +1742,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onSelectionDragStop = useCallback(
     (_event: React.MouseEvent, selectedNodes: Node[]) => {
-      nodeDragActiveRef.current = false;
+      nodeDragActiveRef.current = 0;
       const dragSnapshot = dragStartSnapshotRef.current;
       let anyMoved = true;                    // sem snapshot → mantém o comportamento atual
       if (dragSnapshot) {
@@ -1753,6 +1769,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           });
         } else if (node.type === 'joinnode') {
           // Position is derived from approval children; do not persist.
+          // O GRUPO do join (cards da tarefa-pai + aprovações), porém, é
+          // persistido mais abaixo via persistGroupPositions.
         } else {
           updateCardMut.mutate({
             workspaceId, mapId, cardId: node.id,
