@@ -181,6 +181,11 @@ export interface ApprovalGroupCardInput {
  * (`join-<parentCardId>`, só em modo parallel com 2+ aprovações — espelha
  * buildJoinNodes do canvas). Cards sem aprovações e aprovações órfãs ficam
  * fora do índice (movem livres).
+ *
+ * CONTRATO de ordem do array (consumidores dependem disso):
+ * `[cardPai, ...cardsDeAprovação, joinId?]` — pai é sempre o índice 0 e o
+ * join, quando existe, é sempre o último. `join-` é namespace reservado de
+ * nós virtuais (ids de card são UUIDs, sem colisão possível).
  */
 export type ApprovalGroupIndex = Map<string, string[]>;
 
@@ -328,8 +333,42 @@ describe('expandPositionChanges', () => {
     const out = expandPositionChanges(changes, () => undefined, groupIndex);
     expect(out).toBe(changes);
   });
+
+  it('delta zero ainda propaga (mantém flags dragging do grupo em sincronia)', () => {
+    const changes: NodeChange[] = [
+      { id: 'p1', type: 'position', position: { x: 100, y: 100 }, dragging: true },
+    ];
+    const out = expandPositionChanges(changes, getPos, groupIndex);
+    expect(out).toHaveLength(4);
+    expect(out[1]).toMatchObject({ id: 'a1', position: { x: 450, y: 250 }, dragging: true });
+  });
+
+  it('integra com applyNodeChanges: frames sucessivos + change final sem position mantêm o grupo rígido', () => {
+    let nodes: Node[] = [
+      { id: 'p1', type: 'mindmap', position: { x: 100, y: 100 }, data: {} },
+      { id: 'a1', type: 'approvalnode', position: { x: 450, y: 250 }, data: {} },
+      { id: 'a2', type: 'approvalnode', position: { x: 500, y: 370 }, data: {} },
+      { id: 'join-p1', type: 'joinnode', position: { x: 760, y: 300 }, data: {} },
+    ];
+    const livePos = (id: string) => nodes.find(n => n.id === id)?.position;
+    const frames: NodeChange[][] = [
+      [{ id: 'p1', type: 'position', position: { x: 110, y: 100 }, dragging: true }],
+      [{ id: 'p1', type: 'position', position: { x: 115, y: 107 }, dragging: true }],
+      [{ id: 'p1', type: 'position', dragging: false }],
+    ];
+    for (const changes of frames) {
+      nodes = applyNodeChanges(expandPositionChanges(changes, livePos, groupIndex), nodes);
+    }
+    expect(nodes.find(n => n.id === 'p1')!.position).toEqual({ x: 115, y: 107 });
+    expect(nodes.find(n => n.id === 'a1')!.position).toEqual({ x: 465, y: 257 });
+    expect(nodes.find(n => n.id === 'a2')!.position).toEqual({ x: 515, y: 377 });
+    expect(nodes.find(n => n.id === 'join-p1')!.position).toEqual({ x: 775, y: 307 });
+    expect(nodes.every(n => n.dragging !== true)).toBe(true);
+  });
 });
 ```
+
+Os imports do topo pra esse bloco: `applyNodeChanges` e `type Node` vêm de `'reactflow'` (juntar no mesmo import: `import { applyNodeChanges, type Node } from 'reactflow';`). `applyNodeChanges` é puro (sem DOM) — roda no environment node.
 
 - [ ] **Step 2: Rodar e confirmar que falham**
 
@@ -418,7 +457,7 @@ export function expandPositionChanges(
 pnpm --filter @workspace/mindtask-app test
 ```
 
-Esperado: 14 testes PASS.
+Esperado: 16 testes PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -519,7 +558,7 @@ pnpm --filter @workspace/mindtask-app build
 pnpm --filter @workspace/mindtask-app test
 ```
 
-Esperado: build OK, 14 testes PASS.
+Esperado: build OK, 16 testes PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -536,39 +575,143 @@ git commit -m "feat(canvas): grupo tarefa+aprovacoes se move como bloco rigido (
 - Modify: `artifacts/mindtask-app/src/pages/maps/canvas.tsx`
 
 **Interfaces:**
-- Consumes: `groupIndexRef` (Task 3), `updateCardMut` (~linha 1004), `pendingUpdatesRef` (~linha 399), `nodesRef`, `dragStartSnapshotRef`.
-- Produces: `persistGroupPositions(originId: string, exclude?: Set<string>): void` (interno ao componente).
+- Consumes: `groupIndexRef` (Task 3), `updateCardMut` (~linha 1004), `pendingUpdatesRef` (~linha 399), `nodesRef`, `dragStartSnapshotRef`, tipo `NodePositionSnapshot` (já existente no arquivo), contrato de ordem do índice (`[pai, ...aprovações, join?]`, Task 1).
+- Produces (internos ao componente/módulo):
+  - `nodeDragActiveRef: React.MutableRefObject<boolean>` — predicado REAL de drag ativo. (⚠️ `dragStartSnapshotRef` NÃO serve: canvas.tsx ~2055-2067 seta o snapshot em QUALQUER mousedown do wrapper e só os drag-stops limpam — depois de um clique simples ele fica não-nulo indefinidamente.)
+  - `persistGroupPositions(originId: string, originPosition: {x:number;y:number}, startSnapshot: NodePositionSnapshot | null, exclude?: Set<string>): void` — persiste por snapshot-do-início + delta do payload autoritativo do stop (imune a lag de 1 frame do `nodesRef`, que sincroniza via useEffect).
+  - `deriveJoinPosition(children: Array<{positionX:number;positionY:number}>): {x:number;y:number}` — fórmula do join extraída de `buildJoinNodes` (module-level).
 
 Âncoras no master atual:
+- `onNodeDragStart` ~linha 1358; `onSelectionDragStart` ~linha 1370.
 - `onNodeDragStop` ~linha 1443; early-return de approvalnode ~1474-1475; branch joinnode ~1480-1490; persist do card ~1492-1496.
 - `onSelectionDragStop` ~linha 1609.
 - Loop de persistência do undo/redo ~linhas 1701-1723.
 - Rebuild de join nodes no poll: `const freshJoinNodes = buildJoinNodes(...)` ~linha 911, dentro do `setNodes(prev => ...)` do else-branch do efeito de mapData.
+- `buildJoinNodes` ~linha 248 (fórmula do join ~269-277); `handleAutoLayout` ~linha 1020 (aplicação das posições ~1035-1041).
 
-- [ ] **Step 1: Helper `persistGroupPositions`**
+- [ ] **Step 1: `nodeDragActiveRef` + hoist do snapshot nos handlers de drag**
+
+Declarar junto de `dragStartSnapshotRef` (~linha 404):
+
+```ts
+  const nodeDragActiveRef = useRef(false);
+```
+
+Em `onNodeDragStart` (~1358) e `onSelectionDragStart` (~1370), adicionar como PRIMEIRA linha do corpo:
+
+```ts
+      nodeDragActiveRef.current = true;
+```
+
+Em `onNodeDragStop`, trocar o bloco inicial:
+
+```ts
+      if (dragStartSnapshotRef.current) {
+        const snapshot = dragStartSnapshotRef.current;
+        dragStartSnapshotRef.current = null;
+        const prevPos = snapshot[node.id];
+        const moved = !prevPos ||
+          Math.abs(prevPos.x - node.position.x) > 0.5 ||
+          Math.abs(prevPos.y - node.position.y) > 0.5;
+        if (moved) pushSnapshot(snapshot);
+      }
+```
+
+por (hoist do snapshot pra variável do handler — os steps seguintes usam `dragSnapshot`):
+
+```ts
+      nodeDragActiveRef.current = false;
+      const dragSnapshot = dragStartSnapshotRef.current;
+      if (dragSnapshot) {
+        dragStartSnapshotRef.current = null;
+        const prevPos = dragSnapshot[node.id];
+        const moved = !prevPos ||
+          Math.abs(prevPos.x - node.position.x) > 0.5 ||
+          Math.abs(prevPos.y - node.position.y) > 0.5;
+        if (moved) pushSnapshot(dragSnapshot);
+      }
+```
+
+Em `onSelectionDragStop`, trocar o bloco inicial equivalente:
+
+```ts
+      if (dragStartSnapshotRef.current) {
+        const snapshot = dragStartSnapshotRef.current;
+        dragStartSnapshotRef.current = null;
+        const anyMoved = selectedNodes.some(n => {
+          const prevPos = snapshot[n.id];
+          return !prevPos ||
+            Math.abs(prevPos.x - n.position.x) > 0.5 ||
+            Math.abs(prevPos.y - n.position.y) > 0.5;
+        });
+        if (anyMoved) pushSnapshot(snapshot);
+      }
+```
+
+por:
+
+```ts
+      nodeDragActiveRef.current = false;
+      const dragSnapshot = dragStartSnapshotRef.current;
+      if (dragSnapshot) {
+        dragStartSnapshotRef.current = null;
+        const anyMoved = selectedNodes.some(n => {
+          const prevPos = dragSnapshot[n.id];
+          return !prevPos ||
+            Math.abs(prevPos.x - n.position.x) > 0.5 ||
+            Math.abs(prevPos.y - n.position.y) > 0.5;
+        });
+        if (anyMoved) pushSnapshot(dragSnapshot);
+      }
+```
+
+- [ ] **Step 2: Helper `persistGroupPositions`**
 
 Declarar após as mutations (depois de `const updateCardMut = useUpdateCard();` ~linha 1004) e antes de `onNodeDragStart` (~linha 1358):
 
 ```ts
   // Persiste a posição final de todos os cards de um grupo tarefa+aprovações.
+  // Posições dos membros = snapshot do início do drag + delta do node de
+  // origem (payload autoritativo do ReactFlow no stop) — imune ao lag de um
+  // frame do nodesRef (que sincroniza via useEffect). Fallback: leitura do
+  // nodesRef quando não há snapshot (ex.: fluxo sem mousedown no wrapper).
   // O join node é derivado (nunca persiste) — só ganha guard no
   // pendingUpdatesRef pro rebuild do poll não regredir a posição local
   // enquanto os PATCHes dos cards ainda não refletiram no payload.
   const persistGroupPositions = useCallback(
-    (originId: string, exclude?: Set<string>) => {
+    (
+      originId: string,
+      originPosition: { x: number; y: number },
+      startSnapshot: NodePositionSnapshot | null,
+      exclude?: Set<string>,
+    ) => {
       const memberIds = groupIndexRef.current.get(originId);
       if (!memberIds) return;
+      const startOrigin = startSnapshot?.[originId];
+      const delta = startOrigin
+        ? { x: originPosition.x - startOrigin.x, y: originPosition.y - startOrigin.y }
+        : null;
       for (const id of memberIds) {
         if (id.startsWith('join-')) {
           pendingUpdatesRef.current.set(id, Date.now());
           continue;
         }
         if (exclude?.has(id)) continue;
-        const member = nodesRef.current.find(n => n.id === id);
-        if (!member) continue;
+        if (id === originId) {
+          updateCardMut.mutate({
+            workspaceId, mapId, cardId: id,
+            data: { positionX: originPosition.x, positionY: originPosition.y },
+          });
+          continue;
+        }
+        const startMember = delta ? startSnapshot?.[id] : undefined;
+        const pos = startMember && delta
+          ? { x: startMember.x + delta.x, y: startMember.y + delta.y }
+          : nodesRef.current.find(n => n.id === id)?.position;
+        if (!pos) continue;
         updateCardMut.mutate({
           workspaceId, mapId, cardId: id,
-          data: { positionX: member.position.x, positionY: member.position.y },
+          data: { positionX: pos.x, positionY: pos.y },
         });
       }
     },
@@ -576,7 +719,7 @@ Declarar após as mutations (depois de `const updateCardMut = useUpdateCard();` 
   );
 ```
 
-- [ ] **Step 2: onNodeDragStop — approvalnode e joinnode persistem o grupo**
+- [ ] **Step 3: onNodeDragStop — approvalnode e joinnode persistem o grupo**
 
 Trocar (~linhas 1474-1475):
 
@@ -591,7 +734,7 @@ por:
       // Approval nodes movem o grupo inteiro (bloco rígido via
       // expandPositionChanges); persiste a posição final de todos os cards.
       if (node.type === 'approvalnode') {
-        persistGroupPositions(node.id);
+        persistGroupPositions(node.id, node.position, dragSnapshot);
         return;
       }
 ```
@@ -611,12 +754,12 @@ por:
       // Join nodes arrastam o grupo inteiro; a posição do próprio join é
       // derivada e não persiste, mas os cards do grupo persistem.
       if (node.type === 'joinnode') {
-        persistGroupPositions(node.id);
+        persistGroupPositions(node.id, node.position, dragSnapshot);
 ```
 
-(o corpo existente do branch — limpeza de highlight e `return` — permanece).
+(o corpo existente do branch — limpeza de highlight e `return` — permanece; o id do join cai no guard `startsWith('join-')` dentro do helper, então ele mesmo nunca vira PATCH).
 
-- [ ] **Step 3: onNodeDragStop — mindmap persiste os membros do grupo**
+- [ ] **Step 4: onNodeDragStop — mindmap persiste os membros do grupo**
 
 Logo após o persist do próprio card (~1492-1496):
 
@@ -632,30 +775,31 @@ adicionar:
 
 ```ts
       // Se o card tem aprovações, o grupo se moveu junto — persiste os demais.
-      persistGroupPositions(node.id, new Set([node.id]));
+      persistGroupPositions(node.id, node.position, dragSnapshot, new Set([node.id]));
 ```
 
 Atualizar o array de deps do `onNodeDragStop` para incluir `persistGroupPositions`.
 
-- [ ] **Step 4: onSelectionDragStop — expandir persistência pros membros não-selecionados**
+- [ ] **Step 5: onSelectionDragStop — expandir persistência pros membros não-selecionados**
 
 Após o `selectedNodes.forEach(...)` existente (~1622-1642), adicionar:
 
 ```ts
       // Membros de grupo que não estavam na seleção também se moveram
-      // (expandPositionChanges) — persiste cada um exatamente uma vez.
+      // (expandPositionChanges) — persiste cada um exatamente uma vez, por
+      // snapshot+delta do node selecionado correspondente (payload do stop).
       const persistedIds = new Set(selectedNodes.map(n => n.id));
       for (const node of selectedNodes) {
         const memberIds = groupIndexRef.current.get(node.id);
         if (!memberIds) continue;
-        persistGroupPositions(node.id, persistedIds);
+        persistGroupPositions(node.id, node.position, dragSnapshot, persistedIds);
         for (const id of memberIds) persistedIds.add(id);
       }
 ```
 
 Atualizar o array de deps do `onSelectionDragStop` para incluir `persistGroupPositions`.
 
-- [ ] **Step 5: Guard do join no rebuild do poll**
+- [ ] **Step 6: Guard do join no rebuild do poll**
 
 No else-branch do efeito de mapData, trocar (~linha 911):
 
@@ -667,22 +811,24 @@ por:
 
 ```ts
         const rebuiltJoinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
-        // Durante drag ativo ou na janela pós-persistência do grupo, o payload
-        // do poll ainda pode ser anterior aos PATCHes — preserva a posição
-        // local do join pra ele não "pular" e reconvergir sozinho depois.
+        // Durante drag REAL ativo (nodeDragActiveRef — NÃO usar
+        // dragStartSnapshotRef, que fica setado após qualquer clique) ou na
+        // janela pós-persistência do grupo, o payload do poll ainda pode ser
+        // anterior aos PATCHes — preserva a posição local do join pra ele não
+        // "pular" e reconvergir sozinho depois.
         const freshJoinNodes = rebuiltJoinNodes.map(jn => {
           const existing = prev.find(n => n.id === jn.id);
           if (!existing) return jn;
-          if (dragStartSnapshotRef.current || pendingUpdatesRef.current.has(jn.id)) {
+          if (nodeDragActiveRef.current || pendingUpdatesRef.current.has(jn.id)) {
             return { ...jn, position: existing.position };
           }
           return jn;
         });
 ```
 
-(O sweep de expiração do `pendingUpdatesRef` — `PENDING_GUARD_MS = 5000` — já roda nesse mesmo efeito antes deste ponto, ~linhas 906-910, então o guard expira sozinho.)
+(O sweep de expiração do `pendingUpdatesRef` — `PENDING_GUARD_MS = 5000` — já roda nesse mesmo efeito antes deste ponto, ~linhas 906-910, então o guard expira sozinho. Decisão consciente: o guard por timeout segue o padrão já estabelecido do arquivo pra shapes; posições de CARDS existentes nunca são sobrescritas pelo poll — o else-branch só atualiza `data` — então o join é o único vetor de regressão de posição.)
 
-- [ ] **Step 6: Undo/redo — marcar guard do join**
+- [ ] **Step 7: Undo/redo — marcar guard do join**
 
 No loop de persistência do undo/redo (~linhas 1701-1723), adicionar um branch pro joinnode antes do branch `mindmap || approvalnode`:
 
@@ -693,7 +839,91 @@ No loop de persistência do undo/redo (~linhas 1701-1723), adicionar um branch p
         } else if (n.type === 'mindmap' || n.type === 'approvalnode') {
 ```
 
-- [ ] **Step 7: Gates de compilação e testes**
+- [ ] **Step 8: Auto-layout reposiciona o join na mesma transação**
+
+O `handleAutoLayout` aplica as posições devolvidas pelo servidor só nos ids presentes em `result.cards` (~linhas 1035-1041) — join nodes são virtuais e ficariam no lugar antigo até o refetch (pulo visível). Primeiro, extrair a fórmula do join em `buildJoinNodes` (~linhas 269-277). Trocar:
+
+```ts
+    const joinNodeId = `join-${parentCard.id}`;
+    const maxX = Math.max(...children.map(c => c.positionX));
+    const avgCenterY =
+      children.reduce((sum, c) => sum + c.positionY + APPROVAL_NODE_HEIGHT / 2, 0) /
+      children.length;
+
+    joinNodes.push({
+      id: joinNodeId,
+      type: 'joinnode',
+      position: { x: maxX + 260, y: avgCenterY - 18 },
+```
+
+por:
+
+```ts
+    const joinNodeId = `join-${parentCard.id}`;
+
+    joinNodes.push({
+      id: joinNodeId,
+      type: 'joinnode',
+      position: deriveJoinPosition(children),
+```
+
+e declarar a função module-level imediatamente ACIMA de `buildJoinNodes` (~linha 248):
+
+```ts
+function deriveJoinPosition(children: Array<{ positionX: number; positionY: number }>): { x: number; y: number } {
+  const maxX = Math.max(...children.map(c => c.positionX));
+  const avgCenterY =
+    children.reduce((sum, c) => sum + c.positionY + APPROVAL_NODE_HEIGHT / 2, 0) /
+    children.length;
+  return { x: maxX + 260, y: avgCenterY - 18 };
+}
+```
+
+Depois, no `onSuccess` do `handleAutoLayout`, trocar:
+
+```ts
+          const moved = new Map(result.cards.map((c) => [c.id, { x: c.positionX, y: c.positionY }]));
+          setNodes(prev =>
+            prev.map(n => {
+              const p = moved.get(n.id);
+              return p ? { ...n, position: p } : n;
+            }),
+          );
+```
+
+por:
+
+```ts
+          const moved = new Map(result.cards.map((c) => [c.id, { x: c.positionX, y: c.positionY }]));
+          setNodes(prev =>
+            prev.map(n => {
+              const p = moved.get(n.id);
+              if (p) return { ...n, position: p };
+              // Join nodes são virtuais (fora do result.cards): deriva a
+              // posição nova das aprovações recém-posicionadas na MESMA
+              // transação, senão o join fica pra trás até o refetch.
+              if (n.type === 'joinnode') {
+                const memberIds = groupIndexRef.current.get(n.id);
+                if (memberIds && memberIds[memberIds.length - 1] === n.id) {
+                  const childPositions = memberIds.slice(1, -1).flatMap(id => {
+                    const mp = moved.get(id);
+                    if (mp) return [{ positionX: mp.x, positionY: mp.y }];
+                    const cur = prev.find(pn => pn.id === id);
+                    return cur ? [{ positionX: cur.position.x, positionY: cur.position.y }] : [];
+                  });
+                  if (childPositions.length > 0) {
+                    return { ...n, position: deriveJoinPosition(childPositions) };
+                  }
+                }
+              }
+              return n;
+            }),
+          );
+```
+
+(O `slice(1, -1)` depende do contrato de ordem `[pai, ...aprovações, join]` do índice — documentado e testado na Task 1.)
+
+- [ ] **Step 9: Gates de compilação e testes**
 
 ```powershell
 pnpm --filter @workspace/mindtask-app run typecheck 2>&1 | Select-String -Pattern 'error TS' | Measure-Object -Line
@@ -701,13 +931,13 @@ pnpm --filter @workspace/mindtask-app build
 pnpm --filter @workspace/mindtask-app test
 ```
 
-Esperado: zero erro TS novo vs baseline, build OK, 14 testes PASS.
+Esperado: zero erro TS novo vs baseline, build OK, 16 testes PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```powershell
 git add artifacts/mindtask-app/src/pages/maps/canvas.tsx
-git commit -m "feat(canvas): persistencia de grupo nos drag-stops + guards do join node"
+git commit -m "feat(canvas): persistencia de grupo nos drag-stops + guards do join node e auto-layout"
 ```
 
 ---
@@ -730,7 +960,7 @@ pnpm --filter @workspace/mindtask-app run typecheck 2>&1 | Select-String -Patter
 pnpm --filter @workspace/mindtask-app build
 ```
 
-Esperado: frozen-lockfile OK; 14 testes PASS; contagem de erros TS igual ao baseline de master; build OK. Nenhum arquivo de backend alterado (`git diff master --stat` só deve listar `artifacts/mindtask-app/`, `docs/` e `pnpm-lock.yaml`).
+Esperado: frozen-lockfile OK; 16 testes PASS; contagem de erros TS igual ao baseline de master; build OK. Nenhum arquivo de backend alterado (`git diff master --stat` só deve listar `artifacts/mindtask-app/`, `docs/` e `pnpm-lock.yaml`).
 
 - [ ] **Step 2: Subir dev servers pro smoke**
 
@@ -754,6 +984,7 @@ Num mapa com uma tarefa com 2 aprovações **sequenciais** e outra com 2 aprova�
 7. Botão "reorganizar" (auto-layout) → mapa reorganiza normalmente, join nodes acompanham sem pulos.
 8. Criar uma aprovação nova numa tarefa (painel da tarefa) com o canvas aberto → o card novo aparece e o grupo passa a incluí-lo nos drags.
 9. Esperar ~10s (3 polls) depois de um drag de grupo → nada "pula" de volta.
+10. Clicar no canvas (pane e nodes) SEM arrastar, esperar 2-3 polls → join nodes continuam re-derivando normalmente (regressão do guard: um clique simples não pode congelar o rebuild — `nodeDragActiveRef` deve estar `false`).
 
 - [ ] **Step 4: Push da branch (sem merge)**
 
