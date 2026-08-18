@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { usePositionHistory, NodePositionSnapshot } from "@/hooks/usePositionHistory";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
+import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow, type NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
@@ -14,6 +14,7 @@ import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex, type ShapeKind } from "@/components/maps/layerOrder";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
+import { buildApprovalGroupIndex, expandPositionChanges, type ApprovalGroupIndex } from '@/lib/approvalGroups';
 import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape, useLayoutMap } from "@workspace/api-client-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
@@ -417,6 +418,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [pendingDeleteNodeIds, setPendingDeleteNodeIds] = useState<string[] | null>(null);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
+  const groupIndexRef = useRef<ApprovalGroupIndex>(new Map());
   const edgesRef = useRef<Edge[]>([]);
   const mapDataRef = useRef<typeof mapData>(undefined);
   const selectedCardIdRef = useRef<string | null>(selectedCardId);
@@ -730,6 +732,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     };
 
     const terminalNodeMap = buildTerminalNodeMap(mapData.cards as ApprovalCardMeta[]);
+    groupIndexRef.current = buildApprovalGroupIndex(mapData.cards as ApprovalCardMeta[]);
 
     // Build set of parent task IDs where ALL approval children are approved
     const approvalCards = (mapData.cards as ApprovalCardMeta[]).filter(c => c.taskIsApprovalTask && c.taskParentTaskId);
@@ -1353,6 +1356,22 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       setNodes,
       queryClient,
     ],
+  );
+
+  // Qualquer mudança de posição num membro de grupo tarefa+aprovações é
+  // expandida pros demais membros ANTES de aplicar — o grupo é um bloco
+  // rígido em todos os caminhos de movimento (drag, seleção, teclado).
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(
+        expandPositionChanges(
+          changes,
+          (id) => nodesRef.current.find(n => n.id === id)?.position,
+          groupIndexRef.current,
+        ),
+      );
+    },
+    [onNodesChange],
   );
 
   const onNodeDragStart = useCallback(
@@ -2924,7 +2943,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChangeWithDelete}
             onConnect={onConnect}
             onConnectStart={onConnectStart}
