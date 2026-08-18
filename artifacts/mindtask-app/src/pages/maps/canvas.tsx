@@ -1549,10 +1549,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (_event: React.MouseEvent, node: Node) => {
       nodeDragActiveRef.current = false;
       const dragSnapshot = dragStartSnapshotRef.current;
+      let moved = true;                       // sem snapshot → mantém o comportamento atual
       if (dragSnapshot) {
         dragStartSnapshotRef.current = null;
         const prevPos = dragSnapshot[node.id];
-        const moved = !prevPos ||
+        moved = !prevPos ||
           Math.abs(prevPos.x - node.position.x) > 0.5 ||
           Math.abs(prevPos.y - node.position.y) > 0.5;
         if (moved) pushSnapshot(dragSnapshot);
@@ -1579,15 +1580,18 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
       // Approval nodes movem o grupo inteiro (bloco rígido via
       // expandPositionChanges); persiste a posição final de todos os cards.
+      // Clique sem arraste (ReactFlow v11 dispara o stop mesmo com delta zero)
+      // não persiste nada — senão um clique reescreveria o grupo inteiro com
+      // posições locais possivelmente defasadas.
       if (node.type === 'approvalnode') {
-        persistGroupPositions(node.id, node.position, dragSnapshot);
+        if (moved) persistGroupPositions(node.id, node.position, dragSnapshot);
         return;
       }
 
       // Join nodes arrastam o grupo inteiro; a posição do próprio join é
       // derivada e não persiste, mas os cards do grupo persistem.
       if (node.type === 'joinnode') {
-        persistGroupPositions(node.id, node.position, dragSnapshot);
+        if (moved) persistGroupPositions(node.id, node.position, dragSnapshot);
         // Still clear any edge highlight that may have been left over.
         if (highlightedEdgeIdRef.current) {
           setHighlightedEdgeId(null);
@@ -1606,7 +1610,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       });
 
       // Se o card tem aprovações, o grupo se moveu junto — persiste os demais.
-      persistGroupPositions(node.id, node.position, dragSnapshot, new Set([node.id]));
+      // Só quando houve arraste de fato (ver comentário do approvalnode acima).
+      if (moved) persistGroupPositions(node.id, node.position, dragSnapshot, new Set([node.id]));
 
       const currentHighlightedEdgeId = highlightedEdgeIdRef.current;
 
@@ -1723,9 +1728,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     (_event: React.MouseEvent, selectedNodes: Node[]) => {
       nodeDragActiveRef.current = false;
       const dragSnapshot = dragStartSnapshotRef.current;
+      let anyMoved = true;                    // sem snapshot → mantém o comportamento atual
       if (dragSnapshot) {
         dragStartSnapshotRef.current = null;
-        const anyMoved = selectedNodes.some(n => {
+        anyMoved = selectedNodes.some(n => {
           const prevPos = dragSnapshot[n.id];
           return !prevPos ||
             Math.abs(prevPos.x - n.position.x) > 0.5 ||
@@ -1758,12 +1764,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       // Membros de grupo que não estavam na seleção também se moveram
       // (expandPositionChanges) — persiste cada um exatamente uma vez, por
       // snapshot+delta do node selecionado correspondente (payload do stop).
-      const persistedIds = new Set(selectedNodes.map(n => n.id));
-      for (const node of selectedNodes) {
-        const memberIds = groupIndexRef.current.get(node.id);
-        if (!memberIds) continue;
-        persistGroupPositions(node.id, node.position, dragSnapshot, persistedIds);
-        for (const id of memberIds) persistedIds.add(id);
+      // Clique sem arraste não persiste nada (ver onNodeDragStop).
+      if (anyMoved) {
+        const persistedIds = new Set(selectedNodes.map(n => n.id));
+        for (const node of selectedNodes) {
+          const memberIds = groupIndexRef.current.get(node.id);
+          if (!memberIds) continue;
+          persistGroupPositions(node.id, node.position, dragSnapshot, persistedIds);
+          for (const id of memberIds) persistedIds.add(id);
+        }
       }
     },
     [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, pushSnapshot, persistGroupPositions],
