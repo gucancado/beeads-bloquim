@@ -3097,6 +3097,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
+            // Arraste so comeca depois de 4px: clique e arraste deixam de ser
+            // ambiguos, entao os controles do card podem ser arrastaveis sem
+            // engolir cliques (default do ReactFlow e 0 = drag em qualquer mousedown).
+            nodeDragThreshold={4}
             elevateNodesOnSelect={false}
             elevateEdgesOnSelect={false}
             fitView
