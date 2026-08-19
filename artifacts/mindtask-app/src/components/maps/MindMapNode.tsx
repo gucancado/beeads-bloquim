@@ -658,7 +658,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
               {data.title}
             </h3>
             <button
-              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer bg-muted text-muted-foreground"
+              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 cursor-pointer bg-muted text-muted-foreground"
               title="Expandir card"
               onClick={(e) => { e.stopPropagation(); data.onOpen?.(id); }}
             >
@@ -783,7 +783,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             hoverTitle="Clique para editar o título"
           />
           <button
-            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 nodrag cursor-pointer"
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 cursor-pointer"
             style={{
               backgroundColor: `${color.replace(')', ' / 0.12)')}`,
               color,
@@ -796,7 +796,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         </div>
 
         {plainDescription && (
-          <div className="mt-2 relative nodrag">
+          <div className="mt-2 relative">
             <p
               ref={descRef}
               className="text-[11px] text-muted-foreground leading-relaxed break-words overflow-hidden"
@@ -819,7 +819,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 />
                 <div className="flex justify-center mt-0.5">
                   <button
-                    className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors nodrag"
+                    className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                     onClick={(e) => { e.stopPropagation(); setMaxLines(9999); }}
                   >
                     ver mais
@@ -830,7 +830,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             {!isTruncated && maxLines > 3 && (
               <div className="flex justify-center mt-0.5">
                 <button
-                  className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors nodrag"
+                  className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                   onClick={(e) => { e.stopPropagation(); setMaxLines(3); }}
                 >
                   ver menos
@@ -845,7 +845,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
           <div className="mt-3 flex items-center justify-between gap-2">
             {hasTask ? (
               <div
-                className="nodrag flex-shrink-0"
+                className="flex-shrink-0"
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
               >
@@ -856,7 +856,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                 />
               </div>
             ) : hasAssignee ? (
-              <div className="flex items-center flex-shrink-0 nodrag">
+              <div className="flex items-center flex-shrink-0">
                 {data.taskAssigneeAvatarUrl ? (
                   <img
                     src={data.taskAssigneeAvatarUrl}
@@ -880,7 +880,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             {/* Non-task due-date display */}
             {!hasTask && hasDueDate && (
               <div
-                className={`flex items-center gap-1 text-[11px] font-medium ml-auto rounded px-1 transition-colors ${isOverdue ? 'text-red-500' : 'text-muted-foreground'} cursor-default nodrag`}
+                className={`flex items-center gap-1 text-[11px] font-medium ml-auto rounded px-1 transition-colors ${isOverdue ? 'text-red-500' : 'text-muted-foreground'} cursor-default`}
               >
                 <Calendar className="w-3 h-3 flex-shrink-0" />
                 <span>{dueDateStr}</span>
@@ -891,7 +891,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             {hasTask && !hasDueDate && !editingNoPrazo && currentScheduleMode !== "urgente" && (
               <button
                 type="button"
-                className="nodrag ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground rounded px-1 hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
+                className="ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground rounded px-1 hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
                 title="Clique para definir prazo"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -907,7 +907,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
             {hasTask && !hasDueDate && !editingNoPrazo && currentScheduleMode === "urgente" && (
               <button
                 type="button"
-                className="nodrag ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer"
+                className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer"
                 title="Clique para alterar modalidade de prazo"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -949,7 +949,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                       {hasStartAt ? (
                         <button
                           type="button"
-                          className="nodrag flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer bg-transparent border-none"
+                          className="flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer bg-transparent border-none"
                           title="Clique para editar início"
                           onClick={(e) => e.stopPropagation()}
                           onDoubleClick={(e) => e.stopPropagation()}
@@ -960,7 +960,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                       ) : (
                         <button
                           type="button"
-                          className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer bg-transparent border-none"
+                          className="flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer bg-transparent border-none"
                           title="Adicionar início"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -982,7 +982,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                   {hasDueDate ? (
                     <button
                       type="button"
-                      className={`nodrag flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} cursor-pointer bg-transparent border-none`}
+                      className={`flex items-center gap-1 text-[11px] font-medium rounded px-1 transition-colors ${isOverdue ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'} cursor-pointer bg-transparent border-none`}
                       title="Clique para editar fazer"
                       onClick={(e) => e.stopPropagation()}
                       onDoubleClick={(e) => e.stopPropagation()}
@@ -993,7 +993,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
                   ) : (
                     <button
                       type="button"
-                      className="nodrag flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer bg-transparent border-none"
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground opacity-0 group-hover/node:opacity-100 hover:text-foreground transition-all cursor-pointer bg-transparent border-none"
                       title="Adicionar fazer"
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -1008,7 +1008,7 @@ function MindMapNode({ id, data, selected }: MindMapNodeProps) {
         ) : null}
 
         {/* Status badge */}
-        <div className="mt-3 pt-3 border-t flex items-center gap-2 nodrag">
+        <div className="mt-3 pt-3 border-t flex items-center gap-2">
           <div className="flex flex-col gap-1 min-w-0">
             {(() => {
               const entry = getStatusOrderEntry(data.statusVisual);
