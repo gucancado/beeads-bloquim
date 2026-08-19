@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { usePositionHistory, NodePositionSnapshot } from "@/hooks/usePositionHistory";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow } from 'reactflow';
+import { ReactFlow, Controls, ControlButton, Background, useNodesState, useEdgesState, addEdge, Connection, Edge, Node, BackgroundVariant, ReactFlowProvider, EdgeChange, ConnectionMode, SelectionMode, useReactFlow, type NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import MindMapNode from "@/components/maps/MindMapNode";
 import TextNode from "@/components/maps/TextNode";
@@ -14,6 +14,7 @@ import ApprovalEdge from "@/components/maps/ApprovalEdge";
 import { LAYER_EDGE, LAYER_TASK, LAYER_TEXT, shapeNodeZIndex, type ShapeKind } from "@/components/maps/layerOrder";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
+import { buildApprovalGroupIndex, expandPositionChanges, type ApprovalGroupIndex } from '@/lib/approvalGroups';
 import { useGetMap, useGetWorkspace, useUpdateCard, useCreateCard, useCreateConnection, useDeleteConnection, useDeleteCard, customFetch, CreateConnectionRequest, useCreateTextElement, useUpdateTextElement, useDeleteTextElement, useUpdateTaskStatus, useCreateShape, useUpdateShape, useDeleteShape, useLayoutMap } from "@workspace/api-client-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
@@ -245,6 +246,14 @@ function buildApprovalEdges(
 
 const APPROVAL_NODE_HEIGHT = 90;
 
+function deriveJoinPosition(children: Array<{ positionX: number; positionY: number }>): { x: number; y: number } {
+  const maxX = Math.max(...children.map(c => c.positionX));
+  const avgCenterY =
+    children.reduce((sum, c) => sum + c.positionY + APPROVAL_NODE_HEIGHT / 2, 0) /
+    children.length;
+  return { x: maxX + 260, y: avgCenterY - 18 };
+}
+
 function buildJoinNodes(
   cardList: ApprovalCardMeta[],
   onAddChild: (cardId: string) => void,
@@ -266,15 +275,11 @@ function buildJoinNodes(
     if (approvalMode !== 'parallel') continue;
 
     const joinNodeId = `join-${parentCard.id}`;
-    const maxX = Math.max(...children.map(c => c.positionX));
-    const avgCenterY =
-      children.reduce((sum, c) => sum + c.positionY + APPROVAL_NODE_HEIGHT / 2, 0) /
-      children.length;
 
     joinNodes.push({
       id: joinNodeId,
       type: 'joinnode',
-      position: { x: maxX + 260, y: avgCenterY - 18 },
+      position: deriveJoinPosition(children),
       data: { parentCardId: parentCard.id, onAddChild },
       draggable: true,
       deletable: false,
@@ -357,6 +362,17 @@ function edgeIntersectsNodeBBox(
   return false;
 }
 
+// nodeDragActiveRef guarda o timestamp (ms) do último onNodeDragStart /
+// onSelectionDragStart, e 0 quando não há drag em curso. Self-heal: se um
+// stop handler nunca disparar (ex.: node desmontado no meio do drag por outro
+// usuário apagando o card), o guard expira sozinho após NODE_DRAG_ACTIVE_TIMEOUT_MS
+// em vez de congelar o rebuild dos join nodes pro resto da sessão.
+const NODE_DRAG_ACTIVE_TIMEOUT_MS = 10000;
+
+function isNodeDragActive(startedAt: number): boolean {
+  return startedAt !== 0 && Date.now() - startedAt < NODE_DRAG_ACTIVE_TIMEOUT_MS;
+}
+
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
@@ -402,6 +418,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const connectPointerMoveRef = useRef<((ev: PointerEvent) => void) | null>(null);
   const { pushSnapshot, undo, redo } = usePositionHistory();
   const dragStartSnapshotRef = useRef<NodePositionSnapshot | null>(null);
+  const nodeDragActiveRef = useRef(0);
 
   const search = useSearch();
   const canvasBasePath = `/workspaces/${workspaceId}/maps/${mapId}`;
@@ -417,6 +434,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [pendingDeleteNodeIds, setPendingDeleteNodeIds] = useState<string[] | null>(null);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
+  const groupIndexRef = useRef<ApprovalGroupIndex>(new Map());
   const edgesRef = useRef<Edge[]>([]);
   const mapDataRef = useRef<typeof mapData>(undefined);
   const selectedCardIdRef = useRef<string | null>(selectedCardId);
@@ -730,6 +748,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     };
 
     const terminalNodeMap = buildTerminalNodeMap(mapData.cards as ApprovalCardMeta[]);
+    groupIndexRef.current = buildApprovalGroupIndex(mapData.cards as ApprovalCardMeta[]);
 
     // Build set of parent task IDs where ALL approval children are approved
     const approvalCards = (mapData.cards as ApprovalCardMeta[]).filter(c => c.taskIsApprovalTask && c.taskParentTaskId);
@@ -908,7 +927,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         pendingUpdatesRef.current.forEach((ts, id) => {
           if (now - ts > PENDING_GUARD_MS) pendingUpdatesRef.current.delete(id);
         });
-        const freshJoinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
+        const rebuiltJoinNodes = buildJoinNodes(mapData.cards as ApprovalCardMeta[], handleAddChildCard);
+        // Durante drag REAL ativo (nodeDragActiveRef — NÃO usar
+        // dragStartSnapshotRef, que fica setado após qualquer clique) ou na
+        // janela pós-persistência do grupo, o payload do poll ainda pode ser
+        // anterior aos PATCHes — preserva a posição local do join pra ele não
+        // "pular" e reconvergir sozinho depois.
+        const freshJoinNodes = rebuiltJoinNodes.map(jn => {
+          const existing = prev.find(n => n.id === jn.id);
+          if (!existing) return jn;
+          if (isNodeDragActive(nodeDragActiveRef.current) || pendingUpdatesRef.current.has(jn.id)) {
+            return { ...jn, position: existing.position };
+          }
+          return jn;
+        });
         return [
           ...filtered.map(n => {
             if (n.type === 'textnode') {
@@ -1014,6 +1046,54 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const deleteShapeMut = useDeleteShape();
   const layoutMapMut = useLayoutMap();
 
+  // Persiste a posição final de todos os cards de um grupo tarefa+aprovações.
+  // Posições dos membros = snapshot do início do drag + delta do node de
+  // origem (payload autoritativo do ReactFlow no stop) — imune ao lag de um
+  // frame do nodesRef (que sincroniza via useEffect). Fallback: leitura do
+  // nodesRef quando não há snapshot (ex.: fluxo sem mousedown no wrapper).
+  // O join node é derivado (nunca persiste) — só ganha guard no
+  // pendingUpdatesRef pro rebuild do poll não regredir a posição local
+  // enquanto os PATCHes dos cards ainda não refletiram no payload.
+  const persistGroupPositions = useCallback(
+    (
+      originId: string,
+      originPosition: { x: number; y: number },
+      startSnapshot: NodePositionSnapshot | null,
+      exclude?: Set<string>,
+    ) => {
+      const memberIds = groupIndexRef.current.get(originId);
+      if (!memberIds) return;
+      const startOrigin = startSnapshot?.[originId];
+      const delta = startOrigin
+        ? { x: originPosition.x - startOrigin.x, y: originPosition.y - startOrigin.y }
+        : null;
+      for (const id of memberIds) {
+        if (id.startsWith('join-')) {
+          pendingUpdatesRef.current.set(id, Date.now());
+          continue;
+        }
+        if (exclude?.has(id)) continue;
+        if (id === originId) {
+          updateCardMut.mutate({
+            workspaceId, mapId, cardId: id,
+            data: { positionX: originPosition.x, positionY: originPosition.y },
+          });
+          continue;
+        }
+        const startMember = delta ? startSnapshot?.[id] : undefined;
+        const pos = startMember && delta
+          ? { x: startMember.x + delta.x, y: startMember.y + delta.y }
+          : nodesRef.current.find(n => n.id === id)?.position;
+        if (!pos) continue;
+        updateCardMut.mutate({
+          workspaceId, mapId, cardId: id,
+          data: { positionX: pos.x, positionY: pos.y },
+        });
+      }
+    },
+    [workspaceId, mapId, updateCardMut],
+  );
+
   // Reorganiza o mapa inteiro pelo layout do servidor. Empurra o snapshot das
   // posições atuais ANTES de chamar, então Ctrl+Z desfaz (e re-persiste) tudo —
   // por isso não há diálogo de confirmação.
@@ -1036,7 +1116,25 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           setNodes(prev =>
             prev.map(n => {
               const p = moved.get(n.id);
-              return p ? { ...n, position: p } : n;
+              if (p) return { ...n, position: p };
+              // Join nodes são virtuais (fora do result.cards): deriva a
+              // posição nova das aprovações recém-posicionadas na MESMA
+              // transação, senão o join fica pra trás até o refetch.
+              if (n.type === 'joinnode') {
+                const memberIds = groupIndexRef.current.get(n.id);
+                if (memberIds && memberIds[memberIds.length - 1] === n.id) {
+                  const childPositions = memberIds.slice(1, -1).flatMap(id => {
+                    const mp = moved.get(id);
+                    if (mp) return [{ positionX: mp.x, positionY: mp.y }];
+                    const cur = prev.find(pn => pn.id === id);
+                    return cur ? [{ positionX: cur.position.x, positionY: cur.position.y }] : [];
+                  });
+                  if (childPositions.length > 0) {
+                    return { ...n, position: deriveJoinPosition(childPositions) };
+                  }
+                }
+              }
+              return n;
             }),
           );
           queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
@@ -1355,8 +1453,25 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     ],
   );
 
+  // Qualquer mudança de posição num membro de grupo tarefa+aprovações é
+  // expandida pros demais membros ANTES de aplicar — o grupo é um bloco
+  // rígido em todos os caminhos de movimento (drag, seleção, teclado).
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(
+        expandPositionChanges(
+          changes,
+          (id) => nodesRef.current.find(n => n.id === id)?.position,
+          groupIndexRef.current,
+        ),
+      );
+    },
+    [onNodesChange],
+  );
+
   const onNodeDragStart = useCallback(
     (_event: React.MouseEvent, _node: Node) => {
+      nodeDragActiveRef.current = Date.now();
       if (dragStartSnapshotRef.current) return;
       const snapshot: NodePositionSnapshot = {};
       for (const n of nodesRef.current) {
@@ -1369,6 +1484,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onSelectionDragStart = useCallback(
     (_event: React.MouseEvent, _selectedNodes: Node[]) => {
+      nodeDragActiveRef.current = Date.now();
       if (dragStartSnapshotRef.current) return;
       const snapshot: NodePositionSnapshot = {};
       for (const n of nodesRef.current) {
@@ -1442,14 +1558,16 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      if (dragStartSnapshotRef.current) {
-        const snapshot = dragStartSnapshotRef.current;
+      nodeDragActiveRef.current = 0;
+      const dragSnapshot = dragStartSnapshotRef.current;
+      let moved = true;                       // sem snapshot → mantém o comportamento atual
+      if (dragSnapshot) {
         dragStartSnapshotRef.current = null;
-        const prevPos = snapshot[node.id];
-        const moved = !prevPos ||
+        const prevPos = dragSnapshot[node.id];
+        moved = !prevPos ||
           Math.abs(prevPos.x - node.position.x) > 0.5 ||
           Math.abs(prevPos.y - node.position.y) > 0.5;
-        if (moved) pushSnapshot(snapshot);
+        if (moved) pushSnapshot(dragSnapshot);
       }
 
       // If this is a text node, use the text element update mutation
@@ -1471,13 +1589,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         return;
       }
 
-      // Approval nodes use auto-derived positions and are not user-movable.
-      if (node.type === 'approvalnode') return;
+      // Approval nodes movem o grupo inteiro (bloco rígido via
+      // expandPositionChanges); persiste a posição final de todos os cards.
+      // Clique sem arraste (ReactFlow v11 dispara o stop mesmo com delta zero)
+      // não persiste nada — senão um clique reescreveria o grupo inteiro com
+      // posições locais possivelmente defasadas.
+      if (node.type === 'approvalnode') {
+        if (moved) persistGroupPositions(node.id, node.position, dragSnapshot);
+        return;
+      }
 
-      // Join nodes are user-draggable (individually and in group selections),
-      // but their position is derived from approval children and is not
-      // persisted. The drag lifecycle (snapshot/undo) above still applies.
+      // Join nodes arrastam o grupo inteiro; a posição do próprio join é
+      // derivada e não persiste, mas os cards do grupo persistem.
       if (node.type === 'joinnode') {
+        if (moved) persistGroupPositions(node.id, node.position, dragSnapshot);
         // Still clear any edge highlight that may have been left over.
         if (highlightedEdgeIdRef.current) {
           setHighlightedEdgeId(null);
@@ -1489,11 +1614,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         return;
       }
 
-      // Always save position
-      updateCardMut.mutate({
-        workspaceId, mapId, cardId: node.id,
-        data: { positionX: node.position.x, positionY: node.position.y },
-      });
+      // Persiste a posição só quando houve arraste de fato — clique sem
+      // delta (ReactFlow v11 dispara o stop mesmo assim) não deve reescrever
+      // a posição do pai enquanto o resto do grupo (aprovações/join) fica
+      // intocado, o que separaria o bloco que a tela mostra junto.
+      if (moved) {
+        updateCardMut.mutate({
+          workspaceId, mapId, cardId: node.id,
+          data: { positionX: node.position.x, positionY: node.position.y },
+        });
+      }
+
+      // Se o card tem aprovações, o grupo se moveu junto — persiste os demais.
+      // Só quando houve arraste de fato (ver comentário do approvalnode acima).
+      if (moved) persistGroupPositions(node.id, node.position, dragSnapshot, new Set([node.id]));
 
       const currentHighlightedEdgeId = highlightedEdgeIdRef.current;
 
@@ -1603,21 +1737,23 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
       }
     },
-    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, deleteConnMut, createConnMut, queryClient, mapData],
+    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, deleteConnMut, createConnMut, queryClient, mapData, persistGroupPositions],
   );
 
   const onSelectionDragStop = useCallback(
     (_event: React.MouseEvent, selectedNodes: Node[]) => {
-      if (dragStartSnapshotRef.current) {
-        const snapshot = dragStartSnapshotRef.current;
+      nodeDragActiveRef.current = 0;
+      const dragSnapshot = dragStartSnapshotRef.current;
+      let anyMoved = true;                    // sem snapshot → mantém o comportamento atual
+      if (dragSnapshot) {
         dragStartSnapshotRef.current = null;
-        const anyMoved = selectedNodes.some(n => {
-          const prevPos = snapshot[n.id];
+        anyMoved = selectedNodes.some(n => {
+          const prevPos = dragSnapshot[n.id];
           return !prevPos ||
             Math.abs(prevPos.x - n.position.x) > 0.5 ||
             Math.abs(prevPos.y - n.position.y) > 0.5;
         });
-        if (anyMoved) pushSnapshot(snapshot);
+        if (anyMoved) pushSnapshot(dragSnapshot);
       }
       selectedNodes.forEach(node => {
         if (node.type === 'textnode') {
@@ -1633,6 +1769,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           });
         } else if (node.type === 'joinnode') {
           // Position is derived from approval children; do not persist.
+          // O GRUPO do join (cards da tarefa-pai + aprovações), porém, é
+          // persistido mais abaixo via persistGroupPositions.
         } else {
           updateCardMut.mutate({
             workspaceId, mapId, cardId: node.id,
@@ -1640,8 +1778,22 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           });
         }
       });
+
+      // Membros de grupo que não estavam na seleção também se moveram
+      // (expandPositionChanges) — persiste cada um exatamente uma vez, por
+      // snapshot+delta do node selecionado correspondente (payload do stop).
+      // Clique sem arraste não persiste nada (ver onNodeDragStop).
+      if (anyMoved) {
+        const persistedIds = new Set(selectedNodes.map(n => n.id));
+        for (const node of selectedNodes) {
+          const memberIds = groupIndexRef.current.get(node.id);
+          if (!memberIds) continue;
+          persistGroupPositions(node.id, node.position, dragSnapshot, persistedIds);
+          for (const id of memberIds) persistedIds.add(id);
+        }
+      }
     },
-    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, pushSnapshot],
+    [workspaceId, mapId, updateCardMut, updateTextMut, updateShapeMut, pushSnapshot, persistGroupPositions],
   );
 
   const updateCardMutRef = useRef(updateCardMut);
@@ -1714,6 +1866,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             workspaceId, mapId, shapeId: n.id,
             data: { positionX: pos.x, positionY: pos.y },
           });
+        } else if (n.type === 'joinnode') {
+          // Posição derivada — não persiste; guard evita pulo no poll.
+          pendingUpdatesRef.current.set(n.id, Date.now());
         } else if (n.type === 'mindmap' || n.type === 'approvalnode') {
           updateCardMutRef.current.mutate({
             workspaceId, mapId, cardId: n.id,
@@ -2924,7 +3079,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChangeWithDelete}
             onConnect={onConnect}
             onConnectStart={onConnectStart}
