@@ -119,7 +119,18 @@ describe("my-tasks -> workspace handoff smoke", () => {
     expect(mapAfter.status).toBe(200);
     const cards = (mapAfter.body.cards ?? []) as Array<{ taskId: string | null }>;
     expect(cards.some((c) => c.taskId === taskId)).toBe(true);
-    // ~20 sequential round-trips against the remote dev DB — over the 20s default.
+
+    // 6. Excluir: standalone route refuses (the 403 users hit in prod), the
+    //    workspace route deletes — creator permission carries over the move.
+    const standaloneDelete = await agent.delete(`/api/my-tasks/${taskId}`);
+    expect(standaloneDelete.status).toBe(403);
+
+    const wsDelete = await agent.delete(`/api/workspaces/${workspaceId}/tasks/${taskId}`);
+    expect(wsDelete.status).toBe(200);
+
+    const goneWs = await agent.get(`/api/workspaces/${workspaceId}/tasks/${taskId}`);
+    expect(goneWs.status).toBe(404);
+    // ~25 sequential round-trips against the remote dev DB — over the 20s default.
   }, 60_000);
 
   it("detaching the workspace hands the task back to the standalone routes", async () => {
