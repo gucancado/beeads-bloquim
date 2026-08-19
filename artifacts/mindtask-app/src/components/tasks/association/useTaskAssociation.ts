@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -32,10 +32,23 @@ export function useTaskAssociation({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
+  // taskWorkspaceId is the single source of truth for the task's scope: it starts
+  // as the workspace the modal was opened from (empty for "Minhas tarefas") and
+  // follows the task from then on — including when the user associates the task
+  // to a workspace inside the modal. Deriving the scope from the PROP instead
+  // left every write routed at /api/my-tasks/* after an in-modal association,
+  // which the API rejects with 403 "Use a rota do workspace".
+  const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(propWorkspaceId || null);
   const [taskMapId, setTaskMapId] = useState<string | null>(null);
 
-  const effectiveWorkspaceId = propWorkspaceId || taskWorkspaceId || "";
+  // Reset the scope whenever the modal is (re)opened for another task, so the
+  // previous task's workspace never leaks into the next one.
+  useEffect(() => {
+    setTaskWorkspaceId(propWorkspaceId || null);
+    setTaskMapId(null);
+  }, [open, resolvedTaskId, propWorkspaceId]);
+
+  const effectiveWorkspaceId = taskWorkspaceId ?? "";
 
   const { data: userWorkspaces } = useQuery<{ id: string; name: string; colorIndex?: number | null }[]>({
     queryKey: ["/api/workspaces"],
@@ -59,6 +72,7 @@ export function useTaskAssociation({
 
   const changeWorkspace = (newWsId: string | null) => {
     if (!resolvedTaskId) return;
+    const previousWsId = taskWorkspaceId;
     customFetch(`/api/my-tasks/${resolvedTaskId}/association`, {
       method: "PATCH",
       body: JSON.stringify({ workspaceId: newWsId, mapId: null }),
@@ -71,6 +85,11 @@ export function useTaskAssociation({
       }
       invalidateTask();
       queryClient.invalidateQueries({ queryKey: [`/api/my-tasks/${resolvedTaskId}`] });
+      // The task left its previous workspace — that list/detail is stale too.
+      if (previousWsId && previousWsId !== newWsId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${previousWsId}/tasks`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${previousWsId}/tasks/${resolvedTaskId}`] });
+      }
       if (newWsId) {
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${newWsId}/tasks`] });
         queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${newWsId}/tasks/${resolvedTaskId}`] });
