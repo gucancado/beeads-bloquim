@@ -386,7 +386,6 @@ export default function MyTasksPage() {
                 showWorkspaceName
                 showMapName
                 dateColumnMode={dateColumnMode}
-                compactSchedule={selectedStatus === "in_progress"}
               />
             );
           })()}
