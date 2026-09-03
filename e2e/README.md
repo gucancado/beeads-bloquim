@@ -40,9 +40,13 @@ node e2e/serve.mjs artifacts/mindtask-app/dist/public 3100 http://localhost:5000
 
 ```bash
 cd /tmp/bloquim-e2e
+NODE_PATH=/tmp/bloquim-e2e/node_modules \
 WEB_BASE_URL=http://localhost:3100 API_BASE_URL=http://localhost:5000 \
-  npx playwright test --config <repo>/e2e/playwright.config.ts <repo>/e2e/my-tasks-create.spec.ts
+  npx playwright test --config <repo>/e2e/playwright.config.ts <repo>/e2e/*.spec.ts
 ```
+
+`NODE_PATH` é obrigatório: o config e os specs ficam em `e2e/` e resolvem
+`@playwright/test` a partir dali, não do diretório do runner.
 
 O spec cria workspace + plano por execução e apaga o workspace no fim. Se uma
 execução falhar no meio, sobra um workspace `E2E Tarefas <timestamp>` no dev DB.
