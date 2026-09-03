@@ -131,6 +131,7 @@ export function TaskListItem({
   const displayTitle = getApprovalDisplayTitle(localTask);
   const [statusOpen, setStatusOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [modalityOpen, setModalityOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | "urgente" | null>(null);
   const effectiveMode = pendingMode ?? (localTask.scheduleMode ?? "ate");
@@ -379,7 +380,7 @@ export function TaskListItem({
    * focus trap, keyboard navigation, click-outside-to-close out of the box.
    */
   const wrapModalityPopover = (trigger: React.ReactNode) => (
-    <Popover>
+    <Popover open={modalityOpen} onOpenChange={(open) => setModalityOpen(open)}>
       <PopoverTrigger render={(props) => isValidElement(trigger) ? cloneElement(trigger, props) : <>{trigger}</>} />
       <PopoverContent
         align="start"
