@@ -6,7 +6,7 @@
 import * as React from "react";
 import { Popover, PopoverContent, PopoverTrigger, Calendar } from "@beeads/ui";
 import { ptBR } from "date-fns/locale";
-import { ScheduleModeDropdown } from "@/components/tasks/ScheduleModeDropdown";
+import { ScheduleModeDropdown, ScheduleModeOptionList } from "@/components/tasks/ScheduleModeDropdown";
 import type { ScheduleModeValue } from "@/lib/scheduleMode";
 
 function ymdToDate(ymd: string | null | undefined): Date | undefined {
@@ -120,26 +120,33 @@ export function SchedulePopover({
       <PopoverTrigger render={(props) => React.cloneElement(children, props)} />
       <PopoverContent
         align="start"
-        className="w-auto p-3 rounded-xl"
+        data-schedule-popover=""
+        className={hasDates ? "w-auto p-3 rounded-xl" : "w-auto p-1 rounded-xl min-w-[140px]"}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="lowercase">modalidade de prazo</span>
-          <ScheduleModeDropdown value={mode} onChange={onModeChange} />
-        </div>
-        {hasDates && (
-          <div className="mt-2 flex items-start gap-3">
-            {mode === "entre" && (
-              <CalendarBlock label="início" calendar="start" value={start} max={due || undefined} onSelect={onStartAtSelect} />
-            )}
-            <CalendarBlock
-              label={mode === "entre" ? "fim" : undefined}
-              calendar="due"
-              value={due}
-              min={mode === "entre" ? start || undefined : undefined}
-              onSelect={onDueDateSelect}
-            />
-          </div>
+        {hasDates ? (
+          <>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="lowercase">modalidade de prazo</span>
+              <ScheduleModeDropdown value={mode} onChange={onModeChange} />
+            </div>
+            <div className="mt-2 flex items-start gap-3">
+              {mode === "entre" && (
+                <CalendarBlock label="início" calendar="start" value={start} max={due || undefined} onSelect={onStartAtSelect} />
+              )}
+              <CalendarBlock
+                label={mode === "entre" ? "fim" : undefined}
+                calendar="due"
+                value={due}
+                min={mode === "entre" ? start || undefined : undefined}
+                onSelect={onDueDateSelect}
+              />
+            </div>
+          </>
+        ) : (
+          // Urgente e sem prazo não têm data: o popover É a lista de
+          // modalidades, sem a caixa de seleção intermediária.
+          <ScheduleModeOptionList value={mode} onChange={onModeChange} />
         )}
       </PopoverContent>
     </Popover>
