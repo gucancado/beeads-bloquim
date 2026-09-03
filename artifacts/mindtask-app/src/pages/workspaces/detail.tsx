@@ -826,7 +826,6 @@ export default function WorkspaceDetailPage() {
                         onOpenDetail={openTaskItem}
                         showMapName
                         dateColumnMode={dateColumnMode}
-                        compactSchedule={selectedStatus === "in_progress"}
                       />
                     );
                   })()}

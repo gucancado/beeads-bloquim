@@ -1,10 +1,10 @@
 // Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
 // always-leading "title" cell) are rendered in the order defined by the
 // user's saved column preferences — passed in via `columnOrder`.
-import { useState, useCallback, useEffect, cloneElement, isValidElement } from "react";
+import { useState, useCallback, useEffect, cloneElement } from "react";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate, addOneDayYmd } from "@/lib/utils";
-import { DatePickerPopover } from "@/components/ui/date-picker-popover";
+import { SchedulePopover } from "@/components/tasks/SchedulePopover";
 import { Badge } from "@beeads/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
@@ -81,29 +81,31 @@ interface Props {
   showMapName?: boolean;
   columnOrder: readonly TaskColumnKey[];
   dateColumnMode?: "default" | "completed" | "cancelled";
-  /**
-   * Quando `true`, a coluna `schedule` renderiza só a data final (dueDate),
-   * sem badge de modalidade e sem startAt. Usado pelo filtro de status
-   * "em andamento" pra deixar a tabela mais limpa.
-   */
-  compactSchedule?: boolean;
 }
 
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
-// "urgente" comes first because the backend sort pins it to the top of every
-// list — keeping the dropdown order matched makes the UI legible.
-const SCHEDULE_MODE_OPTIONS: { value: "ate" | "entre" | "em" | "sem_prazo" | "urgente"; label: string }[] = [
-  { value: "urgente", label: "urgente" },
-  { value: "ate", label: "fazer até" },
-  { value: "entre", label: "fazer entre" },
-  { value: "em", label: "fazer em" },
-  { value: "sem_prazo", label: "sem prazo" },
-];
+type ScheduleMode = "ate" | "entre" | "em" | "sem_prazo" | "urgente";
 
-const SCHEDULE_MODE_LABELS: Record<string, string> = Object.fromEntries(
-  SCHEDULE_MODE_OPTIONS.map(o => [o.value, o.label]),
-);
+/**
+ * Texto da célula de prazo: "até X" / "entre X e Y" / "em X" / "sem prazo" /
+ * "urgente". X e Y saem do formatDueDate (hoje, amanhã, dia da semana, dd/MM).
+ * Em "fazer em", palavra relativa aparece sozinha ("hoje", "sexta") porque
+ * "em hoje" não é português; só data numérica ganha o "em".
+ */
+function scheduleLabel(mode: ScheduleMode, startAt: string | null | undefined, dueDate: string | null | undefined): string {
+  const due = dueDate ? formatDueDate(dueDate) : null;
+  const start = startAt ? formatDueDate(startAt) : null;
+  switch (mode) {
+    case "sem_prazo": return "sem prazo";
+    case "urgente": return "urgente";
+    case "entre": return `entre ${start ?? "…"} e ${due ?? "…"}`;
+    case "em":
+      if (!due) return "em …";
+      return /^\d{2}\/\d{2}/.test(due) ? `em ${due}` : due;
+    default: return `até ${due ?? "…"}`;
+  }
+}
 
 function getStatusEntry(s: string) {
   return getStatusOrderEntry(s);
@@ -120,7 +122,6 @@ export function TaskListItem({
   showMapName = false,
   columnOrder,
   dateColumnMode = "default",
-  compactSchedule = false,
 }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -131,7 +132,6 @@ export function TaskListItem({
   const displayTitle = getApprovalDisplayTitle(localTask);
   const [statusOpen, setStatusOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
-  const [modalityOpen, setModalityOpen] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<"ate" | "entre" | "em" | "sem_prazo" | "urgente" | null>(null);
   const effectiveMode = pendingMode ?? (localTask.scheduleMode ?? "ate");
@@ -334,7 +334,6 @@ export function TaskListItem({
   };
 
   const handleModalitySelect = (next: "ate" | "entre" | "em" | "sem_prazo" | "urgente") => {
-    setModalityOpen(false);
     if (next === effectiveMode) return;
     if (next === "sem_prazo" || next === "urgente") {
       setPendingMode(null);
@@ -373,37 +372,6 @@ export function TaskListItem({
   };
 
   const workspaceColorHex = getColorByIndex(localTask.workspaceColorIndex ?? null);
-
-  /**
-   * Wraps any modality trigger button in a Radix Popover with the shared list
-   * of options. Replaces the previous createPortal-based custom dropdown — gains
-   * focus trap, keyboard navigation, click-outside-to-close out of the box.
-   */
-  const wrapModalityPopover = (trigger: React.ReactNode) => (
-    <Popover open={modalityOpen} onOpenChange={(open) => setModalityOpen(open)}>
-      <PopoverTrigger render={(props) => isValidElement(trigger) ? cloneElement(trigger, props) : <>{trigger}</>} />
-      <PopoverContent
-        align="start"
-        className="p-1 rounded-xl min-w-[140px]"
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
-        {SCHEDULE_MODE_OPTIONS.map(opt => {
-          const isCurrent = effectiveMode === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => handleModalitySelect(opt.value)}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors flex items-center gap-2 rounded-md ${isCurrent ? "font-semibold bg-muted/30" : ""}`}
-              aria-pressed={isCurrent}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
-  );
 
   // ─── Cell renderers ───────────────────────────────────────────────────────
 
@@ -603,146 +571,40 @@ export function TaskListItem({
       </span>
     ) : null;
 
-    // Modo compacto (filtro "em andamento"): só a data final, sem badge de
-    // modalidade nem startAt. Urgente e sem_prazo ainda exibem o estado.
-    if (compactSchedule) {
-      return (
-        <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
-          {effectiveMode === "urgente" ? (
-            wrapModalityPopover(
-              <button
-                type="button"
-                disabled={savingField === "scheduleMode"}
-                className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-                title="Clique para alterar modalidade de prazo"
-              >
-                urgente
-              </button>
-            )
-          ) : effectiveMode === "sem_prazo" ? (
-            wrapModalityPopover(
-              <button
-                type="button"
-                disabled={savingField === "scheduleMode"}
-                className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-                title="Clique para alterar modalidade de prazo"
-              >
-                <CalendarIcon className="w-3 h-3 shrink-0" />
-                sem prazo
-              </button>
-            )
-          ) : (
-            <DatePickerPopover
-              value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-              onSelect={handleDueDateSelect}
-              min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
-            >
-              <button
-                type="button"
-                onClick={e => e.stopPropagation()}
-                className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
-                title="Alterar fazer"
-              >
-                <CalendarIcon className={`w-3 h-3 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-                <span className={`select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}>
-                  {localTask.dueDate ? formatDueDate(localTask.dueDate) : "vazio"}
-                </span>
-              </button>
-            </DatePickerPopover>
-          )}
-          {recurrenceIcon}
-        </div>
-      );
-    }
+    // O texto inteiro ("até X", "entre X e Y", "em X", "sem prazo", "urgente")
+    // é o gatilho de um único popover de configuração: modalidade + calendário(s)
+    // + atalhos hoje/amanhã. Os handlers de persistência são os mesmos de antes.
+    const label = scheduleLabel(effectiveMode, localTask.startAt, localTask.dueDate);
+    const saving = savingField === "dueDate" || savingField === "startAt" || savingField === "scheduleMode";
+    const tone = effectiveMode === "urgente"
+      ? "rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60"
+      : isOverdue
+        ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50"
+        : effectiveMode === "sem_prazo"
+          ? "rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40"
+          : "text-muted-foreground hover:text-foreground";
 
     return (
-    <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
-      {effectiveMode === "sem_prazo"
-        ? wrapModalityPopover(
-            <button
-              type="button"
-              disabled={savingField === "scheduleMode"}
-              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-              title="Clique para alterar modalidade de prazo"
-            >
-              <CalendarIcon className="w-3 h-3 shrink-0" />
-              <span>sem prazo</span>
-            </button>
-          )
-        : effectiveMode === "urgente"
-          ? wrapModalityPopover(
-              <button
-                type="button"
-                disabled={savingField === "scheduleMode"}
-                className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-                title="Clique para alterar modalidade de prazo"
-              >
-                <span>urgente</span>
-              </button>
-            )
-          : wrapModalityPopover(
-              <button
-                type="button"
-                disabled={savingField === "scheduleMode"}
-                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] bg-transparent border border-input text-muted-foreground hover:text-foreground cursor-pointer ${savingField === "scheduleMode" ? "opacity-60" : ""}`}
-                title="Modalidade do fazer"
-              >
-                {SCHEDULE_MODE_LABELS[effectiveMode] ?? effectiveMode}
-              </button>
-            )
-      }
-
-      {effectiveMode === "entre" && (
-        <DatePickerPopover
-          value={localTask.startAt ? localTask.startAt.slice(0, 10) : ""}
-          onSelect={handleStartAtSelect}
-          max={localTask.dueDate ? localTask.dueDate.slice(0, 10) : undefined}
+      <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs whitespace-nowrap">
+        <SchedulePopover
+          mode={effectiveMode}
+          startAt={localTask.startAt}
+          dueDate={localTask.dueDate}
+          onModeChange={handleModalitySelect}
+          onStartAtSelect={handleStartAtSelect}
+          onDueDateSelect={handleDueDateSelect}
         >
           <button
             type="button"
-            onClick={e => e.stopPropagation()}
-            className="inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0"
-            title="Data de início"
+            title="Configurar prazo"
+            className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-0 p-0 select-none transition-colors ${tone} ${saving ? "opacity-60" : ""}`}
           >
-            <CalendarIcon className="w-3 h-3 shrink-0 text-muted-foreground" />
-            <span className={`select-none text-muted-foreground ${savingField === "startAt" ? "opacity-60" : ""}`}>
-              {localTask.startAt ? formatDueDate(localTask.startAt) : "vazio"}
-            </span>
+            {effectiveMode !== "urgente" && <CalendarIcon className="w-3 h-3 shrink-0" />}
+            <span>{label}</span>
           </button>
-        </DatePickerPopover>
-      )}
-
-      {effectiveMode !== "sem_prazo" && effectiveMode !== "urgente" && (
-        <DatePickerPopover
-          value={localTask.dueDate ? localTask.dueDate.slice(0, 10) : ""}
-          onSelect={handleDueDateSelect}
-          min={effectiveMode === "entre" && localTask.startAt ? localTask.startAt.slice(0, 10) : undefined}
-        >
-          <button
-            type="button"
-            onClick={e => e.stopPropagation()}
-            className={`inline-flex items-center gap-1 cursor-pointer shrink-0 bg-transparent border-none p-0 ${isOverdue ? "rounded-full px-2 py-0.5 border bg-red-50 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50" : ""}`}
-            title="Alterar fazer"
-          >
-            <CalendarIcon className={`w-3 h-3 shrink-0 ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} />
-            {localTask.dueDate ? (
-              <span
-                className={`select-none ${isOverdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"} ${savingField === "dueDate" ? "opacity-60" : ""}`}
-              >
-                {formatDueDate(localTask.dueDate)}
-              </span>
-            ) : (
-              <span
-                className={`select-none text-muted-foreground ${savingField === "dueDate" ? "opacity-60" : ""}`}
-              >
-                vazio
-              </span>
-            )}
-          </button>
-        </DatePickerPopover>
-      )}
-      {recurrenceIcon}
-    </div>
+        </SchedulePopover>
+        {recurrenceIcon}
+      </div>
     );
   };
 

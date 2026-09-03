@@ -1,24 +1,23 @@
-import { test, expect, request as pwRequest, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { test, expect, request as pwRequest, type APIRequestContext, type BrowserContext, type Page, type Locator } from "@playwright/test";
 
 /**
- * Regressão da edição INLINE de prazo nas listas de tarefas (TaskListItem):
- *   1. trocar a data de uma tarefa "fazer até" pelo calendário da linha;
- *   2. definir prazo numa tarefa "sem prazo" (modalidade → "fazer até" → data);
- *   3. o mesmo que (1) na versão não-compacta da coluna (filtro != em andamento).
+ * Célula de prazo INLINE nas listas de tarefas (TaskListItem):
+ *   - exibe "até X" / "entre X e Y" / "em X" (X, Y no formato do formatDueDate);
+ *   - o texto inteiro é um botão que abre um popover colado ao campo com o
+ *     campo "modalidade de prazo", 1 calendário (até/em) ou 2 (entre) e os
+ *     atalhos "hoje" / "amanhã" sob cada calendário;
+ *   - cada mudança persiste na hora (autosave).
  *
- * Cada teste captura `pageerror`/`console.error` e falha se aparecer qualquer
- * um — o bug que este spec pina é um ReferenceError silencioso no handler de
- * modalidade (setModalityOpen sem estado), que aborta o clique sem toast.
+ * Cada teste captura pageerror/console.error do app e falha se aparecer
+ * algum — a regressão original (setModalityOpen sem estado) era um
+ * ReferenceError silencioso, sem toast.
  */
 
 const API = process.env.API_BASE_URL ?? "http://localhost:5000";
 const PASSWORD = "E2ePass12345!";
+const WEEKDAY_PT = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
-type Seed = {
-  api: APIRequestContext;
-  workspaceId: string;
-  stamp: number;
-};
+type Seed = { api: APIRequestContext; workspaceId: string; stamp: number };
 
 function ymd(d: Date): string {
   const y = d.getFullYear();
@@ -33,11 +32,35 @@ function addDays(d: Date, n: number): Date {
   return x;
 }
 
-/** Data-alvo no MESMO mês da data base, pra não precisar navegar o calendário. */
-function sameMonthTarget(base: Date): Date {
-  const x = new Date(base);
-  x.setDate(base.getDate() <= 14 ? base.getDate() + 7 : base.getDate() - 7);
-  return x;
+function today(): Date {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
+}
+
+/** Espelha `formatDueDate` do app (hoje / ontem / amanhã / dia da semana / dd/MM). */
+function fmt(d: Date): string {
+  const diff = Math.round((d.getTime() - today().getTime()) / 86_400_000);
+  if (diff === 0) return "hoje";
+  if (diff === -1) return "ontem";
+  if (diff === 1) return "amanhã";
+  if (diff > 1 && diff <= 6) return WEEKDAY_PT[d.getDay()];
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return d.getFullYear() === today().getFullYear() ? `${dd}/${mm}` : `${dd}/${mm}/${d.getFullYear()}`;
+}
+
+/** Rótulo de "fazer em": só data numérica ganha o "em" (evita "em hoje" / "em terça"). */
+function emLabel(d: Date): string {
+  const f = fmt(d);
+  return /^\d{2}\/\d{2}/.test(f) ? `em ${f}` : f;
+}
+
+/** Data no MESMO mês de `base` (o calendário abre no mês da data selecionada). */
+function sameMonth(base: Date, delta: number, fallback: number): Date {
+  const a = addDays(base, delta);
+  if (a.getMonth() === base.getMonth()) return a;
+  return addDays(base, fallback);
 }
 
 async function login(api: APIRequestContext, email: string) {
@@ -51,19 +74,14 @@ async function seed(): Promise<Seed> {
   await login(api, "e2e_tasks_owner@test.local");
   const wsRes = await api.post("/api/workspaces", { data: { name: `E2E Prazo ${stamp}`, colorIndex: 0 } });
   expect(wsRes.ok(), `workspace: ${wsRes.status()} ${await wsRes.text()}`).toBeTruthy();
-  const workspaceId = (await wsRes.json()).id as string;
-  return { api, workspaceId, stamp };
+  return { api, workspaceId: (await wsRes.json()).id as string, stamp };
 }
 
-async function createTask(
-  s: Seed,
-  body: Record<string, unknown>,
-  status: "pending" | "in_progress",
-): Promise<{ id: string; title: string }> {
+async function createTask(s: Seed, body: Record<string, unknown>): Promise<{ id: string; title: string }> {
   const res = await s.api.post(`/api/workspaces/${s.workspaceId}/tasks`, { data: body });
   expect(res.ok(), `task: ${res.status()} ${await res.text()}`).toBeTruthy();
   const task = await res.json();
-  const st = await s.api.patch(`/api/workspaces/${s.workspaceId}/tasks/${task.id}/status`, { data: { status } });
+  const st = await s.api.patch(`/api/workspaces/${s.workspaceId}/tasks/${task.id}/status`, { data: { status: "in_progress" } });
   expect(st.ok(), `status: ${st.status()} ${await st.text()}`).toBeTruthy();
   return { id: task.id, title: body.title as string };
 }
@@ -76,16 +94,9 @@ async function getTask(s: Seed, id: string) {
 
 async function authenticate(context: BrowserContext, api: APIRequestContext) {
   const state = await api.storageState();
-  await context.addCookies(
-    state.cookies.map((c) => ({ ...c, domain: "localhost", path: "/", secure: false })),
-  );
+  await context.addCookies(state.cookies.map((c) => ({ ...c, domain: "localhost", path: "/", secure: false })));
 }
 
-/**
- * Só erros REAIS: exceções não tratadas (pageerror) e console.error do próprio
- * app (handler inline falhou / toast). Warnings do Base UI, 503 de feature
- * desligada (agenda em dev) e props desconhecidas ficam de fora.
- */
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
@@ -99,9 +110,27 @@ function collectErrors(page: Page): string[] {
   return errors;
 }
 
-async function pickDay(page: Page, target: Date) {
-  const cell = page.locator(`td[data-day="${ymd(target)}"] button`);
-  await expect(cell, "dia-alvo visível no calendário").toBeVisible({ timeout: 15_000 });
+async function openList(page: Page, context: BrowserContext, s: Seed, title: string): Promise<Locator> {
+  await authenticate(context, s.api);
+  await page.goto("/my-tasks?window=todas");
+  const row = page.locator("tr", { hasText: title });
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  return row;
+}
+
+/** Botão-texto do prazo na linha ("até X", "entre X e Y", "em X", "sem prazo", "urgente"). */
+function scheduleTrigger(row: Locator): Locator {
+  return row.getByTitle("Configurar prazo");
+}
+
+/** Popover de configuração de prazo (base-ui Popover.Popup tem role=dialog). */
+function schedulePopover(page: Page): Locator {
+  return page.getByRole("dialog").filter({ hasText: "modalidade de prazo" });
+}
+
+async function pickDay(scope: Locator, target: Date) {
+  const cell = scope.locator(`td[data-day="${ymd(target)}"] button`);
+  await expect(cell, `dia ${ymd(target)} visível no calendário`).toBeVisible({ timeout: 15_000 });
   await cell.click();
 }
 
@@ -117,47 +146,56 @@ test.describe("prazo inline na lista de Minhas Tarefas", () => {
     await s.api.dispose();
   });
 
-  test("troca a data de uma tarefa 'fazer até' (coluna compacta)", async ({ page, context }) => {
-    const due = addDays(new Date(), 3);
-    const target = sameMonthTarget(due);
-    const t = await createTask(s, { title: `E2E ate compacta ${s.stamp}`, scheduleMode: "ate", dueDate: ymd(due) }, "in_progress");
+  test("exibe 'até X', 'entre X e Y' e 'em X' na coluna de prazo", async ({ page, context }) => {
+    const due = addDays(today(), 10);
+    const start = addDays(today(), 3);
+    const single = addDays(today(), 5);
+    const ate = await createTask(s, { title: `E2E exibe até ${s.stamp}`, scheduleMode: "ate", dueDate: ymd(due) });
+    const entre = await createTask(s, { title: `E2E exibe entre ${s.stamp}`, scheduleMode: "entre", startAt: ymd(start), dueDate: ymd(due) });
+    const em = await createTask(s, { title: `E2E exibe em ${s.stamp}`, scheduleMode: "em", dueDate: ymd(single) });
 
     const errors = collectErrors(page);
-    await authenticate(context, s.api);
-    await page.goto("/my-tasks?window=todas");
-    const row = page.locator("tr", { hasText: t.title });
-    await expect(row).toBeVisible({ timeout: 60_000 });
+    const rowAte = await openList(page, context, s, ate.title);
+    await expect(scheduleTrigger(rowAte)).toHaveText(`até ${fmt(due)}`);
+    await expect(scheduleTrigger(page.locator("tr", { hasText: entre.title }))).toHaveText(`entre ${fmt(start)} e ${fmt(due)}`);
+    await expect(scheduleTrigger(page.locator("tr", { hasText: em.title }))).toHaveText(emLabel(single));
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
 
-    await row.getByTitle("Alterar fazer").click();
-    await pickDay(page, target);
+  test("troca a data de 'fazer até' pelo calendário do popover", async ({ page, context }) => {
+    const due = addDays(today(), 10);
+    const target = sameMonth(due, 2, -2);
+    const t = await createTask(s, { title: `E2E ate calendario ${s.stamp}`, scheduleMode: "ate", dueDate: ymd(due) });
 
-    await expect
-      .poll(async () => (await getTask(s, t.id)).dueDate?.slice(0, 10), { timeout: 15_000 })
-      .toBe(ymd(target));
-    await expect(page.getByText("Não foi possível salvar a alteração.")).toHaveCount(0);
+    const errors = collectErrors(page);
+    const row = await openList(page, context, s, t.title);
+    await scheduleTrigger(row).click();
+    const pop = schedulePopover(page);
+    await expect(pop).toBeVisible();
+    await expect(pop.getByRole("grid")).toHaveCount(1);
+    await pickDay(pop, target);
+
+    await expect.poll(async () => (await getTask(s, t.id)).dueDate?.slice(0, 10), { timeout: 15_000 }).toBe(ymd(target));
+    await expect(scheduleTrigger(row)).toHaveText(`até ${fmt(target)}`);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
   test("define prazo numa tarefa 'sem prazo': modalidade → fazer até → data", async ({ page, context }) => {
-    const target = sameMonthTarget(addDays(new Date(), 3));
-    const t = await createTask(s, { title: `E2E sem prazo ${s.stamp}` }, "in_progress");
+    const target = sameMonth(today(), 1, -1);
+    const t = await createTask(s, { title: `E2E sem prazo ${s.stamp}` });
 
     const errors = collectErrors(page);
-    await authenticate(context, s.api);
-    await page.goto("/my-tasks?window=todas");
-    const row = page.locator("tr", { hasText: t.title });
-    await expect(row).toBeVisible({ timeout: 60_000 });
+    const row = await openList(page, context, s, t.title);
+    await expect(scheduleTrigger(row)).toHaveText("sem prazo");
+    await scheduleTrigger(row).click();
+    const pop = schedulePopover(page);
+    await expect(pop).toBeVisible();
+    await expect(pop.getByRole("grid")).toHaveCount(0);
 
-    await row.getByTitle("Clique para alterar modalidade de prazo").click();
+    await pop.getByRole("button", { name: "sem prazo", exact: true }).click();
     await page.getByRole("button", { name: "fazer até", exact: true }).click();
-
-    // Depois de escolher "fazer até" a célula deve virar o seletor de data.
-    const dateBtn = row.getByTitle("Alterar fazer");
-    await expect(dateBtn, "seletor de data não apareceu").toBeVisible({ timeout: 10_000 }).catch((e: Error) => {
-      throw new Error(`${e.message}\n\nerros de página capturados:\n${errors.join("\n") || "(nenhum)"}`);
-    });
-    await dateBtn.click();
-    await pickDay(page, target);
+    await expect(pop.getByRole("grid"), `calendário não apareceu; erros: ${errors.join(" | ") || "(nenhum)"}`).toHaveCount(1);
+    await pickDay(pop, target);
 
     await expect
       .poll(async () => {
@@ -165,27 +203,50 @@ test.describe("prazo inline na lista de Minhas Tarefas", () => {
         return `${task.scheduleMode}|${task.dueDate?.slice(0, 10)}`;
       }, { timeout: 15_000 })
       .toBe(`ate|${ymd(target)}`);
+    await expect(scheduleTrigger(row)).toHaveText(`até ${fmt(target)}`);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("troca a data de uma tarefa 'fazer até' (coluna completa, filtro pronta e aguardando)", async ({ page, context }) => {
-    const due = addDays(new Date(), 3);
-    const target = sameMonthTarget(due);
-    const t = await createTask(s, { title: `E2E ate completa ${s.stamp}`, scheduleMode: "ate", dueDate: ymd(due) }, "pending");
+  test("'fazer entre' abre 2 calendários e edita fim e início", async ({ page, context }) => {
+    const start = addDays(today(), 3);
+    const due = addDays(today(), 10);
+    const newDue = sameMonth(due, 2, -2);
+    const newStart = sameMonth(start, 1, -1);
+    const t = await createTask(s, { title: `E2E entre ${s.stamp}`, scheduleMode: "entre", startAt: ymd(start), dueDate: ymd(due) });
 
     const errors = collectErrors(page);
-    await authenticate(context, s.api);
-    await page.goto("/my-tasks?status=pending&window=todas");
-    const row = page.locator("tr", { hasText: t.title });
-    await expect(row).toBeVisible({ timeout: 60_000 });
-    await expect(row.getByTitle("Modalidade do fazer")).toBeVisible();
+    const row = await openList(page, context, s, t.title);
+    await scheduleTrigger(row).click();
+    const pop = schedulePopover(page);
+    await expect(pop.getByRole("grid")).toHaveCount(2);
 
-    await row.getByTitle("Alterar fazer").click();
-    await pickDay(page, target);
+    await pickDay(pop.locator('[data-calendar="due"]'), newDue);
+    await expect.poll(async () => (await getTask(s, t.id)).dueDate?.slice(0, 10), { timeout: 15_000 }).toBe(ymd(newDue));
+
+    await pickDay(pop.locator('[data-calendar="start"]'), newStart);
+    await expect.poll(async () => (await getTask(s, t.id)).startAt?.slice(0, 10), { timeout: 15_000 }).toBe(ymd(newStart));
+
+    await expect(scheduleTrigger(row)).toHaveText(`entre ${fmt(newStart)} e ${fmt(newDue)}`);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("atalho 'hoje' sob o calendário define a data de 'fazer em'", async ({ page, context }) => {
+    const single = addDays(today(), 5);
+    const t = await createTask(s, { title: `E2E em hoje ${s.stamp}`, scheduleMode: "em", dueDate: ymd(single) });
+
+    const errors = collectErrors(page);
+    const row = await openList(page, context, s, t.title);
+    await scheduleTrigger(row).click();
+    const pop = schedulePopover(page);
+    await pop.getByRole("button", { name: "hoje", exact: true }).click();
 
     await expect
-      .poll(async () => (await getTask(s, t.id)).dueDate?.slice(0, 10), { timeout: 15_000 })
-      .toBe(ymd(target));
+      .poll(async () => {
+        const task = await getTask(s, t.id);
+        return `${task.dueDate?.slice(0, 10)}|${task.startAt?.slice(0, 10)}`;
+      }, { timeout: 15_000 })
+      .toBe(`${ymd(today())}|${ymd(today())}`);
+    await expect(scheduleTrigger(row)).toHaveText(emLabel(today()));
     expect(errors, errors.join("\n")).toEqual([]);
   });
 });

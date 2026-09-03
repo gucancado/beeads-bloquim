@@ -45,8 +45,6 @@ interface Props {
   showWorkspaceName?: boolean;
   showMapName?: boolean;
   dateColumnMode?: DateColumnMode;
-  /** Forward pra TaskListItem — coluna `schedule` renderiza só a data final. */
-  compactSchedule?: boolean;
 }
 
 function SortableHeaderCell({ columnKey, dateColumnMode }: { columnKey: TaskColumnKey; dateColumnMode: DateColumnMode }) {
@@ -96,7 +94,6 @@ export function TaskTable({
   showWorkspaceName = false,
   showMapName = false,
   dateColumnMode = "default",
-  compactSchedule = false,
 }: Props) {
   const resolveMembers = (task: TaskListItemData): TaskListItemMember[] =>
     getMembers ? getMembers(task) : members ?? [];
@@ -153,7 +150,6 @@ export function TaskTable({
                   showMapName={showMapName}
                   columnOrder={order}
                   dateColumnMode={dateColumnMode}
-                  compactSchedule={compactSchedule}
                 />
               ))}
             </tbody>
