@@ -16,6 +16,39 @@ export const SCHEDULE_MODE_OPTIONS: { value: ScheduleModeValue; label: string }[
   { value: "sem_prazo", label: "sem prazo" },
 ];
 
+/**
+ * Lista crua das modalidades. Usada dentro do dropdown e, direto no popover de
+ * prazo, quando a modalidade atual não tem data (urgente / sem prazo) — aí não
+ * há calendário pra mostrar e a caixa de seleção seria um clique a mais.
+ */
+export function ScheduleModeOptionList({
+  value,
+  onChange,
+}: {
+  value: ScheduleModeValue;
+  onChange: (next: ScheduleModeValue) => void;
+}) {
+  return (
+    <>
+      {SCHEDULE_MODE_OPTIONS.map(opt => {
+        const isCurrent = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs lowercase rounded-md hover:bg-muted/60 transition-colors text-left ${isCurrent ? "bg-muted/30" : ""}`}
+            aria-pressed={isCurrent}
+          >
+            <span>{opt.label}</span>
+            {isCurrent && <Check className="w-3 h-3 text-primary shrink-0" />}
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
 export function ScheduleModeDropdown({
   value,
   onChange,
@@ -39,24 +72,13 @@ export function ScheduleModeDropdown({
         </button>
       )} />
       <PopoverContent align="start" className="p-1 rounded-xl min-w-[140px]">
-        {SCHEDULE_MODE_OPTIONS.map(opt => {
-          const isCurrent = opt.value === value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs lowercase rounded-md hover:bg-muted/60 transition-colors text-left ${isCurrent ? "bg-muted/30" : ""}`}
-              aria-pressed={isCurrent}
-            >
-              <span>{opt.label}</span>
-              {isCurrent && <Check className="w-3 h-3 text-primary shrink-0" />}
-            </button>
-          );
-        })}
+        <ScheduleModeOptionList
+          value={value}
+          onChange={(next) => {
+            onChange(next);
+            setOpen(false);
+          }}
+        />
       </PopoverContent>
     </Popover>
   );

@@ -123,9 +123,9 @@ function scheduleTrigger(row: Locator): Locator {
   return row.getByTitle("Configurar prazo");
 }
 
-/** Popover de configuração de prazo (base-ui Popover.Popup tem role=dialog). */
+/** Popover de configuração de prazo. */
 function schedulePopover(page: Page): Locator {
-  return page.getByRole("dialog").filter({ hasText: "modalidade de prazo" });
+  return page.locator("[data-schedule-popover]");
 }
 
 async function pickDay(scope: Locator, target: Date) {
@@ -180,7 +180,7 @@ test.describe("prazo inline na lista de Minhas Tarefas", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("define prazo numa tarefa 'sem prazo': modalidade → fazer até → data", async ({ page, context }) => {
+  test("'sem prazo' abre a lista de modalidades direto, sem passo intermediário", async ({ page, context }) => {
     const target = sameMonth(today(), 1, -1);
     const t = await createTask(s, { title: `E2E sem prazo ${s.stamp}` });
 
@@ -190,10 +190,14 @@ test.describe("prazo inline na lista de Minhas Tarefas", () => {
     await scheduleTrigger(row).click();
     const pop = schedulePopover(page);
     await expect(pop).toBeVisible();
+    // Modalidade sem data não tem calendário nem caixa de seleção: as opções
+    // aparecem já na abertura.
     await expect(pop.getByRole("grid")).toHaveCount(0);
+    for (const label of ["urgente", "fazer até", "fazer entre", "fazer em", "sem prazo"]) {
+      await expect(pop.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
 
-    await pop.getByRole("button", { name: "sem prazo", exact: true }).click();
-    await page.getByRole("button", { name: "fazer até", exact: true }).click();
+    await pop.getByRole("button", { name: "fazer até", exact: true }).click();
     await expect(pop.getByRole("grid"), `calendário não apareceu; erros: ${errors.join(" | ") || "(nenhum)"}`).toHaveCount(1);
     await pickDay(pop, target);
 
@@ -204,6 +208,29 @@ test.describe("prazo inline na lista de Minhas Tarefas", () => {
       }, { timeout: 15_000 })
       .toBe(`ate|${ymd(target)}`);
     await expect(scheduleTrigger(row)).toHaveText(`até ${fmt(target)}`);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("'urgente' abre a lista de modalidades direto e troca pra 'fazer até'", async ({ page, context }) => {
+    const t = await createTask(s, { title: `E2E urgente ${s.stamp}`, scheduleMode: "urgente" });
+
+    const errors = collectErrors(page);
+    const row = await openList(page, context, s, t.title);
+    await expect(scheduleTrigger(row)).toHaveText("urgente");
+    await scheduleTrigger(row).click();
+    const pop = schedulePopover(page);
+    await expect(pop).toBeVisible();
+    await expect(pop.getByRole("grid")).toHaveCount(0);
+    for (const label of ["urgente", "fazer até", "fazer entre", "fazer em", "sem prazo"]) {
+      await expect(pop.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
+
+    await pop.getByRole("button", { name: "fazer até", exact: true }).click();
+    await expect
+      .poll(async () => (await getTask(s, t.id)).scheduleMode, { timeout: 15_000 })
+      .toBe("ate");
+    // Trocada a modalidade, o mesmo popover passa a mostrar o calendário.
+    await expect(pop.getByRole("grid")).toHaveCount(1);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
