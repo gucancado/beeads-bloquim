@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { getMemberRoleFresh } from "../middlewares/permissions";
 
 /**
@@ -94,4 +94,35 @@ internalRouter.post("/authz/workspace-role", async (req, res) => {
   const { userId, workspaceId } = parsed.data;
   const role = await getMemberRoleFresh(workspaceId, userId);
   res.status(200).json({ role });
+});
+
+/**
+ * GET /api/internal/workspaces?ids=uuid1,uuid2
+ *
+ * Server-to-server: resolve NOMES de workspace por UUID. Existe para o worker da
+ * plataforma de agentes nomear o cliente em avisos automáticos (ex.: aviso de
+ * queda de WhatsApp enviado ao próprio número), onde não há usuário nem cookie —
+ * o equivalente público (`/api/public/workspaces`) exige auth de usuário.
+ *
+ * Diferente do público, NÃO filtra `hidden`: quem chama já tem o workspace_id, e
+ * o nome vai para o próprio workspace. Ids malformados são ignorados; teto de
+ * 100 por chamada.
+ *
+ * 200: { workspaces: [{ id, name }] }
+ */
+internalRouter.get("/workspaces", async (req, res) => {
+  const ids = String(req.query.ids ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^[0-9a-f-]{36}$/i.test(s))
+    .slice(0, 100);
+  if (ids.length === 0) {
+    res.json({ workspaces: [] });
+    return;
+  }
+  const rows = await db
+    .select({ id: workspaces.id, name: workspaces.name })
+    .from(workspaces)
+    .where(inArray(workspaces.id, ids));
+  res.json({ workspaces: rows });
 });
