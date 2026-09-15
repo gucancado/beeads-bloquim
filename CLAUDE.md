@@ -393,6 +393,14 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 - `/*` → `bloquim-web` (Vite SPA, porta `WEB_PORT`)
 - Reverse proxy gerenciado pelo Coolify; ambos sobem como containers separados no projeto `bloquim`.
 
+### Embed do modal de tarefa no painel (`/embed/task`)
+Desde 2026-09-15 o painel (`painel.beeads.com.br`, repo `beeads-central-de-dados`) embute o `TaskDetailModal` deste app num iframe em tela cheia (botão "nova tarefa" do header). É **contrato entre repos**:
+- `artifacts/mindtask-app/src/pages/embed/task.tsx` — rota sem AppLayout; posta `ready` ao montar, abre o modal com `open {workspaceId, taskId}`, posta `closed` ao fechar. A cópia duplicada só reabre depois do `open=false` commitado (`pendingReopen` + effect) — senão fechar a cópia **apaga a original** intocada (o reset do `useAutoCreateTask` só roda num `!open` commitado).
+- `artifacts/mindtask-app/src/lib/embedBridge.ts` (+ `.test.ts`) — protocolo e allowlist de origem; **espelho** de `web/src/lib/task-embed-bridge.ts` do painel, com as mesmas fixtures. Mudar um lado exige mudar o outro.
+- `App.tsx` força o tema em `/embed/*` a partir de `?theme=` (`forcedTheme`, não grava a preferência); `index.css` tem `html.embed-transparent` (fundo transparente).
+- `deploy/mindtask-app/nginx.conf` — `location ^~ /embed/` com `rewrite ^ /index.html break` e `Content-Security-Policy: frame-ancestors 'self' https://painel.beeads.com.br`. **Não trocar por `try_files`**: o fallback reentra em `location /` e herda o `X-Frame-Options: SAMEORIGIN`.
+- Ao mexer nos callbacks do `TaskDetailModal` (`onClose`/`onAutoCreated`/`onDuplicated`, e a ordem em que o duplicar os chama) ou em navegação interna do modal (ex.: `navigate` em `components/tasks/approval/ApprovalTaskView.tsx`), conferir o embed: dentro do iframe, navegar renderiza o app inteiro e nunca manda `closed`. O painel nunca desmonta o iframe ao fechar (o save do título no fechamento não é aguardado).
+
 ### Sincronização Visual
 Ao atualizar `task.status`, o `taskVisualSyncService` atualiza automaticamente `card.statusVisual`. Cores: pending=azul, in_progress=âmbar, completed=esmeralda, overdue=vermelho, blocked=cinza, draft=slate.
 
