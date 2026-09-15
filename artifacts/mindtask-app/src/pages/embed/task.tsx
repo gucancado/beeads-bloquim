@@ -24,6 +24,7 @@ import {
 export default function EmbedTaskPage() {
   const [allowed] = useState(() => allowedParentOrigins(import.meta.env.DEV));
   const [open, setOpen] = useState(false);
+  const [pendingReopen, setPendingReopen] = useState(false);
   const [workspaceId, setWorkspaceId] = useState("");
   const [taskId, setTaskId] = useState<string | null>(null);
   const parentOriginRef = useRef<string | null>(null);
@@ -69,6 +70,16 @@ export default function EmbedTaskPage() {
     return () => window.removeEventListener("message", onMessage);
   }, [allowed]);
 
+  // Só reabre depois que `open=false` é COMMITADO: efeitos filhos (o reset de
+  // auto-criação do modal) rodam antes dos do pai no mesmo flush, então este
+  // efeito só dispara depois que o modal já processou o fechamento.
+  useEffect(() => {
+    if (!open && pendingReopen) {
+      setPendingReopen(false);
+      setOpen(true);
+    }
+  }, [open, pendingReopen]);
+
   function handleClose() {
     setOpen(false);
     cancelPendingClose();
@@ -80,10 +91,11 @@ export default function EmbedTaskPage() {
 
   function handleDuplicated(newTaskId: string) {
     // O modal chama onClose() e, na mesma pilha, onDuplicated(): cancela o
-    // `closed` e reabre com a cópia depois do open=false ser commitado.
+    // `closed` pendente e marca a reabertura, que só acontece no efeito acima
+    // quando `open=false` já tiver sido commitado.
     cancelPendingClose();
     setTaskId(newTaskId);
-    window.setTimeout(() => setOpen(true), 0);
+    setPendingReopen(true);
   }
 
   return (
