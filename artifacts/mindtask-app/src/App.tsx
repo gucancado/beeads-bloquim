@@ -17,6 +17,8 @@ import SettingsIntegrationsPage from "@/pages/settings/integrations";
 import SettingsMcpPage from "@/pages/settings/mcp";
 import PrivacidadePage from "@/pages/privacidade";
 import TermosPage from "@/pages/termos";
+import EmbedTaskPage from "@/pages/embed/task";
+import { forcedEmbedTheme, isEmbedPath } from "@/lib/embedBridge";
 
 // Safety net: any mutation that goes through React Query and fails without a
 // caller-side onError handler triggers a destructive toast. Mutations that
@@ -115,15 +117,22 @@ function Router() {
       <Route path="/settings/mcp" component={SettingsMcpPage} />
       <Route path="/privacidade" component={PrivacidadePage} />
       <Route path="/termos" component={TermosPage} />
+      <Route path="/embed/task" component={EmbedTaskPage} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
+  // /embed/*: o painel manda o tema dele na URL do iframe. `forcedTheme` não
+  // grava na preferência do usuário (`mindtask-theme`).
+  const embedTheme = isEmbedPath(window.location.pathname)
+    ? forcedEmbedTheme(window.location.search)
+    : undefined;
+
   return (
     <ErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="mindtask-theme">
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="mindtask-theme" forcedTheme={embedTheme}>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

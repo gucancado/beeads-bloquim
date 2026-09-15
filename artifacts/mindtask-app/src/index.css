@@ -350,3 +350,10 @@ body[data-alt-key="true"] .react-flow__node * {
   text-decoration: none;
   color: inherit;
 }
+
+/* /embed/task: o painel embute o modal de tarefa num iframe em tela cheia e
+   precisa aparecer por trás do backdrop do Dialog. Classe posta pela página. */
+html.embed-transparent,
+html.embed-transparent body {
+  background: transparent !important;
+}
