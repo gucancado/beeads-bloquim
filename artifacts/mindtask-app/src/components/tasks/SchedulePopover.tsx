@@ -97,6 +97,11 @@ interface Props {
   onModeChange: (next: ScheduleModeValue) => void;
   onStartAtSelect: (ymd: string) => void;
   onDueDateSelect: (ymd: string) => void;
+  /**
+   * Avisa o dono da linha que a configuração começou/terminou — ele usa isso
+   * pra segurar o refetch da lista enquanto o popover está aberto.
+   */
+  onOpenChange?: (open: boolean) => void;
   /** Elemento que dispara o popover (o texto do prazo na linha). */
   children: React.ReactElement;
 }
@@ -108,15 +113,20 @@ export function SchedulePopover({
   onModeChange,
   onStartAtSelect,
   onDueDateSelect,
+  onOpenChange,
   children,
 }: Props) {
   const [open, setOpen] = React.useState(false);
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   const start = startAt ? startAt.slice(0, 10) : "";
   const due = dueDate ? dueDate.slice(0, 10) : "";
   const hasDates = mode === "ate" || mode === "em" || mode === "entre";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger render={(props) => React.cloneElement(children, props)} />
       <PopoverContent
         align="start"

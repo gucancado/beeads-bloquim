@@ -276,4 +276,43 @@ test.describe("prazo inline na lista de Minhas Tarefas", () => {
     await expect(scheduleTrigger(row)).toHaveText(emLabel(today()));
     expect(errors, errors.join("\n")).toEqual([]);
   });
+
+  test("a linha não some no meio da configuração (urgente → fazer até, janela 'hoje')", async ({ page, context }) => {
+    const t = await createTask(s, { title: `E2E nao some ${s.stamp}`, scheduleMode: "urgente" });
+
+    const errors = collectErrors(page);
+    await authenticate(context, s.api);
+    // Janela padrão ("hoje"), que é como o usuário chega na página: urgente
+    // aparece por regra especial do agrupamento.
+    await page.goto("/my-tasks");
+    const row = page.locator("tr", { hasText: t.title });
+    await expect(row).toBeVisible({ timeout: 60_000 });
+
+    await scheduleTrigger(row).click();
+    const pop = schedulePopover(page);
+    await pop.getByRole("button", { name: "fazer até", exact: true }).click();
+    await expect
+      .poll(async () => (await getTask(s, t.id)).scheduleMode, { timeout: 15_000 })
+      .toBe("ate");
+
+    // Agora a tarefa não é mais urgente e ainda não tem data: sai da janela
+    // "hoje". O refetch da lista não pode arrancar a linha enquanto o usuário
+    // está no meio da configuração. Espera fixa porque o que se verifica é a
+    // AUSÊNCIA de mudança depois do refetch que o PATCH dispara.
+    await page.waitForTimeout(2_500);
+    await expect(row, "a linha sumiu no meio da configuração do prazo").toBeVisible();
+    await expect(pop.getByRole("grid"), "o popover fechou junto com a linha").toHaveCount(1);
+
+    // E dá pra terminar o que começou.
+    await pop.getByRole("button", { name: "amanhã", exact: true }).click();
+    await expect
+      .poll(async () => (await getTask(s, t.id)).dueDate?.slice(0, 10), { timeout: 15_000 })
+      .toBe(ymd(addDays(today(), 1)));
+
+    // Represar não pode virar lista congelada: fechado o popover, a
+    // atualização sai e a tarefa (agora pra amanhã) deixa a janela "hoje".
+    await page.keyboard.press("Escape");
+    await expect(row, "a lista não atualizou depois de fechar o popover").toHaveCount(0, { timeout: 15_000 });
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
 });

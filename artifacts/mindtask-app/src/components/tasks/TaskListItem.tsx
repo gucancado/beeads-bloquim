@@ -1,7 +1,7 @@
 // Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
 // always-leading "title" cell) are rendered in the order defined by the
 // user's saved column preferences — passed in via `columnOrder`.
-import { useState, useCallback, useEffect, cloneElement } from "react";
+import { useState, useCallback, useEffect, useRef, cloneElement } from "react";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate, addOneDayYmd } from "@/lib/utils";
 import { SchedulePopover } from "@/components/tasks/SchedulePopover";
@@ -148,7 +148,20 @@ export function TaskListItem({
 
   const isStandaloneTask = !task.workspaceId;
 
+  // Enquanto o popover de prazo está aberto, a invalidação da lista fica
+  // represada: cada escolha (modalidade, depois a data) muda o agrupamento, e
+  // o refetch arrancaria a linha — junto com o popover — no meio da
+  // configuração. Ex.: urgente → "fazer até" ainda sem data sai da janela
+  // "hoje". A linha segue mostrando `localTask` (otimista) e a lista atualiza
+  // quando o popover fecha.
+  const scheduleOpenRef = useRef(false);
+  const pendingInvalidateRef = useRef(false);
+
   const invalidate = useCallback(() => {
+    if (scheduleOpenRef.current) {
+      pendingInvalidateRef.current = true;
+      return;
+    }
     invalidateQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
     if (task.mapId && task.workspaceId) {
       queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${task.workspaceId}/maps/${task.mapId}`] });
@@ -157,6 +170,24 @@ export function TaskListItem({
       }
     }
   }, [invalidateQueryKeys, queryClient, task.mapId, task.cardId, task.workspaceId]);
+
+  const handleScheduleOpenChange = useCallback((open: boolean) => {
+    scheduleOpenRef.current = open;
+    if (!open && pendingInvalidateRef.current) {
+      pendingInvalidateRef.current = false;
+      invalidate();
+    }
+  }, [invalidate]);
+
+  // Desmontar com invalidação represada (a linha saiu por outro motivo, ou a
+  // página trocou) não pode engolir a atualização da lista.
+  useEffect(() => () => {
+    if (pendingInvalidateRef.current) {
+      pendingInvalidateRef.current = false;
+      scheduleOpenRef.current = false;
+      invalidateQueryKeys.forEach(k => queryClient.invalidateQueries({ queryKey: k }));
+    }
+  }, [invalidateQueryKeys, queryClient]);
 
   const patchTask = useCallback(async (body: Record<string, any>) => {
     try {
@@ -587,6 +618,7 @@ export function TaskListItem({
     return (
       <div onClick={e => e.stopPropagation()} className="inline-flex flex-nowrap items-center gap-2 text-xs whitespace-nowrap">
         <SchedulePopover
+          onOpenChange={handleScheduleOpenChange}
           mode={effectiveMode}
           startAt={localTask.startAt}
           dueDate={localTask.dueDate}
