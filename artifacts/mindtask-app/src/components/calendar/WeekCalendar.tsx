@@ -6,6 +6,7 @@ import { TriageDialog } from "@/components/meetings/TriageDialog";
 import type { Meeting } from "@/components/meetings/useMeetings";
 import type { AvatarPickerMember } from "@/components/tasks/AssigneeAvatarPicker";
 import { useToast } from "@/hooks/use-toast";
+import { getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { useGoogleCalendarStatus, useRangeEvents } from "@/hooks/useGoogleCalendar";
 import {
   calendarMeetingsKey, calendarTasksKey, useCalendarMeetings, useCalendarTasks, useReorderCalendar, type CalendarScope,
@@ -86,12 +87,16 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
     if (!activeKey) return null;
     for (const d of week.days) {
       const it = d.items.find(i => i.key === activeKey);
-      if (it) return it.kind === "meeting" ? (it.meeting.title ?? "reunião") : it.task.title;
+      if (it) return it.kind === "meeting" ? (it.meeting.title ?? "reunião") : getApprovalDisplayTitle(it.task);
     }
-    return week.pool.find(t => `task:${t.id}` === activeKey)?.title ?? null;
+    const poolTask = week.pool.find(t => `task:${t.id}` === activeKey);
+    return poolTask ? getApprovalDisplayTitle(poolTask) : null;
   }, [activeKey, week]);
 
-  const loading = tasksQ.isLoading;
+  // Com keepPreviousData, troca de semana não zera `data`: spinner só no
+  // primeiro carregamento, sem dado nenhum.
+  const loading = !tasksQ.data && tasksQ.isLoading;
+  const refreshing = tasksQ.isPlaceholderData;
 
   return (
     <div data-testid="week-calendar">
@@ -118,7 +123,10 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2">
+            <div
+              className={`flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2 transition-opacity ${refreshing ? "opacity-60" : ""}`}
+              aria-busy={refreshing || undefined}
+            >
               {week.visibleDays.map(day => <DayColumn key={day.date} day={day} cb={cb} />)}
             </div>
             <Button

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { statusFilterToApi } from "@/lib/taskStatusConstants";
@@ -30,6 +30,8 @@ export function useCalendarTasks(scope: CalendarScope, weekStart: string, status
       if (scope.kind === "workspace") p.set("workspaceId", scope.workspaceId);
       return customFetch<CalendarTask[]>(`/api/calendar/tasks?${p.toString()}`);
     },
+    // Troca de semana mantém o kanban na tela enquanto a próxima carrega.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -49,6 +51,7 @@ export function useCalendarMeetings(scope: CalendarScope, weekStart: string) {
       }
     },
     retry: false,
+    placeholderData: keepPreviousData,
   });
 }
 

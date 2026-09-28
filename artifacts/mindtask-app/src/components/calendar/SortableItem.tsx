@@ -2,8 +2,16 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ReactNode } from "react";
 
-export function SortableItem({ id, disabled, children }: { id: string; disabled?: boolean; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
+/**
+ * `dragDisabled` só impede arrastar: o item continua alvo de drop. Em dia
+ * passado isso faz o drop cair na coluna passada (e o computeDrop recusar com
+ * `past`) em vez de escorregar para a coluna habilitada mais próxima.
+ */
+export function SortableItem({ id, dragDisabled, children }: { id: string; dragDisabled?: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: { draggable: !!dragDisabled, droppable: false },
+  });
   return (
     <div
       ref={setNodeRef}
@@ -11,7 +19,7 @@ export function SortableItem({ id, disabled, children }: { id: string; disabled?
       {...attributes}
       {...listeners}
       data-calendar-item={id}
-      className={disabled ? "" : "cursor-grab active:cursor-grabbing"}
+      className={dragDisabled ? "" : "cursor-grab active:cursor-grabbing"}
     >
       {children}
     </div>

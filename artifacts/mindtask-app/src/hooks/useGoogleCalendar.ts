@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const cf = (url: string, options?: RequestInit) =>
   fetch(url, {
@@ -135,5 +135,6 @@ export function useRangeEvents(from: string, to: string, enabled: boolean) {
     enabled,
     staleTime: 5 * 60 * 1000,
     retry: false,
+    placeholderData: keepPreviousData,
   });
 }
