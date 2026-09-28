@@ -286,6 +286,38 @@ router.patch("/calendars/:calendarId", requireAuth, async (req: AuthRequest, res
 
 const todayQuerySchema = z.object({ tz: z.string().min(1).max(64).optional() });
 
+class NotConnectedError extends Error {}
+
+/**
+ * Miolo compartilhado por today-events e /events: valida a conta conectada,
+ * busca as agendas habilitadas e coleta+ordena os eventos do Google no
+ * intervalo [startISO, endISO). Erros de auth (GoogleAuthError) propagam pro
+ * caller; erros de uma agenda isolada só são logados (as outras seguem).
+ */
+async function collectEvents(
+  userId: string, startISO: string, endISO: string, tz: string,
+): Promise<{ events: TodayEvent[]; noCalendarsSelected: boolean }> {
+  const accessToken = await getValidAccessToken(userId);
+  if (!accessToken) throw new NotConnectedError();
+  const enabledPrefs = await db
+    .select()
+    .from(userCalendarPreferences)
+    .where(and(eq(userCalendarPreferences.userId, userId), eq(userCalendarPreferences.enabled, true)));
+  if (enabledPrefs.length === 0) return { events: [], noCalendarsSelected: true };
+  const allEvents: TodayEvent[] = [];
+  for (const pref of enabledPrefs) {
+    try {
+      const events = await listEvents(accessToken, pref.googleCalendarId, startISO, endISO, tz);
+      for (const ev of events) allEvents.push(toTodayEvent(ev, pref));
+    } catch (innerErr) {
+      if (innerErr instanceof GoogleAuthError) throw innerErr;
+      log.warn({ err: innerErr, calendarId: pref.googleCalendarId }, "skipping calendar due to error");
+    }
+  }
+  allEvents.sort(compareEvents);
+  return { events: allEvents, noCalendarsSelected: false };
+}
+
 router.get("/today-events", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const parsed = todayQuerySchema.safeParse(req.query);
@@ -299,45 +331,58 @@ router.get("/today-events", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
-    const accessToken = await getValidAccessToken(userId);
-    if (!accessToken) {
+    const { startISO, endISO } = computeDayWindow(tz);
+    const { events, noCalendarsSelected } = await collectEvents(userId, startISO, endISO, tz);
+    if (!noCalendarsSelected) eventsCache.set(cacheKey, { events, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
+    res.json({ events, cached: false, noCalendarsSelected });
+  } catch (err) {
+    if (err instanceof NotConnectedError) {
       return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
     }
-
-    const enabledPrefs = await db
-      .select()
-      .from(userCalendarPreferences)
-      .where(and(eq(userCalendarPreferences.userId, userId), eq(userCalendarPreferences.enabled, true)));
-
-    if (enabledPrefs.length === 0) {
-      return res.json({ events: [], cached: false, noCalendarsSelected: true });
-    }
-
-    const { startISO, endISO } = computeDayWindow(tz);
-
-    const allEvents: TodayEvent[] = [];
-    for (const pref of enabledPrefs) {
-      try {
-        const events = await listEvents(accessToken, pref.googleCalendarId, startISO, endISO, tz);
-        for (const ev of events) {
-          allEvents.push(toTodayEvent(ev, pref));
-        }
-      } catch (innerErr) {
-        if (innerErr instanceof GoogleAuthError) throw innerErr;
-        log.warn({ err: innerErr, calendarId: pref.googleCalendarId }, "skipping calendar due to error");
-      }
-    }
-
-    allEvents.sort(compareEvents);
-
-    eventsCache.set(cacheKey, { events: allEvents, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
-    res.json({ events: allEvents, cached: false, noCalendarsSelected: false });
-  } catch (err) {
     if (err instanceof GoogleAuthError) {
       return res.status(401).json({ error: "Reauth required", message: "Sessão do Google expirou. Reconecte sua conta." });
     }
     log.error({ err }, "today-events failed");
     res.status(500).json({ error: "Internal", message: "Erro ao buscar eventos." });
+  }
+});
+
+const rangeQuerySchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  tz: z.string().min(1).max(64).optional(),
+});
+const MAX_EVENTS_RANGE_MS = 31 * 86_400_000;
+
+// GET /events?from&to&tz — eventos de um intervalo (calendário semanal).
+router.get("/events", requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.userId;
+  const parsed = rangeQuerySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "Validation", message: "parâmetros inválidos" });
+  const from = new Date(parsed.data.from);
+  const to = new Date(parsed.data.to);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from || to.getTime() - from.getTime() > MAX_EVENTS_RANGE_MS) {
+    return res.status(400).json({ error: "Validation", message: "from/to inválidos (to > from, máx 31 dias)" });
+  }
+  const tz = parsed.data.tz || "UTC";
+  const cacheKey = `${userId}::range::${from.toISOString()}::${to.toISOString()}::${tz}`;
+  const cached = eventsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({ events: cached.events, cached: true, noCalendarsSelected: false });
+  }
+  try {
+    const { events, noCalendarsSelected } = await collectEvents(userId, from.toISOString(), to.toISOString(), tz);
+    if (!noCalendarsSelected) eventsCache.set(cacheKey, { events, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
+    return res.json({ events, cached: false, noCalendarsSelected });
+  } catch (err) {
+    if (err instanceof NotConnectedError) {
+      return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
+    }
+    if (err instanceof GoogleAuthError) {
+      return res.status(401).json({ error: "Reauth required", message: "Sessão do Google expirou. Reconecte sua conta." });
+    }
+    log.error({ err }, "events failed");
+    return res.status(500).json({ error: "Internal", message: "Erro ao buscar eventos." });
   }
 });
 
