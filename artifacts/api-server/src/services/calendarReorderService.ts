@@ -5,8 +5,15 @@ import { tasks, meetings, workspaceMembers } from "@workspace/db/schema";
 import { canActOnMeeting } from "../routes/meetings";
 import { ACTIVE_STATUSES } from "./calendarTasksQuery";
 
+/** YYYY-MM-DD que existe no calendário (2030-02-30 → false). */
+export function isRealYmd(s: string): boolean {
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 export const reorderSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealYmd, "data inexistente"),
   items: z.array(z.object({ kind: z.enum(["task", "meeting"]), id: z.string().uuid() })).max(500),
   moved: z.object({
     kind: z.enum(["task", "meeting"]),

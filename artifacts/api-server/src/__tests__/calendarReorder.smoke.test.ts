@@ -87,6 +87,8 @@ describe("PUT /api/calendar/reorder", () => {
     expect((await put({ date: "2030-01-08", items: [{ kind: "task", id: a }], moved: { kind: "task", id: a, target: "pool" } })).status).toBe(400);
     expect((await put({ date: "2030-01-08", items: [{ kind: "task", id: a }], moved: { kind: "task", id: b, target: "day" } })).status).toBe(400);
     expect((await put({ date: "08/01/2030", items: [] })).status).toBe(400);
+    expect((await put({ date: "2030-02-30", items: [] })).status).toBe(400);
+    expect((await put({ date: "2030-13-01", items: [] })).status).toBe(400);
   });
 
   it("404 com id inexistente", async () => {

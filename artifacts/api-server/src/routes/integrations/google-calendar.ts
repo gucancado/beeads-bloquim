@@ -330,7 +330,13 @@ function respondWithEvents(
   result: { events: TodayEvent[]; noCalendarsSelected: boolean },
 ) {
   if (!result.noCalendarsSelected) {
-    eventsCache.set(cacheKey, { events: result.events, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
+    const now = Date.now();
+    // Varredura barata: as chaves de /events incluem o intervalo, então sem isso
+    // o Map cresce a cada semana navegada.
+    for (const [key, entry] of eventsCache) {
+      if (entry.expiresAt <= now) eventsCache.delete(key);
+    }
+    eventsCache.set(cacheKey, { events: result.events, expiresAt: now + EVENTS_CACHE_TTL_MS });
   }
   return res.json({ events: result.events, cached: false, noCalendarsSelected: result.noCalendarsSelected });
 }
