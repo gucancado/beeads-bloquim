@@ -2,6 +2,7 @@ import {
   pgTable,
   text,
   timestamp,
+  date,
   uuid,
   pgEnum,
   boolean,
@@ -104,6 +105,10 @@ export const tasks = pgTable("tasks", {
   parentApprovalStatus: parentApprovalStatusEnum("parent_approval_status"),
   isRecurring: boolean("is_recurring").notNull().default(false),
   recurrenceConfig: jsonb("recurrence_config").$type<RecurrenceConfig>(),
+  /** Data de execução pretendida. Só o modo calendário lê/escreve. */
+  plannedDate: date("planned_date", { mode: "string" }),
+  /** Ordem de prioridade dentro da coluna do dia no calendário. NULL = não ordenada. */
+  plannedOrder: integer("planned_order"),
   /**
    * User who created the task. Nullable for two reasons:
    * - rows that pre-date this column (backfill leaves NULL where the
@@ -152,6 +157,9 @@ export const tasks = pgTable("tasks", {
     table.createdAt,
     table.id,
   ),
+  index("idx_tasks_assigned_planned")
+    .on(table.assignedTo, table.plannedDate)
+    .where(sql`${table.plannedDate} IS NOT NULL`),
 ]);
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({
