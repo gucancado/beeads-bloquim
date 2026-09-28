@@ -8,6 +8,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { recordTaskActivity } from "./taskActivitiesService";
+import { safeApplyOrderRules } from "./calendarOrderService";
 
 /**
  * Moves a standalone task into a workspace. One-way operation
@@ -190,6 +191,8 @@ export async function moveStandaloneTaskToWorkspace(
         ),
       );
   });
+
+  if (nextAssignee !== task.assignedTo) await safeApplyOrderRules(taskId);
 
   // Activity is recorded outside the transaction — recordTaskActivity does
   // its own insert and we don't want a log failure to roll back the move.
