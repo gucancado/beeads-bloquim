@@ -41,6 +41,7 @@ function stickyReasonOf(week: WeekModel, taskId: string): string | null {
     for (const it of d.items) {
       if (it.kind === "meeting" || it.id !== taskId) continue;
       if (it.task.scheduleMode === "urgente") return "tarefa urgente continua em hoje";
+      if (it.task.dueDate && d.isToday && it.task.dueDate.slice(0, 10) < d.date) return "tarefa atrasada continua em hoje";
       if (it.task.dueDate) return "tarefa com prazo continua no dia do prazo";
       return null;
     }

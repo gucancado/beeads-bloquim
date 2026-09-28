@@ -636,7 +636,7 @@ export default function TaskCardBody({
                 ref={scheduleWrapperRef}
                 onBlur={handleScheduleWrapperBlur}
                 data-no-dnd
-                className={`ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : "flex items-center gap-1"}`}
+                className={`ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : `flex items-center gap-1${width === "fill" ? " flex-wrap justify-end min-w-0" : ""}`}`}
               >
                 {/* Top row: mode select + startAt (only shown for "entre") */}
                 <div className="flex items-center gap-1">

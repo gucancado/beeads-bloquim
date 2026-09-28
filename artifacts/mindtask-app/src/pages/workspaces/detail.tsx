@@ -550,7 +550,7 @@ export default function WorkspaceDetailPage() {
   return (
     <AppLayout>
       <div className="flex-1 overflow-auto">
-        <div className="pt-12 px-8 lg:px-12 pb-0">
+        <div className={`pt-12 px-8 ${viewMode === "calendario" ? "lg:px-6" : "lg:px-12"} pb-0`}>
           <div className="max-w-6xl mx-auto">
             <Tabs value={activeTab} onValueChange={(v) => { if (isValidTab(v)) setActiveTab(v); }} className="w-full">
               {(() => {
