@@ -150,18 +150,18 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={endDrag}>
           {/* Setas nas laterais do calendário (pedido do produto). Ficam fora da
               área com scroll horizontal, então nunca cobrem cards. */}
-          <div className="flex items-stretch gap-2">
+          <div className="flex items-stretch gap-1">
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 self-center"
+              className="h-8 w-8 shrink-0 self-center p-0"
               onClick={() => setWeekStart(w => addDaysYmd(w, -7))}
               aria-label="semana anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div
-              className={`flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2 transition-opacity ${refreshing ? "opacity-60" : ""}`}
+              className={`flex min-w-0 flex-1 gap-2 overflow-x-auto pb-2 transition-opacity ${refreshing ? "opacity-60" : ""}`}
               aria-busy={refreshing || undefined}
             >
               {week.visibleDays.map(day => (
@@ -171,7 +171,7 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 self-center"
+              className="h-8 w-8 shrink-0 self-center p-0"
               onClick={() => setWeekStart(w => addDaysYmd(w, 7))}
               aria-label="próxima semana"
             >

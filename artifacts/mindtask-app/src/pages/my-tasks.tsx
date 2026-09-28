@@ -257,7 +257,8 @@ export default function MyTasksPage() {
   return (
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
-        <div className="max-w-screen-2xl mx-auto p-8 lg:p-12">
+        {/* Calendário: padding lateral menor para seg–sex caberem a 1440px com a sidebar aberta. */}
+        <div className={`max-w-screen-2xl mx-auto p-8 ${viewMode === "calendario" ? "lg:px-6 lg:py-12" : "lg:p-12"}`}>
           <PageBreadcrumb items={[{ label: "tarefas" }]} className="mb-4" />
           <div className="flex flex-col gap-6 mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

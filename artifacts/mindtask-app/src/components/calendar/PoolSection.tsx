@@ -14,7 +14,7 @@ export function PoolSection({ tasks, cb, isOver }: { tasks: CalendarTask[]; cb: 
       <h3 className="mb-3 px-1 text-xs font-light lowercase text-muted-foreground">sem data · {tasks.length}</h3>
       <div
         ref={setNodeRef}
-        className={`grid min-h-[96px] grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 rounded-2xl border border-dashed p-3 ${
+        className={`grid min-h-[96px] grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 rounded-2xl border border-dashed p-3 ${
           isOver ? "border-primary/60 bg-primary/5" : "border-border/60"
         }`}
       >

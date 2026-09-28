@@ -29,7 +29,7 @@ export function DayColumn({ day, cb, isOver }: { day: DayColumnModel; cb: Column
     <section
       aria-label={`${weekday} ${d.getDate()}`}
       data-calendar-day={day.date}
-      className={`flex min-w-[260px] flex-1 flex-col rounded-2xl border p-2 transition-colors ${
+      className={`flex min-w-[200px] flex-1 flex-col rounded-2xl border p-2 transition-colors ${
         day.isToday ? "border-primary/50 bg-primary/5" : "border-border bg-card/40"
       } ${isOver && !day.isPast ? "ring-2 ring-primary/40" : ""} ${day.isPast ? "opacity-80" : ""}`}
     >
