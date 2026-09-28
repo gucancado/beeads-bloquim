@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { DashboardGreeting } from "@/components/DashboardGreeting";
@@ -20,6 +20,9 @@ import { NewMeetingModal } from "@/components/meetings/NewMeetingModal";
 import { useRoute, useLocation } from "wouter";
 import { TASK_STATUS_ORDER, TODOS_STATUS, statusFilterToApi } from "@/lib/taskStatusConstants";
 import { TodosStatusPill } from "@/components/tasks/TodosStatusPill";
+import { ViewModeToggle, type ViewMode } from "@/components/tasks/ViewModeToggle";
+import { WeekCalendar } from "@/components/calendar/WeekCalendar";
+import type { AvatarPickerMember } from "@/components/tasks/AssigneeAvatarPicker";
 
 interface OpenCard {
   workspaceId: string;
@@ -42,7 +45,7 @@ const VALID_STATUSES = new Set<string>([...STATUS_OPTIONS.map(o => o.value), TOD
 
 function readInitialFilters() {
   if (typeof window === "undefined") {
-    return { status: "in_progress", window: "hoje" as TimeWindow, assignees: ["me"] };
+    return { status: "in_progress", window: "hoje" as TimeWindow, assignees: ["me"], view: "lista" as ViewMode };
   }
   const p = new URLSearchParams(window.location.search);
   const rawStatus = p.get("status");
@@ -52,6 +55,7 @@ function readInitialFilters() {
     status: rawStatus && VALID_STATUSES.has(rawStatus) ? rawStatus : "in_progress",
     window: rawWindow && VALID_TIME_WINDOWS.includes(rawWindow) ? rawWindow : ("hoje" as TimeWindow),
     assignees: rawAssignees ? rawAssignees.split(",").filter(Boolean) : ["me"],
+    view: p.get("view") === "calendario" ? ("calendario" as ViewMode) : ("lista" as ViewMode),
   };
 }
 
@@ -60,6 +64,7 @@ export default function MyTasksPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>(initial.status);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>(initial.assignees);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>(initial.window);
+  const [viewMode, setViewMode] = useState<ViewMode>(initial.view);
 
   // Sync filter state → URL (query string only, preserves path so deep links keep
   // working). Defaults are stripped so a clean URL like /my-tasks stays clean.
@@ -74,12 +79,14 @@ export default function MyTasksPage() {
     } else {
       p.set("assignees", selectedAssignees.join(","));
     }
+    if (viewMode === "lista") p.delete("view");
+    else p.set("view", viewMode);
     const qs = p.toString();
     const next = `${window.location.pathname}${qs ? "?" + qs : ""}`;
     if (window.location.pathname + window.location.search !== next) {
       window.history.replaceState(null, "", next);
     }
-  }, [selectedStatus, timeWindow, selectedAssignees]);
+  }, [selectedStatus, timeWindow, selectedAssignees, viewMode]);
 
   // Se o usuário tinha "ate_sexta" selecionado quando o relógio virou pra
   // sexta-feira, o botão some — fallback automático pra "hoje".
@@ -100,6 +107,11 @@ export default function MyTasksPage() {
     setSelectedStatus(value);
   };
 
+  const changeView = (v: ViewMode) => {
+    setViewMode(v);
+    if (v === "calendario") setSelectedStatus(TODOS_STATUS);
+  };
+
   const toggleAssignee = (id: string) => {
     setSelectedAssignees(prev =>
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
@@ -110,6 +122,17 @@ export default function MyTasksPage() {
     queryKey: ["/api/my-tasks/members"],
     queryFn: () => customFetch("/api/my-tasks/members"),
   });
+
+  const pickerMembersByWorkspace = useMemo(() => {
+    const acc: Record<string, AvatarPickerMember[]> = {};
+    for (const m of members ?? []) {
+      (acc[m.workspaceId] ??= []);
+      if (!acc[m.workspaceId].some(x => x.userId === m.userId)) {
+        acc[m.workspaceId].push({ userId: m.userId, user: { name: m.name, avatarUrl: m.avatarUrl ?? null } });
+      }
+    }
+    return acc;
+  }, [members]);
 
   const [createSheetOpen, setCreateSheetOpen] = useState(false);
 
@@ -144,6 +167,9 @@ export default function MyTasksPage() {
       return customFetch(`/api/my-tasks/counts?${p.toString()}`);
     },
   });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const calendarExtraKeys = useMemo(() => [countsQueryKey], [JSON.stringify(countsQueryKey)]);
 
   const { data: deepLinkTaskMeta } = useQuery<{ id: string; workspaceId: string | null } | null>({
     queryKey: ["/api/my-tasks/task-meta", deepLinkTaskId],
@@ -292,7 +318,7 @@ export default function MyTasksPage() {
                     );
                   })}
                 </div>
-                {selectedStatus !== "completed" && selectedStatus !== "blocked" && (
+                {viewMode === "lista" && selectedStatus !== "completed" && selectedStatus !== "blocked" && (
                   <TimeWindowFilterPills
                     value={timeWindow}
                     onChange={setTimeWindow}
@@ -300,6 +326,7 @@ export default function MyTasksPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <ViewModeToggle value={viewMode} onChange={changeView} />
                 <AssigneeFilterPills
                   members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }])).values())}
                   selected={selectedAssignees}
@@ -312,11 +339,22 @@ export default function MyTasksPage() {
             </div>
           </div>
 
-          <div className="mb-6">
-            <AgendaPanel />
-          </div>
+          {viewMode === "lista" && (
+            <div className="mb-6">
+              <AgendaPanel />
+            </div>
+          )}
 
-          {isLoading ? (
+          {viewMode === "calendario" ? (
+            <WeekCalendar
+              scope={{ kind: "my" }}
+              status={selectedStatus}
+              assignees={selectedAssignees}
+              membersFor={(ws) => (ws ? pickerMembersByWorkspace[ws] ?? [] : [])}
+              extraInvalidateKeys={calendarExtraKeys}
+              onOpenTask={openTaskItem}
+            />
+          ) : isLoading ? (
             <TaskTableSkeleton />
           ) : (() => {
             // Em status terminais (completed/blocked) ordenamos pelo timestamp

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRoute, Link, useSearch, useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb, PageBreadcrumbItem } from "@/components/layout/PageBreadcrumb";
@@ -27,6 +27,8 @@ import { groupTasksByDeadline, selectWindow, ateSextaLabel, type TimeWindow } fr
 import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
 import { TASK_STATUS_ORDER, TODOS_STATUS, statusFilterToApi } from "@/lib/taskStatusConstants";
 import { TodosStatusPill } from "@/components/tasks/TodosStatusPill";
+import { ViewModeToggle, type ViewMode } from "@/components/tasks/ViewModeToggle";
+import { WeekCalendar } from "@/components/calendar/WeekCalendar";
 
 function getInitials(name: string) {
   return name
@@ -199,6 +201,7 @@ export default function WorkspaceDetailPage() {
   // Default "todas" no workspace — usuário pediu (decisão diferente da tela
   // de /my-tasks, que defaulta pra "hoje").
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("todas");
+  const [viewMode, setViewMode] = useState<ViewMode>("lista");
 
   // Fallback caso o usuário esteja em "ate_sexta" quando o dia vira pra
   // sexta-feira (botão fica oculto).
@@ -249,6 +252,9 @@ export default function WorkspaceDetailPage() {
     },
     enabled: !selectedAssignees.includes("me") || !!currentUserId,
   });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const calendarExtraKeys = useMemo(() => [countsQueryKey, ["/api/my-tasks"]], [JSON.stringify(countsQueryKey)]);
 
   const isAdmin = workspace?.role === "admin";
   const queryClient = useQueryClient();
@@ -471,6 +477,11 @@ export default function WorkspaceDetailPage() {
     setSelectedStatus(value);
   };
 
+  const changeView = (v: ViewMode) => {
+    setViewMode(v);
+    if (v === "calendario") setSelectedStatus(TODOS_STATUS);
+  };
+
   useEffect(() => {
     if (deepLinkTaskId) {
       // Always sync the open sheet to the URL — including when the user
@@ -494,6 +505,7 @@ export default function WorkspaceDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
     setOpenCard(null);
     if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
   };
@@ -506,6 +518,7 @@ export default function WorkspaceDetailPage() {
   const handleCloseTaskSheet = () => {
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
     setTaskSheetOpen(false);
     setEditingTaskId(null);
     if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
@@ -756,15 +769,16 @@ export default function WorkspaceDetailPage() {
                             );
                           })}
                         </div>
-                        {selectedStatus !== "completed" && selectedStatus !== "blocked" && (
+                        {viewMode === "lista" && selectedStatus !== "completed" && selectedStatus !== "blocked" && (
                           <TimeWindowFilterPills
                             value={timeWindow}
                             onChange={setTimeWindow}
                           />
                         )}
                       </div>
-                      {(workspaceMembers && workspaceMembers.length > 0) && (
-                        <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ViewModeToggle value={viewMode} onChange={changeView} />
+                        {(workspaceMembers && workspaceMembers.length > 0) && (
                           <AssigneeFilterPills
                             members={(workspaceMembers ?? [])
                               .filter(m => m.userId !== currentUserId)
@@ -775,12 +789,21 @@ export default function WorkspaceDetailPage() {
                             meLabel="Eu"
                             meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
                           />
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {isTasksLoading ? (
+                  {viewMode === "calendario" ? (
+                    <WeekCalendar
+                      scope={{ kind: "workspace", workspaceId }}
+                      status={selectedStatus}
+                      assignees={selectedAssignees}
+                      membersFor={() => (workspaceMembers ?? []).map(m => ({ userId: m.userId, user: { name: m.user.name, avatarUrl: m.user.avatarUrl ?? null } }))}
+                      extraInvalidateKeys={calendarExtraKeys}
+                      onOpenTask={openTaskItem}
+                    />
+                  ) : isTasksLoading ? (
                     <div className="flex items-center justify-center py-20">
                       <Loader2 className="w-10 h-10 animate-spin text-primary" />
                     </div>
