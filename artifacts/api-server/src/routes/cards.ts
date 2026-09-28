@@ -9,6 +9,7 @@ import { computeOverdue } from "../lib/overdue";
 import { toVisualStatus } from "../services/taskVisualSyncService";
 import { resolveSchedule, isWithinScheduleWindow, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
+import { safeApplyOrderRules } from "../services/calendarOrderService";
 import { recordTaskActivity } from "../services/taskActivitiesService";
 import { findFreeSlot, NODE_WIDTH, NODE_HEIGHT } from "../lib/collision";
 
@@ -281,6 +282,8 @@ router.post("/:cardId/task", requireAuth, requireWorkspaceRole(["admin", "editor
     metadata: { actorName: actorUser?.name ?? null },
     source: req.user?.source ?? null,
   });
+
+  if (task.scheduleMode === "urgente") await safeApplyOrderRules(task.id);
 
   res.status(201).json(task);
 });
@@ -601,6 +604,10 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
   if (touchesSchedule) {
     await tryActivateTask(card.taskId!);
   }
+
+  const assigneeChanged = parsed.data.assignedTo !== undefined && !!currentTask && currentTask.assignedTo !== parsed.data.assignedTo;
+  const becameUrgent = updatedTask.scheduleMode === "urgente" && currentTask?.scheduleMode !== "urgente";
+  if (assigneeChanged || becameUrgent) await safeApplyOrderRules(card.taskId!, { clearPlannedDate: becameUrgent });
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
 

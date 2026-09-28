@@ -1,6 +1,6 @@
 import { Router, IRouter } from "express";
 import { z } from "zod/v4";
-import { and, eq, or, isNull, inArray, desc, asc } from "drizzle-orm";
+import { and, eq, or, isNull, inArray, desc, asc, ne, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { meetings, workspaceMembers, maps, userGoogleCalendarAccounts, type Meeting } from "@workspace/db/schema";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
@@ -94,13 +94,35 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// GET /api/meetings?workspaceId=
+// GET /api/meetings?workspaceId=&from=&to=
+// from/to (ISO, to exclusivo) alimentam o calendário semanal: só não-canceladas
+// cujo início (scheduled_start_at ?? occurred_at) cai na janela, em ordem crescente.
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const workspaceId = typeof req.query.workspaceId === "string" ? req.query.workspaceId : undefined;
+  const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
+  const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
+  if (!!fromRaw !== !!toRaw) return res.status(400).json({ message: "from e to vão juntos" });
+  const from = fromRaw ? new Date(fromRaw) : null;
+  const to = toRaw ? new Date(toRaw) : null;
+  if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+    return res.status(400).json({ message: "from/to inválidos" });
+  }
+  const startExpr = sql`COALESCE(${meetings.scheduledStartAt}, ${meetings.occurredAt})`;
+  const rangeCond = from && to
+    ? and(
+        sql`${startExpr} >= ${from.toISOString()}::timestamp`,
+        sql`${startExpr} < ${to.toISOString()}::timestamp`,
+        ne(meetings.status, "canceled"),
+      )
+    : undefined;
+  const orderBy = from && to ? asc(startExpr) : desc(meetings.createdAt);
+
   if (workspaceId) {
     if (!(await assertMembership(userId, workspaceId))) return res.status(403).json({ message: "Sem permissão" });
-    const rows = await db.select().from(meetings).where(eq(meetings.workspaceId, workspaceId)).orderBy(desc(meetings.createdAt));
+    const rows = await db.select().from(meetings)
+      .where(and(eq(meetings.workspaceId, workspaceId), rangeCond))
+      .orderBy(orderBy);
     return res.json(rows);
   }
   // sem workspace: tudo que o usuário legitimamente vê — standalone criadas por
@@ -110,11 +132,14 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const myWorkspaces = db.select({ id: workspaceMembers.workspaceId })
     .from(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   const rows = await db.select().from(meetings)
-    .where(or(
-      and(eq(meetings.createdBy, userId), isNull(meetings.workspaceId)),
-      inArray(meetings.workspaceId, myWorkspaces),
+    .where(and(
+      or(
+        and(eq(meetings.createdBy, userId), isNull(meetings.workspaceId)),
+        inArray(meetings.workspaceId, myWorkspaces),
+      ),
+      rangeCond,
     ))
-    .orderBy(desc(meetings.createdAt));
+    .orderBy(orderBy);
   return res.json(rows);
 });
 

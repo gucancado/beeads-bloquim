@@ -3,7 +3,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@beeads/ui";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
 import { User } from "lucide-react";
-import type { WorkspaceMemberResponse } from "@workspace/api-client-react";
 import { MemberSelectList, type MemberItem } from "@/components/tasks/MemberSelectList";
 
 function getInitials(name: string) {
@@ -15,9 +14,11 @@ function getInitials(name: string) {
     .join("");
 }
 
+export type AvatarPickerMember = { userId: string; user: { name: string; avatarUrl?: string | null } };
+
 interface AssigneeAvatarPickerProps {
   assignedTo: string;
-  members: WorkspaceMemberResponse[] | undefined;
+  members: AvatarPickerMember[] | undefined;
   onSelect: (value: string) => void;
 }
 

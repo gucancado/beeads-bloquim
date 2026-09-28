@@ -44,6 +44,8 @@ export const meetings = pgTable("meetings", {
   attendees: jsonb("attendees").$type<MeetingAttendee[]>(),
   collectEnabled: boolean("collect_enabled").notNull().default(true),
   attributionMethod: text("attribution_method"),
+  /** Ordem de prioridade na coluna do dia do calendário. NULL = não ordenada. */
+  plannedOrder: integer("planned_order"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

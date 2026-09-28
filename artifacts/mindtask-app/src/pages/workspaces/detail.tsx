@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRoute, Link, useSearch, useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb, PageBreadcrumbItem } from "@/components/layout/PageBreadcrumb";
@@ -25,7 +25,10 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beead
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
 import { groupTasksByDeadline, selectWindow, ateSextaLabel, type TimeWindow } from "@/lib/groupTasksByDeadline";
 import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
-import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
+import { TASK_STATUS_ORDER, TODOS_STATUS, statusFilterToApi } from "@/lib/taskStatusConstants";
+import { TodosStatusPill } from "@/components/tasks/TodosStatusPill";
+import { ViewModeToggle, type ViewMode } from "@/components/tasks/ViewModeToggle";
+import { WeekCalendar } from "@/components/calendar/WeekCalendar";
 
 function getInitials(name: string) {
   return name
@@ -198,6 +201,7 @@ export default function WorkspaceDetailPage() {
   // Default "todas" no workspace — usuário pediu (decisão diferente da tela
   // de /my-tasks, que defaulta pra "hoje").
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("todas");
+  const [viewMode, setViewMode] = useState<ViewMode>("lista");
 
   // Fallback caso o usuário esteja em "ate_sexta" quando o dia vira pra
   // sexta-feira (botão fica oculto).
@@ -229,7 +233,7 @@ export default function WorkspaceDetailPage() {
     queryKey: tasksQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set("status", selectedStatus);
+      p.set("status", statusFilterToApi(selectedStatus));
       if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
       const qs = p.toString() ? `?${p.toString()}` : "";
       return customFetch(`/api/workspaces/${workspaceId}/tasks${qs}`);
@@ -248,6 +252,9 @@ export default function WorkspaceDetailPage() {
     },
     enabled: !selectedAssignees.includes("me") || !!currentUserId,
   });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const calendarExtraKeys = useMemo(() => [countsQueryKey, ["/api/my-tasks"]], [JSON.stringify(countsQueryKey)]);
 
   const isAdmin = workspace?.role === "admin";
   const queryClient = useQueryClient();
@@ -470,6 +477,11 @@ export default function WorkspaceDetailPage() {
     setSelectedStatus(value);
   };
 
+  const changeView = (v: ViewMode) => {
+    setViewMode(v);
+    if (v === "calendario") setSelectedStatus(TODOS_STATUS);
+  };
+
   useEffect(() => {
     if (deepLinkTaskId) {
       // Always sync the open sheet to the URL — including when the user
@@ -493,6 +505,7 @@ export default function WorkspaceDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
     setOpenCard(null);
     if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
   };
@@ -505,6 +518,7 @@ export default function WorkspaceDetailPage() {
   const handleCloseTaskSheet = () => {
     queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     queryClient.invalidateQueries({ queryKey: countsQueryKey });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
     setTaskSheetOpen(false);
     setEditingTaskId(null);
     if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
@@ -536,7 +550,7 @@ export default function WorkspaceDetailPage() {
   return (
     <AppLayout>
       <div className="flex-1 overflow-auto">
-        <div className="pt-12 px-8 lg:px-12 pb-0">
+        <div className={`pt-12 px-8 ${viewMode === "calendario" ? "lg:px-6" : "lg:px-12"} pb-0`}>
           <div className="max-w-6xl mx-auto">
             <Tabs value={activeTab} onValueChange={(v) => { if (isValidTab(v)) setActiveTab(v); }} className="w-full">
               {(() => {
@@ -725,6 +739,10 @@ export default function WorkspaceDetailPage() {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                         <div className="flex flex-wrap items-center gap-2">
+                          <TodosStatusPill
+                            active={selectedStatus === TODOS_STATUS}
+                            onSelect={() => selectStatus(TODOS_STATUS)}
+                          />
                           {STATUS_OPTIONS.map(opt => {
                             const isActive = selectedStatus === opt.value;
                             const cnt = statusCounts?.[opt.value] ?? 0;
@@ -751,15 +769,16 @@ export default function WorkspaceDetailPage() {
                             );
                           })}
                         </div>
-                        {selectedStatus !== "completed" && selectedStatus !== "blocked" && (
+                        {viewMode === "lista" && selectedStatus !== "completed" && selectedStatus !== "blocked" && (
                           <TimeWindowFilterPills
                             value={timeWindow}
                             onChange={setTimeWindow}
                           />
                         )}
                       </div>
-                      {(workspaceMembers && workspaceMembers.length > 0) && (
-                        <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ViewModeToggle value={viewMode} onChange={changeView} />
+                        {(workspaceMembers && workspaceMembers.length > 0) && (
                           <AssigneeFilterPills
                             members={(workspaceMembers ?? [])
                               .filter(m => m.userId !== currentUserId)
@@ -770,12 +789,21 @@ export default function WorkspaceDetailPage() {
                             meLabel="Eu"
                             meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
                           />
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {isTasksLoading ? (
+                  {viewMode === "calendario" ? (
+                    <WeekCalendar
+                      scope={{ kind: "workspace", workspaceId }}
+                      status={selectedStatus}
+                      assignees={selectedAssignees}
+                      membersFor={() => (workspaceMembers ?? []).map(m => ({ userId: m.userId, user: { name: m.user.name, avatarUrl: m.user.avatarUrl ?? null } }))}
+                      extraInvalidateKeys={calendarExtraKeys}
+                      onOpenTask={openTaskItem}
+                    />
+                  ) : isTasksLoading ? (
                     <div className="flex items-center justify-center py-20">
                       <Loader2 className="w-10 h-10 animate-spin text-primary" />
                     </div>

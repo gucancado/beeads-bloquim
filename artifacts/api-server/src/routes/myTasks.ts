@@ -16,6 +16,7 @@ const log = logger.child({ module: "myTasks" });
 import { computeOverdue } from "../lib/overdue";
 import { resolveSchedule, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
+import { safeApplyOrderRules } from "../services/calendarOrderService";
 import { calculateNextDueDateInFuture } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { z } from "zod";
@@ -435,6 +436,8 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     source: req.user?.source ?? null,
   });
 
+  if (newTask.scheduleMode === "urgente") await safeApplyOrderRules(newTask.id);
+
   return res.status(201).json(newTask);
 });
 
@@ -494,6 +497,8 @@ router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   if (touchesSchedule) {
     await tryActivateTask(taskId);
   }
+  const becameUrgent = updated.scheduleMode === "urgente" && existing.scheduleMode !== "urgente";
+  if (becameUrgent) await safeApplyOrderRules(taskId as string, { clearPlannedDate: true });
   return res.json(updated);
 });
 
@@ -702,6 +707,10 @@ router.patch("/:taskId/association", requireAuth, async (req: AuthRequest, res) 
     }
     return u;
   });
+
+  if (updateData.assignedTo !== undefined && updateData.assignedTo !== existing.assignedTo) {
+    await safeApplyOrderRules(taskId as string);
+  }
 
   return res.json(updated);
 });

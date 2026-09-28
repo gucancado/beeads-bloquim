@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb } from "@/components/layout/PageBreadcrumb";
 import { DashboardGreeting } from "@/components/DashboardGreeting";
@@ -18,7 +18,11 @@ import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills"
 import { AgendaPanel } from "@/components/tasks/AgendaPanel";
 import { NewMeetingModal } from "@/components/meetings/NewMeetingModal";
 import { useRoute, useLocation } from "wouter";
-import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
+import { TASK_STATUS_ORDER, TODOS_STATUS, statusFilterToApi } from "@/lib/taskStatusConstants";
+import { TodosStatusPill } from "@/components/tasks/TodosStatusPill";
+import { ViewModeToggle, type ViewMode } from "@/components/tasks/ViewModeToggle";
+import { WeekCalendar } from "@/components/calendar/WeekCalendar";
+import type { AvatarPickerMember } from "@/components/tasks/AssigneeAvatarPicker";
 
 interface OpenCard {
   workspaceId: string;
@@ -37,20 +41,25 @@ interface StandaloneTask {
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 const VALID_TIME_WINDOWS: TimeWindow[] = ["hoje", "ate_sexta", "todas"];
-const VALID_STATUSES = new Set(STATUS_OPTIONS.map(o => o.value));
+const VALID_STATUSES = new Set<string>([...STATUS_OPTIONS.map(o => o.value), TODOS_STATUS]);
 
 function readInitialFilters() {
   if (typeof window === "undefined") {
-    return { status: "in_progress", window: "hoje" as TimeWindow, assignees: ["me"] };
+    return { status: "in_progress", window: "hoje" as TimeWindow, assignees: ["me"], view: "lista" as ViewMode };
   }
   const p = new URLSearchParams(window.location.search);
   const rawStatus = p.get("status");
   const rawWindow = p.get("window") as TimeWindow | null;
   const rawAssignees = p.get("assignees");
+  const view: ViewMode = p.get("view") === "calendario" ? "calendario" : "lista";
+  // Modo calendário tem "todos" como default (rascunho é o estado mais comum
+  // de tarefa recém-agendada); um ?status= explícito continua vencendo.
+  const defaultStatus = view === "calendario" ? TODOS_STATUS : "in_progress";
   return {
-    status: rawStatus && VALID_STATUSES.has(rawStatus) ? rawStatus : "in_progress",
+    status: rawStatus && VALID_STATUSES.has(rawStatus) ? rawStatus : defaultStatus,
     window: rawWindow && VALID_TIME_WINDOWS.includes(rawWindow) ? rawWindow : ("hoje" as TimeWindow),
     assignees: rawAssignees ? rawAssignees.split(",").filter(Boolean) : ["me"],
+    view,
   };
 }
 
@@ -59,12 +68,16 @@ export default function MyTasksPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>(initial.status);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>(initial.assignees);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>(initial.window);
+  const [viewMode, setViewMode] = useState<ViewMode>(initial.view);
 
   // Sync filter state → URL (query string only, preserves path so deep links keep
   // working). Defaults are stripped so a clean URL like /my-tasks stays clean.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
-    if (selectedStatus === "in_progress") p.delete("status");
+    // O default de status depende do modo: "todos" em calendário, "in_progress"
+    // em lista — mantém a URL limpa quando o filtro está no default de cada modo.
+    const defaultStatus = viewMode === "calendario" ? TODOS_STATUS : "in_progress";
+    if (selectedStatus === defaultStatus) p.delete("status");
     else p.set("status", selectedStatus);
     if (timeWindow === "hoje") p.delete("window");
     else p.set("window", timeWindow);
@@ -73,12 +86,14 @@ export default function MyTasksPage() {
     } else {
       p.set("assignees", selectedAssignees.join(","));
     }
+    if (viewMode === "lista") p.delete("view");
+    else p.set("view", viewMode);
     const qs = p.toString();
     const next = `${window.location.pathname}${qs ? "?" + qs : ""}`;
     if (window.location.pathname + window.location.search !== next) {
       window.history.replaceState(null, "", next);
     }
-  }, [selectedStatus, timeWindow, selectedAssignees]);
+  }, [selectedStatus, timeWindow, selectedAssignees, viewMode]);
 
   // Se o usuário tinha "ate_sexta" selecionado quando o relógio virou pra
   // sexta-feira, o botão some — fallback automático pra "hoje".
@@ -99,6 +114,11 @@ export default function MyTasksPage() {
     setSelectedStatus(value);
   };
 
+  const changeView = (v: ViewMode) => {
+    setViewMode(v);
+    if (v === "calendario") setSelectedStatus(TODOS_STATUS);
+  };
+
   const toggleAssignee = (id: string) => {
     setSelectedAssignees(prev =>
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
@@ -109,6 +129,17 @@ export default function MyTasksPage() {
     queryKey: ["/api/my-tasks/members"],
     queryFn: () => customFetch("/api/my-tasks/members"),
   });
+
+  const pickerMembersByWorkspace = useMemo(() => {
+    const acc: Record<string, AvatarPickerMember[]> = {};
+    for (const m of members ?? []) {
+      (acc[m.workspaceId] ??= []);
+      if (!acc[m.workspaceId].some(x => x.userId === m.userId)) {
+        acc[m.workspaceId].push({ userId: m.userId, user: { name: m.name, avatarUrl: m.avatarUrl ?? null } });
+      }
+    }
+    return acc;
+  }, [members]);
 
   const [createSheetOpen, setCreateSheetOpen] = useState(false);
 
@@ -121,7 +152,7 @@ export default function MyTasksPage() {
     queryKey: tasksQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set("status", selectedStatus);
+      p.set("status", statusFilterToApi(selectedStatus));
       p.set("assignedTo", selectedAssignees.join(","));
       return customFetch(`/api/my-tasks?${p.toString()}`);
     },
@@ -143,6 +174,9 @@ export default function MyTasksPage() {
       return customFetch(`/api/my-tasks/counts?${p.toString()}`);
     },
   });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const calendarExtraKeys = useMemo(() => [countsQueryKey], [JSON.stringify(countsQueryKey)]);
 
   const { data: deepLinkTaskMeta } = useQuery<{ id: string; workspaceId: string | null } | null>({
     queryKey: ["/api/my-tasks/task-meta", deepLinkTaskId],
@@ -223,7 +257,8 @@ export default function MyTasksPage() {
   return (
     <AppLayout>
       <div className="flex-1 overflow-auto bg-slate-50 dark:bg-background">
-        <div className="max-w-screen-2xl mx-auto p-8 lg:p-12">
+        {/* Calendário: padding lateral menor para seg–sex caberem a 1440px com a sidebar aberta. */}
+        <div className={`max-w-screen-2xl mx-auto p-8 ${viewMode === "calendario" ? "lg:px-6 lg:py-12" : "lg:p-12"}`}>
           <PageBreadcrumb items={[{ label: "tarefas" }]} className="mb-4" />
           <div className="flex flex-col gap-6 mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -260,6 +295,10 @@ export default function MyTasksPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  <TodosStatusPill
+                    active={selectedStatus === TODOS_STATUS}
+                    onSelect={() => selectStatus(TODOS_STATUS)}
+                  />
                   {STATUS_OPTIONS.map(opt => {
                     const isActive = selectedStatus === opt.value;
                     const cnt = statusCounts?.[opt.value] ?? 0;
@@ -287,7 +326,7 @@ export default function MyTasksPage() {
                     );
                   })}
                 </div>
-                {selectedStatus !== "completed" && selectedStatus !== "blocked" && (
+                {viewMode === "lista" && selectedStatus !== "completed" && selectedStatus !== "blocked" && (
                   <TimeWindowFilterPills
                     value={timeWindow}
                     onChange={setTimeWindow}
@@ -295,6 +334,7 @@ export default function MyTasksPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <ViewModeToggle value={viewMode} onChange={changeView} />
                 <AssigneeFilterPills
                   members={Array.from(new Map((members ?? []).filter(m => m.userId !== undefined && m.userId !== me?.id).map(m => [m.userId, { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl }])).values())}
                   selected={selectedAssignees}
@@ -307,11 +347,22 @@ export default function MyTasksPage() {
             </div>
           </div>
 
-          <div className="mb-6">
-            <AgendaPanel />
-          </div>
+          {viewMode === "lista" && (
+            <div className="mb-6">
+              <AgendaPanel />
+            </div>
+          )}
 
-          {isLoading ? (
+          {viewMode === "calendario" ? (
+            <WeekCalendar
+              scope={{ kind: "my" }}
+              status={selectedStatus}
+              assignees={selectedAssignees}
+              membersFor={(ws) => (ws ? pickerMembersByWorkspace[ws] ?? [] : [])}
+              extraInvalidateKeys={calendarExtraKeys}
+              onOpenTask={openTaskItem}
+            />
+          ) : isLoading ? (
             <TaskTableSkeleton />
           ) : (() => {
             // Em status terminais (completed/blocked) ordenamos pelo timestamp

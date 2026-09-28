@@ -13,6 +13,7 @@ import { z } from "zod";
 import { computeOverdue } from "../lib/overdue";
 import { resolveSchedule, type ScheduleMode } from "../lib/scheduleMode";
 import { tryActivateTask } from "../services/taskActivation";
+import { safeApplyOrderRules } from "../services/calendarOrderService";
 import { calculateNextDueDate } from "../lib/recurrence";
 import { duplicateRecurringTask } from "../lib/duplicateRecurring";
 import { getStorage } from "../lib/storage";
@@ -563,6 +564,8 @@ router.post("/", requireAuth, requireWorkspaceRole(["admin", "editor", "executor
     source: req.user?.source ?? null,
   });
 
+  if (task.scheduleMode === "urgente") await safeApplyOrderRules(task.id);
+
   res.status(201).json({
     ...task,
     mapName: null,
@@ -758,6 +761,9 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   if (touchesSchedule) {
     await tryActivateTask(taskId);
   }
+
+  const becameUrgent = updated.scheduleMode === "urgente" && existing.scheduleMode !== "urgente";
+  if (assigneeChanging || becameUrgent) await safeApplyOrderRules(taskId as string, { clearPlannedDate: becameUrgent });
 
   const [assignee, actorUser] = await Promise.all([
     updated.assignedTo
