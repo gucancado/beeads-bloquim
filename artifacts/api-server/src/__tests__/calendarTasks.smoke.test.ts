@@ -84,6 +84,11 @@ describe("GET /api/calendar/tasks", () => {
     const r = await agent.get(`/api/calendar/tasks?${range()}&workspaceId=${wsId}&status=blocked`);
     expect(r.status).toBe(200);
     expect(titles(r.body)).toEqual(["cancelada-agora"]);
+    // blockedSince é instante UTC ISO ("...Z"), não o timestamp cru sem tz
+    // (que o browser leria como hora local).
+    const blockedSince: string = r.body[0].blockedSince;
+    expect(blockedSince).toMatch(/Z$/);
+    expect(Math.abs(Date.parse(blockedSince) - Date.now())).toBeLessThan(5 * 60 * 1000);
   });
 
   it("assignedTo=unassigned exclui as minhas", async () => {

@@ -35,6 +35,15 @@ describe("anchorOfTask", () => {
   it("bloqueada ancora no MAIS RECENTE entre cancelledAt e blockedSince (cancelledAt pode ficar stale — a rota do canvas não escreve cancelled_at)", () => {
     expect(anchorOfTask(task({ status: "blocked", cancelledAt: localIso("2026-09-20"), blockedSince: localIso("2026-09-29") }), TODAY)).toEqual({ kind: "day", date: "2026-09-29" });
   });
+  it("bloqueada com blockedSince ISO-com-Z (formato da API) perto da meia-noite local ancora no dia LOCAL", () => {
+    // 22:30 local de 28/09 → em fusos a oeste de UTC o dia UTC já é 29.
+    const lateNight = new Date(2026, 8, 28, 22, 30).toISOString();
+    expect(lateNight).toMatch(/Z$/);
+    expect(anchorOfTask(task({ status: "blocked", cancelledAt: null, blockedSince: lateNight }), TODAY)).toEqual({ kind: "day", date: "2026-09-28" });
+    // 00:30 local de 29/09 → em fusos a leste de UTC o dia UTC ainda é 28.
+    const earlyMorning = new Date(2026, 8, 29, 0, 30).toISOString();
+    expect(anchorOfTask(task({ status: "blocked", cancelledAt: null, blockedSince: earlyMorning }), TODAY)).toEqual({ kind: "day", date: "2026-09-29" });
+  });
   it("data pretendida vence o prazo; prazo sem pretendida; entre usa o prazo máximo", () => {
     expect(anchorOfTask(task({ plannedDate: "2026-10-02", dueDate: "2026-10-01T12:00:00.000Z" }), TODAY)).toEqual({ kind: "day", date: "2026-10-02" });
     expect(anchorOfTask(task({ dueDate: "2026-10-01T12:00:00.000Z", scheduleMode: "ate" }), TODAY)).toEqual({ kind: "day", date: "2026-10-01" });

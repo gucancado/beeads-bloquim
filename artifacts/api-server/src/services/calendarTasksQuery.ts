@@ -2,6 +2,9 @@ import { db } from "@workspace/db";
 import { tasks, cards, maps, workspaces, workspaceMembers, users } from "@workspace/db/schema";
 import { and, eq, gte, inArray, isNull, lt, ne, not, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { logger } from "../lib/logger";
+
+export const CALENDAR_TASKS_LIMIT = 1000;
 
 export const ACTIVE_STATUSES = ["draft", "pending", "in_progress"] as const;
 export const CALENDAR_STATUSES = ["draft", "pending", "in_progress", "completed", "blocked"] as const;
@@ -79,7 +82,7 @@ function statusWindowFilter(statuses: CalendarStatus[], from: Date, to: Date): S
 
 export async function listCalendarTasks(p: CalendarTasksParams) {
   const parentTasks = alias(tasks, "parent_tasks");
-  return db
+  const rows = await db
     .select({
       id: tasks.id,
       mapId: tasks.mapId,
@@ -95,7 +98,10 @@ export async function listCalendarTasks(p: CalendarTasksParams) {
       overdue: tasks.overdue,
       completedAt: tasks.completedAt,
       cancelledAt: tasks.cancelledAt,
-      blockedSince: blockedSinceExpr,
+      // timestamp SEM tz: mapWith(createdAt) aplica o mapper do drizzle (trata o
+      // valor como UTC → Date → JSON ISO com "Z"). Sem isso a string crua
+      // "2026-09-28 01:00:00" era lida pelo browser como hora LOCAL.
+      blockedSince: sql<Date | null>`${blockedSinceExpr}`.mapWith(tasks.createdAt),
       createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
       plannedDate: tasks.plannedDate,
@@ -131,5 +137,19 @@ export async function listCalendarTasks(p: CalendarTasksParams) {
       not(and(eq(tasks.isApprovalTask, true), eq(tasks.status, "draft"))!),
       statusWindowFilter(p.statuses, p.from, p.to),
     ))
-    .limit(1000);
+    // Ativas primeiro (são as que o calendário não pode perder se bater no limite),
+    // depois pela data de ancoragem e criação.
+    .orderBy(
+      sql`CASE WHEN ${tasks.status} IN ('draft','pending','in_progress') THEN 0 ELSE 1 END`,
+      sql`COALESCE(${tasks.plannedDate}, ${tasks.dueDate}::date) ASC NULLS LAST`,
+      tasks.createdAt,
+    )
+    .limit(CALENDAR_TASKS_LIMIT);
+  if (rows.length >= CALENDAR_TASKS_LIMIT) {
+    logger.warn(
+      { userId: p.userId, workspaceId: p.workspaceId, limit: CALENDAR_TASKS_LIMIT },
+      "calendar tasks query hit row limit; result truncated",
+    );
+  }
+  return rows;
 }
