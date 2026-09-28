@@ -51,11 +51,15 @@ function readInitialFilters() {
   const rawStatus = p.get("status");
   const rawWindow = p.get("window") as TimeWindow | null;
   const rawAssignees = p.get("assignees");
+  const view: ViewMode = p.get("view") === "calendario" ? "calendario" : "lista";
+  // Modo calendário tem "todos" como default (rascunho é o estado mais comum
+  // de tarefa recém-agendada); um ?status= explícito continua vencendo.
+  const defaultStatus = view === "calendario" ? TODOS_STATUS : "in_progress";
   return {
-    status: rawStatus && VALID_STATUSES.has(rawStatus) ? rawStatus : "in_progress",
+    status: rawStatus && VALID_STATUSES.has(rawStatus) ? rawStatus : defaultStatus,
     window: rawWindow && VALID_TIME_WINDOWS.includes(rawWindow) ? rawWindow : ("hoje" as TimeWindow),
     assignees: rawAssignees ? rawAssignees.split(",").filter(Boolean) : ["me"],
-    view: p.get("view") === "calendario" ? ("calendario" as ViewMode) : ("lista" as ViewMode),
+    view,
   };
 }
 
@@ -70,7 +74,10 @@ export default function MyTasksPage() {
   // working). Defaults are stripped so a clean URL like /my-tasks stays clean.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
-    if (selectedStatus === "in_progress") p.delete("status");
+    // O default de status depende do modo: "todos" em calendário, "in_progress"
+    // em lista — mantém a URL limpa quando o filtro está no default de cada modo.
+    const defaultStatus = viewMode === "calendario" ? TODOS_STATUS : "in_progress";
+    if (selectedStatus === defaultStatus) p.delete("status");
     else p.set("status", selectedStatus);
     if (timeWindow === "hoje") p.delete("window");
     else p.set("window", timeWindow);
