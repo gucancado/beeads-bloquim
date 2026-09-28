@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import { db } from "@workspace/db";
 import { userGoogleCalendarAccounts, userCalendarPreferences } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -318,6 +318,39 @@ async function collectEvents(
   return { events: allEvents, noCalendarsSelected: false };
 }
 
+/**
+ * Resposta de sucesso compartilhada por today-events e /events: cacheia (a
+ * não ser que noCalendarsSelected) e devolve o corpo padrão { events, cached:
+ * false, noCalendarsSelected }. `cacheKey` já vem calculada por cada rota
+ * (formatos diferentes), então só o `set` é comum.
+ */
+function respondWithEvents(
+  res: Response,
+  cacheKey: string,
+  result: { events: TodayEvent[]; noCalendarsSelected: boolean },
+) {
+  if (!result.noCalendarsSelected) {
+    eventsCache.set(cacheKey, { events: result.events, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
+  }
+  return res.json({ events: result.events, cached: false, noCalendarsSelected: result.noCalendarsSelected });
+}
+
+/**
+ * Mapeamento de erro compartilhado por today-events e /events: conta não
+ * conectada → 404, token expirado/reauth → 401, qualquer outro → loga (com o
+ * `label` da rota) e 500.
+ */
+function handleCollectError(err: unknown, res: Response, label: string) {
+  if (err instanceof NotConnectedError) {
+    return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
+  }
+  if (err instanceof GoogleAuthError) {
+    return res.status(401).json({ error: "Reauth required", message: "Sessão do Google expirou. Reconecte sua conta." });
+  }
+  log.error({ err }, `${label} failed`);
+  return res.status(500).json({ error: "Internal", message: "Erro ao buscar eventos." });
+}
+
 router.get("/today-events", requireAuth, async (req: AuthRequest, res) => {
   const userId = req.user!.userId;
   const parsed = todayQuerySchema.safeParse(req.query);
@@ -332,18 +365,10 @@ router.get("/today-events", requireAuth, async (req: AuthRequest, res) => {
 
   try {
     const { startISO, endISO } = computeDayWindow(tz);
-    const { events, noCalendarsSelected } = await collectEvents(userId, startISO, endISO, tz);
-    if (!noCalendarsSelected) eventsCache.set(cacheKey, { events, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
-    res.json({ events, cached: false, noCalendarsSelected });
+    const result = await collectEvents(userId, startISO, endISO, tz);
+    return respondWithEvents(res, cacheKey, result);
   } catch (err) {
-    if (err instanceof NotConnectedError) {
-      return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
-    }
-    if (err instanceof GoogleAuthError) {
-      return res.status(401).json({ error: "Reauth required", message: "Sessão do Google expirou. Reconecte sua conta." });
-    }
-    log.error({ err }, "today-events failed");
-    res.status(500).json({ error: "Internal", message: "Erro ao buscar eventos." });
+    return handleCollectError(err, res, "today-events");
   }
 });
 
@@ -371,18 +396,10 @@ router.get("/events", requireAuth, async (req: AuthRequest, res) => {
     return res.json({ events: cached.events, cached: true, noCalendarsSelected: false });
   }
   try {
-    const { events, noCalendarsSelected } = await collectEvents(userId, from.toISOString(), to.toISOString(), tz);
-    if (!noCalendarsSelected) eventsCache.set(cacheKey, { events, expiresAt: Date.now() + EVENTS_CACHE_TTL_MS });
-    return res.json({ events, cached: false, noCalendarsSelected });
+    const result = await collectEvents(userId, from.toISOString(), to.toISOString(), tz);
+    return respondWithEvents(res, cacheKey, result);
   } catch (err) {
-    if (err instanceof NotConnectedError) {
-      return res.status(404).json({ error: "Not connected", message: "Conecte sua conta Google primeiro." });
-    }
-    if (err instanceof GoogleAuthError) {
-      return res.status(401).json({ error: "Reauth required", message: "Sessão do Google expirou. Reconecte sua conta." });
-    }
-    log.error({ err }, "events failed");
-    return res.status(500).json({ error: "Internal", message: "Erro ao buscar eventos." });
+    return handleCollectError(err, res, "events");
   }
 });
 
