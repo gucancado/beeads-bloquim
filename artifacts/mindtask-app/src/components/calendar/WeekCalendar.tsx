@@ -12,7 +12,7 @@ import {
   calendarMeetingsKey, calendarTasksKey, useCalendarMeetings, useCalendarTasks, useReorderCalendar, type CalendarScope,
 } from "@/hooks/useCalendarData";
 import { computeDrop, dayContainerId, POOL_ID } from "@/lib/calendar/dnd";
-import { placeWeek, type CalendarTask } from "@/lib/calendar/placement";
+import { placeWeek, type CalendarTask, type WeekModel } from "@/lib/calendar/placement";
 import { CalendarPointerSensor } from "@/lib/calendar/sensor";
 import { addDaysYmd, parseYmd, startOfWeekMonday, weekBoundsISO, ymdLocal } from "@/lib/calendar/week";
 import { DayColumn, type ColumnCallbacks } from "./DayColumn";
@@ -34,6 +34,19 @@ function weekLabel(weekStart: string): string {
   return `${fmt(s)} – ${fmt(e)}`;
 }
 
+/** Aviso quando soltar no pool não tira a tarefa do dia (prazo ou urgente). */
+function stickyReasonOf(week: WeekModel, taskId: string): string | null {
+  for (const d of week.days) {
+    for (const it of d.items) {
+      if (it.kind === "meeting" || it.id !== taskId) continue;
+      if (it.task.scheduleMode === "urgente") return "tarefa urgente continua em hoje";
+      if (it.task.dueDate) return "tarefa com prazo continua no dia do prazo";
+      return null;
+    }
+  }
+  return null;
+}
+
 export function WeekCalendar({ scope, status, assignees, membersFor, extraInvalidateKeys, onOpenTask }: WeekCalendarProps) {
   const today = ymdLocal(new Date());
   const currentWeek = startOfWeekMonday(today);
@@ -48,8 +61,9 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
   const { data: gcal } = useGoogleCalendarStatus();
   const { from, to } = weekBoundsISO(weekStart);
   // Query desabilitada ainda devolve o cache: sem o gate aqui, os eventos do
-  // Google seguiriam na tela depois de tirar "eu" do filtro.
-  const eventsOn = !!gcal?.connected && assignees.includes("me");
+  // Google seguiriam na tela depois de tirar "eu" do filtro. Filtro vazio =
+  // todo mundo (inclui "eu").
+  const eventsOn = !!gcal?.connected && (assignees.length === 0 || assignees.includes("me"));
   const eventsQ = useRangeEvents(from, to, eventsOn);
 
   const week = useMemo(() => placeWeek({
@@ -92,7 +106,13 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
     if (!e.over || stale) return;
     const result = computeDrop({ week, activeKey: String(e.active.id), overId: String(e.over.id), today });
     if (result.ok) {
-      reorder.mutate({ body: result.body, optimistic: result.optimistic });
+      const moved = result.body.moved;
+      // Soltar no pool só limpa a data pretendida: com prazo (ou urgente) a
+      // tarefa continua ancorada num dia. Avisar em vez de parecer que falhou.
+      const stays = moved?.target === "pool" ? stickyReasonOf(week, moved.id) : null;
+      reorder.mutate({ body: result.body, optimistic: result.optimistic }, {
+        onSuccess: () => { if (stays) toast({ title: stays }); },
+      });
     } else if (result.reason === "past") {
       toast({ title: "dias passados não recebem tarefas" });
     } else if (result.reason === "meeting-cross-day") {

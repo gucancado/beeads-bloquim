@@ -2,7 +2,7 @@ import { useRef, useLayoutEffect, useState, useEffect, cloneElement } from 'reac
 import { getStatusColorHex, formatDueDate, addOneDayYmd } from '@/lib/utils';
 import { DatePickerPopover } from '@/components/ui/date-picker-popover';
 import { TASK_STATUS_ORDER, getStatusLabel as getStatusLabelCentralized, getStatusOrderEntry } from '@/lib/taskStatusConstants';
-import { Maximize2, Calendar, Paperclip, ListChecks, MessageSquare } from 'lucide-react';
+import { Maximize2, Calendar, Paperclip, ListChecks, MessageSquare, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@beeads/ui";
 import { AssigneeAvatarPicker, type AvatarPickerMember } from '@/components/tasks/AssigneeAvatarPicker';
@@ -726,7 +726,9 @@ export default function TaskCardBody({
           <div className="flex flex-col gap-1 min-w-0">
             {(() => {
               const entry = getStatusOrderEntry(data.statusVisual);
-              const StatusIcon = entry?.icon;
+              // 'overdue' não está em TASK_STATUS_ORDER: sem ícone, o texto
+              // "vencida" ficava cortado no círculo de 24px.
+              const StatusIcon = entry?.icon ?? (data.statusVisual === 'overdue' ? AlertTriangle : undefined);
               const ariaLabel = entry?.label ?? statusLabel(data.statusVisual);
               const badge = (
                 <div

@@ -125,7 +125,7 @@ export function TaskListItem({
   const { toast } = useToast();
 
   const {
-    localTask, setLocalTask, isLinkedToCard, isStandaloneTask,
+    localTask, setLocalTask,
     handleScheduleOpenChange, patchTask, patchStatus, saveTitle,
   } = useInlineTaskEditor({ task, invalidateQueryKeys, countsQueryKeys });
   const [editingTitle, setEditingTitle] = useState(false);
