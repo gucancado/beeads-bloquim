@@ -7,6 +7,7 @@ import { requireAuth, AuthRequest } from "../middlewares/auth";
 import {
   CALENDAR_STATUSES, TODOS_STATUSES, listCalendarTasks, type CalendarStatus,
 } from "../services/calendarTasksQuery";
+import { reorderSchema, applyCalendarReorder } from "../services/calendarReorderService";
 
 const router: IRouter = Router();
 const MAX_RANGE_MS = 31 * 86_400_000;
@@ -55,6 +56,15 @@ router.get("/tasks", requireAuth, async (req: AuthRequest, res) => {
 
   const rows = await listCalendarTasks({ userId, workspaceId, statuses, assignees, from: range.from, to: range.to });
   return res.json(rows);
+});
+
+// PUT /api/calendar/reorder — grava a ordem final de uma coluna (e a data
+// pretendida do item movido, ou limpa quando solto no pool).
+router.put("/reorder", requireAuth, async (req: AuthRequest, res) => {
+  const parsed = reorderSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Validation error", message: parsed.error.message });
+  const result = await applyCalendarReorder(req.user!.userId, parsed.data);
+  return res.status(result.status).json(result.body);
 });
 
 export default router;
