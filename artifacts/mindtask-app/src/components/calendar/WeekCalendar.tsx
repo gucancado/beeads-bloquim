@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { DndContext, DragOverlay, closestCorners, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent } from "@dnd-kit/core";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@beeads/ui";
 import { TriageDialog } from "@/components/meetings/TriageDialog";
@@ -14,6 +14,7 @@ import {
 import { computeDrop, dayContainerId, POOL_ID } from "@/lib/calendar/dnd";
 import { placeWeek, type CalendarTask, type WeekModel } from "@/lib/calendar/placement";
 import { CalendarPointerSensor } from "@/lib/calendar/sensor";
+import { calendarCollision } from "@/lib/calendar/collision";
 import { addDaysYmd, parseYmd, startOfWeekMonday, weekBoundsISO, ymdLocal } from "@/lib/calendar/week";
 import { DayColumn, type ColumnCallbacks } from "./DayColumn";
 import { PoolSection } from "./PoolSection";
@@ -147,7 +148,7 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={endDrag}>
+        <DndContext sensors={sensors} collisionDetection={calendarCollision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={endDrag}>
           {/* Setas nas laterais do calendário (pedido do produto). Ficam fora da
               área com scroll horizontal, então nunca cobrem cards. */}
           <div className="flex items-stretch gap-1">

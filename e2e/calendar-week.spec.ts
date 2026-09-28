@@ -41,6 +41,16 @@ async function dragTo(page: Page, from: Locator, to: Locator) {
   await page.mouse.down();
   await page.mouse.move(a.x + 20, a.y + 20, { steps: 5 });
   await page.mouse.move(b.x + b.width / 2, dropY, { steps: 15 });
+  // O dia de destino é escolhido pelo PONTEIRO: se o autoscroll do dnd-kit rolou
+  // a página durante o arrasto (início perto da borda de baixo), re-mira na
+  // coluna como uma pessoa faria antes de soltar. Só para alvo-coluna: num alvo
+  // card, o sortable já deslocou os itens e re-mirar mudaria a posição pedida.
+  const isColumn = (await to.getAttribute("data-calendar-day")) != null;
+  const b2 = isColumn ? await to.boundingBox() : null;
+  if (b2 && Math.abs(b2.y - b.y) > 1) {
+    const y2 = Math.max(b2.y + 40, Math.min(b2.y + b2.height - 12, vh - 10));
+    await page.mouse.move(b2.x + b2.width / 2, y2, { steps: 3 });
+  }
   await page.mouse.up();
 }
 
