@@ -31,22 +31,34 @@ test("card do canvas: título, status e prazo inline persistem", async ({ page, 
     const node = page.locator(".react-flow__node-mindmap").first();
     await expect(node).toContainText(`card ${stamp}`);
 
+    const cardPath = `/api/workspaces/${ws.id}/maps/${map.id}/cards/${card.id}`;
+    const resp = (method: string, suffix: string) =>
+      page.waitForResponse(r => r.request().method() === method && new URL(r.url()).pathname === cardPath + suffix);
+
     await node.getByText(`card ${stamp}`).click();
     const input = node.locator("input").first();
     await input.fill(`renomeado ${stamp}`);
+    const titleSaved = resp("PUT", "");
     await input.press("Enter");
+    expect((await titleSaved).ok()).toBeTruthy();
 
     await node.getByLabel(/status|rascunho|pronta/i).first().click();
+    const statusSaved = resp("PATCH", "/task/status");
     await page.getByRole("button", { name: /pronta para fazer/ }).click();
+    expect((await statusSaved).ok()).toBeTruthy();
 
     await node.getByTitle("Clique para definir prazo").click();
-    await expect(node.getByTitle("Modalidade do fazer")).toBeVisible();
+    const modality = node.getByTitle("Modalidade do fazer");
+    await expect(modality).toBeVisible();
+    const scheduleSaved = resp("PATCH", "/task/details");
+    await modality.selectOption("urgente");
+    expect((await scheduleSaved).ok()).toBeTruthy();
 
-    await page.waitForTimeout(800);
     await page.reload();
     const again = page.locator(".react-flow__node-mindmap").first();
     await expect(again).toContainText(`renomeado ${stamp}`);
     await expect(again.getByLabel("pronta para fazer")).toBeVisible();
+    await expect(again.getByTitle("Clique para alterar modalidade de prazo")).toBeVisible();
   } finally {
     await ctx.delete(`/api/workspaces/${ws.id}`);
   }

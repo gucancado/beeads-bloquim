@@ -256,9 +256,22 @@ export default function TaskCardBody({
   }, [serverScheduleMode, pendingMode]);
   const currentScheduleMode: "ate" | "entre" | "em" | "sem_prazo" | "urgente" = pendingMode ?? serverScheduleMode;
   const scheduleEditing = editingNoPrazo || pendingMode !== null;
+  // Emite só em transição (sem `false` inicial nem reemissão por callback
+  // inline); ao desmontar no meio da edição, fecha com `false`.
+  const onScheduleEditingChangeRef = useRef(onScheduleEditingChange);
+  onScheduleEditingChangeRef.current = onScheduleEditingChange;
+  const lastScheduleEditingRef = useRef(false);
   useEffect(() => {
-    onScheduleEditingChange?.(scheduleEditing);
-  }, [scheduleEditing, onScheduleEditingChange]);
+    if (lastScheduleEditingRef.current === scheduleEditing) return;
+    lastScheduleEditingRef.current = scheduleEditing;
+    onScheduleEditingChangeRef.current?.(scheduleEditing);
+  }, [scheduleEditing]);
+  useEffect(() => () => {
+    if (lastScheduleEditingRef.current) {
+      lastScheduleEditingRef.current = false;
+      onScheduleEditingChangeRef.current?.(false);
+    }
+  }, []);
 
   const handleDueDateSelect = (val: string) => {
     if (currentScheduleMode === "entre" && val && data.taskStartAt) {
@@ -379,7 +392,8 @@ export default function TaskCardBody({
               {data.title}
             </h3>
             <button
-              className="nodrag flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 cursor-pointer bg-muted text-muted-foreground"
+              data-no-dnd
+              className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 cursor-pointer bg-muted text-muted-foreground"
               title="Expandir card"
               onClick={(e) => { e.stopPropagation(); onOpen(); }}
             >
@@ -477,7 +491,8 @@ export default function TaskCardBody({
             hoverTitle="Clique para editar o título"
           />
           <button
-            className="nodrag flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 cursor-pointer"
+            data-no-dnd
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-all hover:scale-110 cursor-pointer"
             style={{
               backgroundColor: `${color.replace(')', ' / 0.12)')}`,
               color,
@@ -513,7 +528,8 @@ export default function TaskCardBody({
                 />
                 <div className="flex justify-center mt-0.5">
                   <button
-                    className="nodrag text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    data-no-dnd
+                    className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                     onClick={(e) => { e.stopPropagation(); setMaxLines(9999); }}
                   >
                     ver mais
@@ -524,7 +540,8 @@ export default function TaskCardBody({
             {!isTruncated && maxLines > 3 && (
               <div className="flex justify-center mt-0.5">
                 <button
-                  className="nodrag text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  data-no-dnd
+                  className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                   onClick={(e) => { e.stopPropagation(); setMaxLines(3); }}
                 >
                   ver menos
@@ -539,7 +556,8 @@ export default function TaskCardBody({
           <div className="mt-3 flex items-center justify-between gap-2">
             {hasTask ? (
               <div
-                className="nodrag flex-shrink-0"
+                data-no-dnd
+                className="flex-shrink-0"
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
               >
@@ -585,7 +603,8 @@ export default function TaskCardBody({
             {hasTask && !hasDueDate && !editingNoPrazo && currentScheduleMode !== "urgente" && (
               <button
                 type="button"
-                className="nodrag ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground rounded px-1 hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
+                data-no-dnd
+                className="ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground rounded px-1 hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
                 title="Clique para definir prazo"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -600,7 +619,8 @@ export default function TaskCardBody({
             {hasTask && !hasDueDate && !editingNoPrazo && currentScheduleMode === "urgente" && (
               <button
                 type="button"
-                className="nodrag ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer"
+                data-no-dnd
+                className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60 transition-colors cursor-pointer"
                 title="Clique para alterar modalidade de prazo"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -615,7 +635,8 @@ export default function TaskCardBody({
               <div
                 ref={scheduleWrapperRef}
                 onBlur={handleScheduleWrapperBlur}
-                className={`nodrag ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : "flex items-center gap-1"}`}
+                data-no-dnd
+                className={`ml-auto ${currentScheduleMode === "entre" ? "flex flex-col items-end gap-1" : "flex items-center gap-1"}`}
               >
                 {/* Top row: mode select + startAt (only shown for "entre") */}
                 <div className="flex items-center gap-1">
@@ -709,7 +730,8 @@ export default function TaskCardBody({
               const ariaLabel = entry?.label ?? statusLabel(data.statusVisual);
               const badge = (
                 <div
-                  className={`nodrag flex items-center justify-center w-6 h-6 rounded-full ${hasTask ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+                  data-no-dnd
+                  className={`flex items-center justify-center w-6 h-6 rounded-full ${hasTask ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
                   style={{ backgroundColor: color, color: '#fff' }}
                   title={hasTask ? `status: ${ariaLabel}. Clique para alterar.` : `status: ${ariaLabel}`}
                   aria-label={ariaLabel}
