@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { DndContext, DragOverlay, closestCorners, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCorners, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent } from "@dnd-kit/core";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@beeads/ui";
 import { TriageDialog } from "@/components/meetings/TriageDialog";
@@ -11,7 +11,7 @@ import { useGoogleCalendarStatus, useRangeEvents } from "@/hooks/useGoogleCalend
 import {
   calendarMeetingsKey, calendarTasksKey, useCalendarMeetings, useCalendarTasks, useReorderCalendar, type CalendarScope,
 } from "@/hooks/useCalendarData";
-import { computeDrop } from "@/lib/calendar/dnd";
+import { computeDrop, dayContainerId, POOL_ID } from "@/lib/calendar/dnd";
 import { placeWeek, type CalendarTask } from "@/lib/calendar/placement";
 import { CalendarPointerSensor } from "@/lib/calendar/sensor";
 import { addDaysYmd, parseYmd, startOfWeekMonday, weekBoundsISO, ymdLocal } from "@/lib/calendar/week";
@@ -39,6 +39,7 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
   const currentWeek = startOfWeekMonday(today);
   const [weekStart, setWeekStart] = useState(currentWeek);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [overContainer, setOverContainer] = useState<string | null>(null);
   const [triageTarget, setTriageTarget] = useState<Meeting | null>(null);
   const { toast } = useToast();
 
@@ -46,15 +47,18 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
   const meetingsQ = useCalendarMeetings(scope, weekStart);
   const { data: gcal } = useGoogleCalendarStatus();
   const { from, to } = weekBoundsISO(weekStart);
-  const eventsQ = useRangeEvents(from, to, !!gcal?.connected && assignees.includes("me"));
+  // Query desabilitada ainda devolve o cache: sem o gate aqui, os eventos do
+  // Google seguiriam na tela depois de tirar "eu" do filtro.
+  const eventsOn = !!gcal?.connected && assignees.includes("me");
+  const eventsQ = useRangeEvents(from, to, eventsOn);
 
   const week = useMemo(() => placeWeek({
     tasks: tasksQ.data ?? [],
     meetings: meetingsQ.data ?? [],
-    events: eventsQ.data?.events ?? [],
+    events: eventsOn ? eventsQ.data?.events ?? [] : [],
     weekStart,
     today,
-  }), [tasksQ.data, meetingsQ.data, eventsQ.data, weekStart, today]);
+  }), [tasksQ.data, meetingsQ.data, eventsQ.data, eventsOn, weekStart, today]);
 
   const tasksKey = calendarTasksKey(scope, weekStart, status, assignees);
   const meetingsKey = calendarMeetingsKey(scope, weekStart);
@@ -69,10 +73,23 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
   const invalidateKeys = useMemo(() => [[tasksKey[0]], ...extraInvalidateKeys], [tasksKey[0], extraKeySig]);
   const cb: ColumnCallbacks = { membersFor, invalidateKeys, onOpenTask, onTriage: setTriageTarget };
 
+  // Semana em troca: o modelo ainda é o da semana anterior e o reorder mandaria
+  // a lista de coluna errada. Drop é ignorado até os dados novos chegarem.
+  const stale = tasksQ.isPlaceholderData || meetingsQ.isPlaceholderData;
+
   const onDragStart = (e: DragStartEvent) => setActiveKey(String(e.active.id));
+  const onDragOver = (e: DragOverEvent) => {
+    const over = e.over;
+    if (!over) { setOverContainer(null); return; }
+    const id = String(over.id);
+    const sortable = (over.data.current as { sortable?: { containerId?: string | number } } | undefined)?.sortable;
+    if (id === POOL_ID || id.startsWith("day:")) setOverContainer(id);
+    else setOverContainer(sortable?.containerId != null ? String(sortable.containerId) : null);
+  };
+  const endDrag = () => { setActiveKey(null); setOverContainer(null); };
   const onDragEnd = (e: DragEndEvent) => {
-    setActiveKey(null);
-    if (!e.over) return;
+    endDrag();
+    if (!e.over || stale) return;
     const result = computeDrop({ week, activeKey: String(e.active.id), overId: String(e.over.id), today });
     if (result.ok) {
       reorder.mutate({ body: result.body, optimistic: result.optimistic });
@@ -96,7 +113,7 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
   // Com keepPreviousData, troca de semana não zera `data`: spinner só no
   // primeiro carregamento, sem dado nenhum.
   const loading = !tasksQ.data && tasksQ.isLoading;
-  const refreshing = tasksQ.isPlaceholderData;
+  const refreshing = stale;
 
   return (
     <div data-testid="week-calendar">
@@ -110,7 +127,7 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveKey(null)}>
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={endDrag}>
           {/* Setas nas laterais do calendário (pedido do produto). Ficam fora da
               área com scroll horizontal, então nunca cobrem cards. */}
           <div className="flex items-stretch gap-2">
@@ -127,7 +144,9 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
               className={`flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2 transition-opacity ${refreshing ? "opacity-60" : ""}`}
               aria-busy={refreshing || undefined}
             >
-              {week.visibleDays.map(day => <DayColumn key={day.date} day={day} cb={cb} />)}
+              {week.visibleDays.map(day => (
+                <DayColumn key={day.date} day={day} cb={cb} isOver={overContainer === dayContainerId(day.date)} />
+              ))}
             </div>
             <Button
               variant="outline"
@@ -139,7 +158,7 @@ export function WeekCalendar({ scope, status, assignees, membersFor, extraInvali
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <PoolSection tasks={week.pool} cb={cb} />
+          <PoolSection tasks={week.pool} cb={cb} isOver={overContainer === POOL_ID} />
           <DragOverlay>
             {activeTitle ? (
               <div className="max-w-[260px] rounded-xl border bg-card px-3 py-2 text-sm font-semibold shadow-lg">{activeTitle}</div>

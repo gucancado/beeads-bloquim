@@ -18,10 +18,11 @@ export interface ColumnCallbacks {
   onTriage: (m: Meeting) => void;
 }
 
-export function DayColumn({ day, cb }: { day: DayColumnModel; cb: ColumnCallbacks }) {
+/** `isOver` vem do WeekCalendar: cobre hover na coluna e nos cards dela. */
+export function DayColumn({ day, cb, isOver }: { day: DayColumnModel; cb: ColumnCallbacks; isOver: boolean }) {
   // Coluna passada segue droppable: o drop registra nela e o computeDrop
   // devolve `past` (toast). Só o anel de hover fica desligado.
-  const { setNodeRef, isOver } = useDroppable({ id: dayContainerId(day.date) });
+  const { setNodeRef } = useDroppable({ id: dayContainerId(day.date) });
   const d = parseYmd(day.date);
   const weekday = WEEKDAY_SHORT[(d.getDay() + 6) % 7];
   return (
@@ -46,7 +47,7 @@ export function DayColumn({ day, cb }: { day: DayColumnModel; cb: ColumnCallback
       )}
 
       <div ref={setNodeRef} className="flex min-h-[80px] flex-1 flex-col gap-3">
-        <SortableContext items={day.items.map(i => i.key)} strategy={verticalListSortingStrategy}>
+        <SortableContext id={dayContainerId(day.date)} items={day.items.map(i => i.key)} strategy={verticalListSortingStrategy}>
           {day.items.map(item => (
             <SortableItem key={item.key} id={item.key} dragDisabled={day.isPast}>
               {item.kind === "meeting" ? (

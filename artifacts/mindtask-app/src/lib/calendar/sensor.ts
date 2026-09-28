@@ -17,7 +17,10 @@ export class CalendarPointerSensor extends PointerSensor {
         if (!nativeEvent.isPrimary || nativeEvent.button !== 0) return false;
         const target = nativeEvent.target as Element | null;
         if (!target || !(currentTarget as Element).contains(target)) return false;
-        return !target.closest(INTERACTIVE);
+        // Só conta controle DENTRO do card: o próprio card pode estar dentro de
+        // algo que casa o seletor (ex.: um [role='dialog']) e aí nada arrastaria.
+        const hit = target.closest(INTERACTIVE);
+        return !hit || !(currentTarget as Element).contains(hit);
       },
     },
   ];

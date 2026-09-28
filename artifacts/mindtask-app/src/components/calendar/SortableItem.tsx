@@ -8,7 +8,10 @@ import type { ReactNode } from "react";
  * `past`) em vez de escorregar para a coluna habilitada mais próxima.
  */
 export function SortableItem({ id, dragDisabled, children }: { id: string; dragDisabled?: boolean; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // Só há PointerSensor: role/tabIndex/aria-roledescription do dnd-kit
+  // anunciariam um "botão" arrastável por teclado que não existe. Mantém só
+  // os atributos de estado (aria-disabled/aria-pressed/aria-describedby).
+  const { attributes: { role: _role, tabIndex: _tabIndex, "aria-roledescription": _ard, ...attributes }, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     disabled: { draggable: !!dragDisabled, droppable: false },
   });
