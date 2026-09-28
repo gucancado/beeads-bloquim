@@ -10,6 +10,7 @@ import {
 
 const router: IRouter = Router();
 const MAX_RANGE_MS = 31 * 86_400_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const tasksQuerySchema = z.object({
   from: z.string().min(1),
@@ -41,6 +42,9 @@ router.get("/tasks", requireAuth, async (req: AuthRequest, res) => {
   }
   const statuses = rawStatuses.length > 0 ? (rawStatuses as CalendarStatus[]) : TODOS_STATUSES;
   const assignees = parsed.data.assignedTo !== undefined ? parsed.data.assignedTo.split(",").filter(Boolean) : ["me"];
+  if (assignees.some(a => a !== "me" && a !== "unassigned" && !UUID_RE.test(a))) {
+    return res.status(400).json({ error: "Validation error", message: "assignedTo aceita: me, unassigned ou uuid" });
+  }
 
   const workspaceId = parsed.data.workspaceId ?? null;
   if (workspaceId) {

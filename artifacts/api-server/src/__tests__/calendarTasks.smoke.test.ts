@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { tasks } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { registerAndLogin, deleteUser, deleteWorkspaces, type TestUser } from "./helpers";
+import { recordTaskActivity } from "../services/taskActivitiesService";
 
 const DAY = 86_400_000;
 const noon = (offsetDays: number) => {
@@ -98,12 +99,29 @@ describe("GET /api/calendar/tasks", () => {
     expect(titles(r.body)).toContain("ativa-futura");
   });
 
-  it("403 em workspace alheio; 400 em datas inválidas, intervalo > 31 dias e status inválido", async () => {
+  it("403 em workspace alheio; 400 em datas inválidas, intervalo > 31 dias, status inválido e assignedTo inválido", async () => {
     expect((await agent.get(`/api/calendar/tasks?${range()}&workspaceId=${alienWsId}`)).status).toBe(403);
     expect((await agent.get(`/api/calendar/tasks?from=xx&to=yy`)).status).toBe(400);
     const from = new Date().toISOString();
     const to = new Date(Date.now() + 40 * DAY).toISOString();
     expect((await agent.get(`/api/calendar/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).status).toBe(400);
     expect((await agent.get(`/api/calendar/tasks?${range()}&status=overdue`)).status).toBe(400);
+    expect((await agent.get(`/api/calendar/tasks?${range()}&assignedTo=not-a-uuid`)).status).toBe(400);
+  });
+
+  it("status=blocked usa a atividade mais recente quando cancelledAt está desatualizado (reblock via canvas)", async () => {
+    // cards.ts (rota do canvas) nunca escreve cancelledAt — um desbloqueio +
+    // rebloqueio por ali deixa a coluna travada numa data antiga enquanto o
+    // activity log já registrou o rebloqueio recente. COALESCE(cancelledAt,
+    // blockedSinceExpr) pegaria a data antiga por engano; GREATEST não.
+    const stale = await create("reblocada-via-canvas");
+    await setStatus(stale, "pending");
+    await setStatus(stale, "blocked");
+    await db.update(tasks).set({ cancelledAt: new Date(Date.now() - 30 * DAY) }).where(eq(tasks.id, stale));
+    await recordTaskActivity({ taskId: stale, actorId: user.id, type: "status_changed", metadata: { newStatus: "blocked" } });
+
+    const r = await agent.get(`/api/calendar/tasks?${range()}&workspaceId=${wsId}&status=blocked`);
+    expect(r.status).toBe(200);
+    expect(titles(r.body)).toContain("reblocada-via-canvas");
   });
 });

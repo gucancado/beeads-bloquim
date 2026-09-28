@@ -62,7 +62,11 @@ function statusWindowFilter(statuses: CalendarStatus[], from: Date, to: Date): S
   }
   if (statuses.includes("blocked")) {
     // timestamp SEM tz: serializar com toISOString antes de interpolar (ver myTasks.ts, cursor).
-    const cancelledExpr = sql`COALESCE(${tasks.cancelledAt}, ${blockedSinceExpr})`;
+    // GREATEST, não COALESCE: a rota do canvas (cards.ts PATCH /:cardId/task/status)
+    // nunca escreve cancelledAt, só o activity log — um desbloqueio+rebloqueio por
+    // ali deixa cancelledAt travado numa data antiga enquanto o activity log já tem
+    // o rebloqueio recente. GREATEST ignora NULLs e pega o mais recente dos dois.
+    const cancelledExpr = sql`GREATEST(${tasks.cancelledAt}, ${blockedSinceExpr})`;
     parts.push(and(
       eq(tasks.status, "blocked"),
       sql`${cancelledExpr} >= ${from.toISOString()}::timestamp`,
