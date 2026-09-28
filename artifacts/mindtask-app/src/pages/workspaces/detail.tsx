@@ -25,7 +25,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beead
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
 import { groupTasksByDeadline, selectWindow, ateSextaLabel, type TimeWindow } from "@/lib/groupTasksByDeadline";
 import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
-import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
+import { TASK_STATUS_ORDER, TODOS_STATUS, TODOS_FILTER_OPTION, statusFilterToApi } from "@/lib/taskStatusConstants";
 
 function getInitials(name: string) {
   return name
@@ -229,7 +229,7 @@ export default function WorkspaceDetailPage() {
     queryKey: tasksQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set("status", selectedStatus);
+      p.set("status", statusFilterToApi(selectedStatus));
       if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
       const qs = p.toString() ? `?${p.toString()}` : "";
       return customFetch(`/api/workspaces/${workspaceId}/tasks${qs}`);
@@ -725,6 +725,19 @@ export default function WorkspaceDetailPage() {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                         <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => selectStatus(TODOS_STATUS)}
+                            title={TODOS_FILTER_OPTION.label}
+                            aria-label={TODOS_FILTER_OPTION.label}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
+                              selectedStatus === TODOS_STATUS
+                                ? TODOS_FILTER_OPTION.activeClass
+                                : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
+                            }`}
+                          >
+                            <TODOS_FILTER_OPTION.icon className="w-3.5 h-3.5" />
+                            <span>todos</span>
+                          </button>
                           {STATUS_OPTIONS.map(opt => {
                             const isActive = selectedStatus === opt.value;
                             const cnt = statusCounts?.[opt.value] ?? 0;

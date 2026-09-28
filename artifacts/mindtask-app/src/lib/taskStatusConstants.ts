@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Pencil, Clock, Play, Check, X } from 'lucide-react';
+import { Pencil, Clock, Play, Check, X, Layers } from 'lucide-react';
 
 export interface TaskStatusEntry {
   value: 'draft' | 'pending' | 'in_progress' | 'completed' | 'blocked';
@@ -64,6 +64,21 @@ export const TASK_STATUS_ORDER: readonly TaskStatusEntry[] = [
     activeClass: 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-800/60',
   },
 ];
+
+/** Filtro "todos": todos os status menos cancelada (blocked). */
+export const TODOS_STATUS = "todos";
+export const TODOS_STATUS_VALUES = ["draft", "pending", "in_progress", "completed"] as const;
+
+export function statusFilterToApi(selected: string): string {
+  return selected === TODOS_STATUS ? TODOS_STATUS_VALUES.join(",") : selected;
+}
+
+export const TODOS_FILTER_OPTION = {
+  value: TODOS_STATUS,
+  label: "todos (menos canceladas)",
+  icon: Layers,
+  activeClass: "bg-foreground/5 text-foreground border-foreground/40 hover:bg-foreground/10",
+} as const;
 
 export type TaskStatusValue = TaskStatusEntry['value'];
 

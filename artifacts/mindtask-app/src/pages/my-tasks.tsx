@@ -18,7 +18,7 @@ import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills"
 import { AgendaPanel } from "@/components/tasks/AgendaPanel";
 import { NewMeetingModal } from "@/components/meetings/NewMeetingModal";
 import { useRoute, useLocation } from "wouter";
-import { TASK_STATUS_ORDER } from "@/lib/taskStatusConstants";
+import { TASK_STATUS_ORDER, TODOS_STATUS, TODOS_FILTER_OPTION, statusFilterToApi } from "@/lib/taskStatusConstants";
 
 interface OpenCard {
   workspaceId: string;
@@ -37,7 +37,7 @@ interface StandaloneTask {
 const STATUS_OPTIONS = TASK_STATUS_ORDER;
 
 const VALID_TIME_WINDOWS: TimeWindow[] = ["hoje", "ate_sexta", "todas"];
-const VALID_STATUSES = new Set(STATUS_OPTIONS.map(o => o.value));
+const VALID_STATUSES = new Set<string>([...STATUS_OPTIONS.map(o => o.value), TODOS_STATUS]);
 
 function readInitialFilters() {
   if (typeof window === "undefined") {
@@ -121,7 +121,7 @@ export default function MyTasksPage() {
     queryKey: tasksQueryKey,
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set("status", selectedStatus);
+      p.set("status", statusFilterToApi(selectedStatus));
       p.set("assignedTo", selectedAssignees.join(","));
       return customFetch(`/api/my-tasks?${p.toString()}`);
     },
@@ -260,6 +260,19 @@ export default function MyTasksPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => selectStatus(TODOS_STATUS)}
+                    title={TODOS_FILTER_OPTION.label}
+                    aria-label={TODOS_FILTER_OPTION.label}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
+                      selectedStatus === TODOS_STATUS
+                        ? TODOS_FILTER_OPTION.activeClass
+                        : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
+                    }`}
+                  >
+                    <TODOS_FILTER_OPTION.icon className="w-3.5 h-3.5" />
+                    <span>todos</span>
+                  </button>
                   {STATUS_OPTIONS.map(opt => {
                     const isActive = selectedStatus === opt.value;
                     const cnt = statusCounts?.[opt.value] ?? 0;
