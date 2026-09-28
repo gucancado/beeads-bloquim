@@ -162,7 +162,6 @@ export default function TaskCardBody({
   const { toast } = useToast();
   const color = getStatusColorHex(data.statusVisual);
   const nodeColors = getNodeColors(data.statusVisual);
-  const isMuted = data.statusVisual === 'no_task';
   const hasTask = !!data.taskId;
 
   const descRef = useRef<HTMLParagraphElement>(null);
@@ -470,14 +469,7 @@ export default function TaskCardBody({
 
       {/* Card content */}
       <div className="px-5 py-4 relative overflow-hidden rounded-xl">
-        {data.statusVisual !== 'pending' && (
-          <div
-            className="absolute top-0 left-0 w-full h-1.5 rounded-t-xl"
-            style={{ backgroundColor: color, opacity: isMuted ? 0.3 : 1 }}
-          />
-        )}
-
-        <div className="flex items-start justify-between gap-3 mt-2">
+        <div className="flex items-start justify-between gap-3">
           <EditableTitle
             value={data.title}
             onSave={handleTitleSave}

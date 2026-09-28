@@ -15,7 +15,6 @@ export interface ApprovalColors {
   borderSelected: string;
   ringLight: string;
   textColor: string;
-  stripBg: string;
   badgeBg: string;
   badgeBorder: string;
   badgeText: string;
@@ -34,7 +33,6 @@ export function getApprovalStatusColors(status: string | null): ApprovalColors {
         borderSelected: 'border-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.35),0_8px_32px_-4px_rgba(59,130,246,0.55)]',
         ringLight: 'ring-blue-300 dark:ring-blue-700',
         textColor: 'text-blue-800 dark:text-blue-200',
-        stripBg: 'bg-blue-400 dark:bg-blue-600',
         badgeBg: 'bg-blue-100 dark:bg-blue-900/50',
         badgeBorder: 'border-blue-200 dark:border-blue-800',
         badgeText: 'text-blue-600 dark:text-blue-400',
@@ -48,7 +46,6 @@ export function getApprovalStatusColors(status: string | null): ApprovalColors {
         borderSelected: 'border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.35),0_8px_32px_-4px_rgba(245,158,11,0.55)]',
         ringLight: 'ring-amber-300 dark:ring-amber-700',
         textColor: 'text-amber-800 dark:text-amber-200',
-        stripBg: 'bg-amber-400 dark:bg-amber-600',
         badgeBg: 'bg-amber-100 dark:bg-amber-900/50',
         badgeBorder: 'border-amber-200 dark:border-amber-800',
         badgeText: 'text-amber-600 dark:text-amber-400',
@@ -62,7 +59,6 @@ export function getApprovalStatusColors(status: string | null): ApprovalColors {
         borderSelected: 'border-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35),0_8px_32px_-4px_rgba(16,185,129,0.55)]',
         ringLight: 'ring-emerald-300 dark:ring-emerald-700',
         textColor: 'text-emerald-800 dark:text-emerald-200',
-        stripBg: 'bg-emerald-400 dark:bg-emerald-600',
         badgeBg: 'bg-emerald-100 dark:bg-emerald-900/50',
         badgeBorder: 'border-emerald-200 dark:border-emerald-800',
         badgeText: 'text-emerald-600 dark:text-emerald-400',
@@ -76,7 +72,6 @@ export function getApprovalStatusColors(status: string | null): ApprovalColors {
         borderSelected: 'border-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,0.35),0_8px_32px_-4px_rgba(100,116,139,0.55)]',
         ringLight: 'ring-slate-300 dark:ring-slate-700',
         textColor: 'text-slate-700 dark:text-slate-300',
-        stripBg: 'bg-slate-400 dark:bg-slate-600',
         badgeBg: 'bg-slate-100 dark:bg-slate-900/50',
         badgeBorder: 'border-slate-200 dark:border-slate-800',
         badgeText: 'text-slate-500 dark:text-slate-400',
@@ -91,7 +86,6 @@ export function getApprovalStatusColors(status: string | null): ApprovalColors {
         borderSelected: 'border-violet-500 shadow-[0_0_0_3px_rgba(139,92,246,0.35),0_8px_32px_-4px_rgba(139,92,246,0.55)]',
         ringLight: 'ring-violet-300 dark:ring-violet-700',
         textColor: 'text-violet-800 dark:text-violet-200',
-        stripBg: 'bg-violet-400 dark:bg-violet-600',
         badgeBg: 'bg-violet-100 dark:bg-violet-900/50',
         badgeBorder: 'border-violet-200 dark:border-violet-800',
         badgeText: 'text-violet-600 dark:text-violet-400',
@@ -195,11 +189,7 @@ export default function ApprovalCardBody({
       {children}
 
       <div className="px-3 py-2.5 relative overflow-hidden rounded-xl">
-        {data.approvalStatus !== 'pending' && (
-          <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${colors.stripBg}`} />
-        )}
-
-        <div className="mt-1 min-w-0">
+        <div className="min-w-0">
           <p className={`text-[11px] font-semibold truncate ${colors.textColor}`} title={data.taskTitle}>
             {data.taskTitle}
           </p>
