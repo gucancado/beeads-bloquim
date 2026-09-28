@@ -52,6 +52,8 @@ export interface TodayEvent {
   end: string;
 }
 
+const RANGE_EVENTS_KEY = "/api/integrations/google-calendar/events";
+
 export function useGoogleCalendarStatus() {
   return useQuery<GoogleCalendarStatus>({
     queryKey: ["/api/integrations/google-calendar/status"],
@@ -76,6 +78,7 @@ export function useGoogleCalendarDisconnect() {
       qc.invalidateQueries({ queryKey: ["/api/integrations/google-calendar/status"] });
       qc.invalidateQueries({ queryKey: ["/api/integrations/google-calendar/calendars"] });
       qc.invalidateQueries({ queryKey: ["/api/integrations/google-calendar/today-events"] });
+      qc.invalidateQueries({ queryKey: [RANGE_EVENTS_KEY] });
     },
   });
 }
@@ -99,6 +102,7 @@ export function useToggleCalendar() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/integrations/google-calendar/calendars"] });
       qc.invalidateQueries({ queryKey: ["/api/integrations/google-calendar/today-events"] });
+      qc.invalidateQueries({ queryKey: [RANGE_EVENTS_KEY] });
     },
   });
 }
@@ -110,5 +114,26 @@ export function useTodayEvents(enabled: boolean) {
     queryFn: () => cf(`/api/integrations/google-calendar/today-events?tz=${encodeURIComponent(tz)}`).then(jsonOrThrow),
     enabled,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Eventos de um intervalo (calendário semanal). Sem conta/flag/reauth → lista vazia. */
+export function useRangeEvents(from: string, to: string, enabled: boolean) {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  return useQuery<{ events: TodayEvent[]; noCalendarsSelected?: boolean }>({
+    queryKey: [RANGE_EVENTS_KEY, from, to, tz],
+    queryFn: async () => {
+      const p = new URLSearchParams({ from, to, tz });
+      try {
+        return await cf(`${RANGE_EVENTS_KEY}?${p.toString()}`).then(jsonOrThrow);
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 401 || status === 404 || status === 503) return { events: [] };
+        throw err;
+      }
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 }
