@@ -497,7 +497,8 @@ router.patch("/:taskId", requireAuth, async (req: AuthRequest, res) => {
   if (touchesSchedule) {
     await tryActivateTask(taskId);
   }
-  if (updated.scheduleMode === "urgente" && existing.scheduleMode !== "urgente") await safeApplyOrderRules(taskId as string);
+  const becameUrgent = updated.scheduleMode === "urgente" && existing.scheduleMode !== "urgente";
+  if (becameUrgent) await safeApplyOrderRules(taskId as string, { clearPlannedDate: true });
   return res.json(updated);
 });
 

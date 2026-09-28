@@ -607,7 +607,7 @@ router.patch("/:cardId/task/details", requireAuth, requireWorkspaceRole(["admin"
 
   const assigneeChanged = parsed.data.assignedTo !== undefined && !!currentTask && currentTask.assignedTo !== parsed.data.assignedTo;
   const becameUrgent = updatedTask.scheduleMode === "urgente" && currentTask?.scheduleMode !== "urgente";
-  if (assigneeChanged || becameUrgent) await safeApplyOrderRules(card.taskId!);
+  if (assigneeChanged || becameUrgent) await safeApplyOrderRules(card.taskId!, { clearPlannedDate: becameUrgent });
 
   const [actorUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
 

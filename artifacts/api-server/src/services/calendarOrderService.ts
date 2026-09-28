@@ -17,8 +17,23 @@ export function todayYmdSP(): string {
  * o fim da coluna do dia do responsável (max + 1), ou para o topo se urgente
  * (min - 1). Coluna sem ordem manual → null (vale a ordem padrão).
  * Âncora = planned_date ?? due_date; sem data e urgente = hoje; passada = hoje.
+ *
+ * `clearPlannedDate`: ao VIRAR urgente a data pretendida é descartada (urgente
+ * pertence a hoje); sem isso uma pretendida futura mantinha a tarefa lá.
+ * Mudança de prazo não mexe em planned_date.
  */
-export async function applyOrderRules(taskId: string, todayOverride?: string): Promise<void> {
+export interface OrderRuleOptions {
+  clearPlannedDate?: boolean;
+}
+
+export async function applyOrderRules(
+  taskId: string,
+  todayOverride?: string,
+  opts: OrderRuleOptions = {},
+): Promise<void> {
+  if (opts.clearPlannedDate) {
+    await db.update(tasks).set({ plannedDate: null }).where(eq(tasks.id, taskId));
+  }
   const [t] = await db
     .select({
       id: tasks.id, status: tasks.status, assignedTo: tasks.assignedTo,
@@ -63,9 +78,9 @@ export async function applyOrderRules(taskId: string, todayOverride?: string): P
 }
 
 /** Versão best-effort para as rotas: a mutação principal já foi gravada. */
-export async function safeApplyOrderRules(taskId: string): Promise<void> {
+export async function safeApplyOrderRules(taskId: string, opts: OrderRuleOptions = {}): Promise<void> {
   try {
-    await applyOrderRules(taskId);
+    await applyOrderRules(taskId, undefined, opts);
   } catch (err) {
     log.error({ taskId, err: err instanceof Error ? { message: err.message, cause: err.cause } : String(err) },
       "applyOrderRules failed (best-effort, swallowed)");

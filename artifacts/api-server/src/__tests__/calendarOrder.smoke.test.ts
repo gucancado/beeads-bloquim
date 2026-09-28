@@ -81,4 +81,22 @@ describe("calendarOrderService.applyOrderRules", () => {
     // irmãs em hoje do owner: h0 (0), h-late (1), urg (-1), late (2) → min - 1 = -2
     expect(await order(t)).toBe(-2);
   });
+
+  it("virar urgente descarta a data pretendida futura e vai para o topo de hoje", async () => {
+    const t = await insert({ title: "pretendida-futura", assignedTo: owner.id, plannedDate: future, plannedOrder: 0 });
+    const r = await agent.patch(`/api/workspaces/${wsId}/tasks/${t}`).send({ scheduleMode: "urgente" });
+    expect(r.status).toBe(200);
+    const [row] = await db.select().from(tasks).where(eq(tasks.id, t));
+    expect(row.plannedDate).toBeNull();
+    // irmãs em hoje do owner: min atual = -2 (vira-urgente) → -3
+    expect(row.plannedOrder).toBe(-3);
+  });
+
+  it("mudar só o prazo não mexe na data pretendida", async () => {
+    const t = await insert({ title: "prazo-muda", assignedTo: owner.id, plannedDate: future, scheduleMode: "ate", dueDate: new Date(future + "T12:00:00.000Z") });
+    const r = await agent.patch(`/api/workspaces/${wsId}/tasks/${t}`).send({ dueDate: addDays(today, 15) + "T12:00:00.000Z" });
+    expect(r.status).toBe(200);
+    const [row] = await db.select().from(tasks).where(eq(tasks.id, t));
+    expect(row.plannedDate).toBe(future);
+  });
 });

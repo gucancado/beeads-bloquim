@@ -763,7 +763,7 @@ router.patch("/:taskId", requireAuth, requireWorkspaceRole(["admin", "editor", "
   }
 
   const becameUrgent = updated.scheduleMode === "urgente" && existing.scheduleMode !== "urgente";
-  if (assigneeChanging || becameUrgent) await safeApplyOrderRules(taskId as string);
+  if (assigneeChanging || becameUrgent) await safeApplyOrderRules(taskId as string, { clearPlannedDate: becameUrgent });
 
   const [assignee, actorUser] = await Promise.all([
     updated.assignedTo
