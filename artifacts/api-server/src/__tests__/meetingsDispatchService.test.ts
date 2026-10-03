@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { db } from "@workspace/db";
 import { meetings, users, workspaces, type Meeting } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
-import { runMeetingsDispatch, type DispatchDeps } from "../services/meetingsDispatchService";
+import { runMeetingsDispatch, dispatchLeadMs, type DispatchDeps } from "../services/meetingsDispatchService";
 
 // Clock fixo do tick. As janelas são todas relativas a NOW.
 const NOW = new Date("2026-07-20T12:00:00Z");
@@ -66,6 +66,7 @@ async function reload(id: string): Promise<Meeting> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   if (reg.meetingIds.length) await db.delete(meetings).where(inArray(meetings.id, reg.meetingIds));
   if (reg.wsIds.length) await db.delete(workspaces).where(inArray(workspaces.id, reg.wsIds));
   if (reg.userIds.length) await db.delete(users).where(inArray(users.id, reg.userIds));
@@ -381,5 +382,77 @@ describe("runMeetingsDispatch", () => {
     });
     expect(r3.errors).toBe(1);
     expect(calls).toBe(2);
+  });
+
+  it("12. começa dentro do LEAD (default 2min) → dispara antes da hora; fora do LEAD → espera", async () => {
+    const { ws } = await seedWs();
+    const end = new Date(NOW.getTime() + 60 * 60_000);
+    const soon = await seedMeeting({
+      workspaceId: ws.id,
+      meetCode: "lea-dddd-aaa",
+      scheduledStartAt: new Date(NOW.getTime() + 90_000), // começa em 1m30s
+      scheduledEndAt: end,
+    });
+    const later = await seedMeeting({
+      workspaceId: ws.id,
+      meetCode: "lea-dddd-bbb",
+      scheduledStartAt: new Date(NOW.getTime() + 150_000), // começa em 2m30s
+      scheduledEndAt: end,
+    });
+    const calls: Array<Parameters<DispatchDeps["createCollection"]>[0]> = [];
+    const report = await runMeetingsDispatch({
+      now: () => NOW,
+      createCollection: async (a) => {
+        calls.push(a);
+        return { id: "worker-lead" };
+      },
+      syncFromWorker: async (r) => r,
+    });
+
+    expect(report.dispatched).toBe(1);
+    expect(calls.map((c) => c.meetCode)).toEqual(["lea-dddd-aaa"]);
+    expect((await reload(soon.id)).status).toBe("collecting");
+    expect((await reload(later.id)).status).toBe("scheduled");
+  });
+
+  it("13. MEETINGS_DISPATCH_LEAD_MS=0 → volta a disparar só na hora", async () => {
+    vi.stubEnv("MEETINGS_DISPATCH_LEAD_MS", "0");
+    const { ws } = await seedWs();
+    const m = await seedMeeting({
+      workspaceId: ws.id,
+      scheduledStartAt: new Date(NOW.getTime() + 60_000),
+      scheduledEndAt: new Date(NOW.getTime() + 60 * 60_000),
+    });
+    const calls: unknown[] = [];
+    const report = await runMeetingsDispatch({
+      now: () => NOW,
+      createCollection: async (a) => {
+        calls.push(a);
+        return { id: "nope" };
+      },
+      syncFromWorker: async (r) => r,
+    });
+    expect(report.dispatched).toBe(0);
+    expect(calls).toHaveLength(0);
+    expect((await reload(m.id)).status).toBe("scheduled");
+  });
+});
+
+describe("dispatchLeadMs", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("default 120000 sem env; aceita inteiro >= 0; lixo/negativo/fração caem no default", () => {
+    vi.stubEnv("MEETINGS_DISPATCH_LEAD_MS", "");
+    expect(dispatchLeadMs()).toBe(120_000);
+    vi.stubEnv("MEETINGS_DISPATCH_LEAD_MS", "300000");
+    expect(dispatchLeadMs()).toBe(300_000);
+    vi.stubEnv("MEETINGS_DISPATCH_LEAD_MS", "0");
+    expect(dispatchLeadMs()).toBe(0);
+    for (const bad of ["abc", "-1", "1.5", "1e400", "  "]) {
+      vi.stubEnv("MEETINGS_DISPATCH_LEAD_MS", bad);
+      expect(dispatchLeadMs()).toBe(120_000);
+    }
   });
 });

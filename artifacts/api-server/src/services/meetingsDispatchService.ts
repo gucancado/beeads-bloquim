@@ -29,6 +29,19 @@ export type DispatchReport = { dispatched: number; missed: number; retried: numb
 // tentativa que morre por falta de admissão já consumiu ~10min sozinha.
 const RETRY_BACKOFF_MS = 10 * 60_000;
 
+// Antecedência do disparo: o bot é pedido LEAD ms antes do horário marcado, pra
+// já estar na fila de admissão quando o anfitrião abrir a sala (disparar no
+// minuto exato perdia o começo). Lido a cada tick (lazy) pra a env valer sem
+// rebuild; lixo/negativo cai no default em vez de derrubar o cron.
+const DEFAULT_DISPATCH_LEAD_MS = 120_000;
+
+export function dispatchLeadMs(): number {
+  const raw = process.env.MEETINGS_DISPATCH_LEAD_MS;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_DISPATCH_LEAD_MS;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n >= 0 ? n : DEFAULT_DISPATCH_LEAD_MS;
+}
+
 // Defaults de produção: worker client (create) + poll-through (syncMeetingFromWorker),
 // ambos com o acting-user de sistema. getWorkerClient() só é chamado dentro dos
 // closures (lazy), então montar os defaults nunca exige WORKER_URL/TOKEN — só o
@@ -48,8 +61,8 @@ function defaultDeps(): DispatchDeps {
 }
 
 // Tick do cron de agenda. Quatro fases sequenciais sobre a tabela meetings:
-//   1. Disparo: reuniões cuja janela [start, end) contém `now`, com coleta
-//      habilitada e workspace resolvido, ainda sem worker → cria a coleta.
+//   1. Disparo: reuniões cuja janela [start - LEAD, end) contém `now`, com
+//      coleta habilitada e workspace resolvido, ainda sem worker → cria a coleta.
 //   1b. Retry: failed cuja janela AINDA está aberta → tenta de novo (respeitando
 //      RETRY_BACKOFF_MS). A falha mais comum era o bot chegar antes da sala
 //      encher; sem isso, uma coleta que falha às 14:00 nunca é refeita às 14:20.
@@ -62,7 +75,10 @@ export async function runMeetingsDispatch(partial?: Partial<DispatchDeps>): Prom
   const report: DispatchReport = { dispatched: 0, missed: 0, retried: 0, polled: 0, errors: 0 };
   const now = deps.now();
 
-  // 1. Disparo.
+  // 1. Disparo. O limite com antecedência é um Date passado pelo helper `lte`
+  // (mapper do drizzle → UTC), igual ao `now`; nada de Date cru em sql``, que
+  // serializaria no fuso local contra a coluna timestamp sem tz.
+  const dispatchFrom = new Date(now.getTime() + dispatchLeadMs());
   const dispatchable = await db
     .select()
     .from(meetings)
@@ -72,13 +88,15 @@ export async function runMeetingsDispatch(partial?: Partial<DispatchDeps>): Prom
         eq(meetings.collectEnabled, true),
         isNotNull(meetings.workspaceId),
         isNull(meetings.workerMeetingId),
-        lte(meetings.scheduledStartAt, now),
+        lte(meetings.scheduledStartAt, dispatchFrom),
         gt(meetings.scheduledEndAt, now),
       ),
     );
 
   // 1b. Retry das que falharam com a janela ainda aberta. episode_id preenchido
   // fica de fora: o worker já produziu episódio, recoletar geraria um segundo.
+  // Sem LEAD aqui de propósito: o backoff (10min) já domina, e uma falha antes
+  // do início só volta a ser elegível quando a reunião começa.
   const retriable = await db
     .select()
     .from(meetings)
