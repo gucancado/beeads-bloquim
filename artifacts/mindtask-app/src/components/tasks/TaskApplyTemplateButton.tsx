@@ -15,7 +15,7 @@ import {
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { apiErrorMessage } from "@/lib/apiErrorMessage";
+import { apiErrorMessage, TEMPLATE_ERRORS_BY_STATUS } from "@/lib/apiErrorMessage";
 
 interface Template {
   id: string;
@@ -85,7 +85,7 @@ export function TaskApplyTemplateButton({
       onApplied();
     },
     onError: (e: unknown) => {
-      toast({ title: apiErrorMessage(e, "erro ao aplicar modelo"), variant: "destructive" });
+      toast({ title: apiErrorMessage(e, "erro ao aplicar modelo", TEMPLATE_ERRORS_BY_STATUS), variant: "destructive" });
     },
   });
 
@@ -101,7 +101,7 @@ export function TaskApplyTemplateButton({
       queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
     },
     onError: (e: unknown) => {
-      toast({ title: apiErrorMessage(e, "erro ao criar modelo"), variant: "destructive" });
+      toast({ title: apiErrorMessage(e, "erro ao criar modelo", TEMPLATE_ERRORS_BY_STATUS), variant: "destructive" });
     },
   });
 
@@ -113,12 +113,12 @@ export function TaskApplyTemplateButton({
         const c = portalContainer.getBoundingClientRect();
         setPos({
           top: r.bottom - c.top + portalContainer.scrollTop + 4,
-          left: Math.max(0, Math.min(r.left - c.left + portalContainer.scrollLeft - 200, portalContainer.clientWidth - 230)),
+          left: Math.max(0, Math.min(r.left - c.left + portalContainer.scrollLeft - 200, portalContainer.clientWidth - 244)),
         });
       } else {
         setPos({
           top: Math.min(r.bottom + 4, window.innerHeight - 250),
-          left: Math.max(4, Math.min(r.left - 200, window.innerWidth - 240)),
+          left: Math.max(4, Math.min(r.left - 200, window.innerWidth - 244)),
         });
       }
     }

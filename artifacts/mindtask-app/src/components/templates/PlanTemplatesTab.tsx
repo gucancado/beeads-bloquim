@@ -5,7 +5,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TaskDeleteDialog } from "@/components/tasks/TaskDeleteDialog";
 import { toast } from "@/hooks/use-toast";
-import { apiErrorMessage } from "@/lib/apiErrorMessage";
+import { apiErrorMessage, TEMPLATE_ERRORS_BY_STATUS } from "@/lib/apiErrorMessage";
 import { formatPlanCounts, PLAN_TEMPLATES_QUERY_KEY, type PlanTemplateListItem } from "@/lib/planTemplates";
 
 function PlanTemplateRow({
@@ -81,7 +81,7 @@ export function PlanTemplatesTab() {
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       customFetch(`/api/plan-templates/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: PLAN_TEMPLATES_QUERY_KEY }),
-    onError: (e: unknown) => toast({ title: apiErrorMessage(e, "erro ao renomear modelo"), variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: apiErrorMessage(e, "erro ao renomear modelo", TEMPLATE_ERRORS_BY_STATUS), variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
@@ -90,7 +90,7 @@ export function PlanTemplatesTab() {
       queryClient.invalidateQueries({ queryKey: PLAN_TEMPLATES_QUERY_KEY });
       setDeletingId(null);
     },
-    onError: (e: unknown) => toast({ title: apiErrorMessage(e, "erro ao excluir modelo"), variant: "destructive" }),
+    onError: (e: unknown) => toast({ title: apiErrorMessage(e, "erro ao excluir modelo", TEMPLATE_ERRORS_BY_STATUS), variant: "destructive" }),
   });
 
   return (

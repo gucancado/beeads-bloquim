@@ -3,6 +3,12 @@
  * `.data` (não `.body`); `.body` é aceito por compatibilidade. `byStatus`
  * substitui mensagens genéricas do servidor (ex.: 403 "Forbidden").
  */
+/** Mensagens pt-BR pros erros genéricos (inglês) do servidor nas telas de modelos. */
+export const TEMPLATE_ERRORS_BY_STATUS: Record<number, string> = {
+  404: "modelo não encontrado",
+  500: "erro no servidor. tente novamente",
+};
+
 export function apiErrorMessage(
   e: unknown,
   fallback: string,

@@ -49,7 +49,7 @@ export default function TemplatesPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
   };
 
-  const tabTriggerClass = "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=active]:font-normal rounded-none px-0 py-0 h-auto text-base font-light text-muted-foreground/80 hover:text-foreground lowercase transition-colors";
+  const tabTriggerClass = "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=active]:font-normal rounded-none px-0 py-0 h-auto text-base font-light text-muted-foreground/80 hover:text-foreground lowercase transition-colors aria-selected:text-foreground aria-selected:font-normal";
 
   const displayName = (t: Template) =>
     (t.name && t.name.trim()) || (t.title && t.title.trim()) || "modelo sem nome";

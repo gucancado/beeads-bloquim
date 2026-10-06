@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { customFetch } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
-import { apiErrorMessage } from "@/lib/apiErrorMessage";
+import { apiErrorMessage, TEMPLATE_ERRORS_BY_STATUS } from "@/lib/apiErrorMessage";
 import {
   PLAN_TEMPLATES_QUERY_KEY,
   skippedDescription,
@@ -49,7 +49,7 @@ export function PlanTemplateMenu({
       queryClient.invalidateQueries({ queryKey: PLAN_TEMPLATES_QUERY_KEY });
     },
     onError: (e: unknown) => {
-      toast({ title: apiErrorMessage(e, "erro ao criar modelo de plano de ação"), variant: "destructive" });
+      toast({ title: apiErrorMessage(e, "erro ao criar modelo de plano de ação", TEMPLATE_ERRORS_BY_STATUS), variant: "destructive" });
     },
   });
 
@@ -63,6 +63,7 @@ export function PlanTemplateMenu({
     onError: (e: unknown) => {
       toast({
         title: apiErrorMessage(e, "erro ao aplicar modelo de plano de ação", {
+          ...TEMPLATE_ERRORS_BY_STATUS,
           403: "você não tem permissão pra aplicar modelos neste plano",
         }),
         variant: "destructive",
