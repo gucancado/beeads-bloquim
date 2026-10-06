@@ -36,6 +36,30 @@ async function getOwnedTemplate(userId: string, templateId: string) {
   return tpl ?? null;
 }
 
+/**
+ * Mesma regra do apply: membro do workspace da tarefa, ou responsável numa
+ * tarefa standalone.
+ */
+async function userCanUseTask(
+  userId: string,
+  task: { workspaceId: string | null; assignedTo: string | null },
+): Promise<boolean> {
+  if (task.workspaceId) {
+    const [m] = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, task.workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    return !!m;
+  }
+  return task.assignedTo === userId;
+}
+
 export async function listTemplates(userId: string): Promise<ServiceResponse> {
   const rows = await db
     .select()
@@ -224,24 +248,8 @@ export async function applyTemplateToTask(
     .limit(1);
   if (!task) return { status: 404, body: { error: "Task not found" } };
 
-  // Permission: user must be a member of the task's workspace, or own the
-  // task (standalone) as assignee.
-  if (task.workspaceId) {
-    const [m] = await db
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, task.workspaceId),
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-    if (!m) return { status: 403, body: { error: "Forbidden" } };
-  } else {
-    if (task.assignedTo !== userId) {
-      return { status: 403, body: { error: "Forbidden" } };
-    }
+  if (!(await userCanUseTask(userId, task))) {
+    return { status: 403, body: { error: "Forbidden" } };
   }
 
   if (task.status !== "draft") {
@@ -291,4 +299,56 @@ export async function applyTemplateToTask(
   });
 
   return { status: 200, body: { success: true, taskId } };
+}
+
+/**
+ * Cria um modelo a partir de uma tarefa existente (campos persistidos).
+ * name = title = título da tarefa; checklist vira subtasks do modelo
+ * preservando `order`.
+ */
+export async function createTemplateFromTask(
+  userId: string,
+  taskId: string,
+): Promise<ServiceResponse> {
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task) return { status: 404, body: { error: "Task not found" } };
+  if (!(await userCanUseTask(userId, task))) {
+    return { status: 403, body: { error: "Forbidden" } };
+  }
+  if (task.isApprovalTask) {
+    return {
+      status: 400,
+      body: { error: "não é possível criar modelo a partir de uma tarefa de aprovação" },
+    };
+  }
+
+  const items = await db
+    .select({ text: subtasks.text, order: subtasks.order })
+    .from(subtasks)
+    .where(eq(subtasks.taskId, taskId))
+    .orderBy(asc(subtasks.order), asc(subtasks.createdAt));
+
+  const body = await db.transaction(async (tx) => {
+    const [tpl] = await tx
+      .insert(taskTemplates)
+      .values({
+        userId,
+        name: task.title,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+      })
+      .returning();
+    const subs =
+      items.length === 0
+        ? []
+        : await tx
+            .insert(taskTemplateSubtasks)
+            .values(items.map((i) => ({ templateId: tpl.id, title: i.text, order: i.order })))
+            .returning();
+    subs.sort((a, b) => a.order - b.order);
+    return { ...tpl, subtasks: subs };
+  });
+
+  return { status: 201, body };
 }
