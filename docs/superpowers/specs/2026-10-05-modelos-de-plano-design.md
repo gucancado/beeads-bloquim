@@ -19,7 +19,7 @@
 **Inclui**
 - Endpoint `POST /api/task-templates/from-task` + menu no `TaskApplyTemplateButton`.
 - Tabela `plan_templates` (snapshot JSON versionado, posições relativas).
-- Endpoints `GET/PATCH/DELETE /api/plan-templates`, `POST /api/plan-templates/from-map`, `POST /api/plan-templates/:id/apply`.
+- Endpoints `GET/PATCH/DELETE /api/plan-templates` (gestão, escopo do usuário) e, no escopo do mapa, `POST /api/workspaces/:wId/maps/:mId/plan-templates/capture` e `POST /api/workspaces/:wId/maps/:mId/plan-templates/:templateId/apply`.
 - Botão + menu no canvas; aplicação com seleção dos novos nós e `fitBounds`.
 - Aba "planos de ação" em `/my-templates` (renomear, excluir).
 - Testes unitários das funções puras e smoke dos endpoints no api-server.
@@ -39,10 +39,10 @@
 | D1 | Modelo de plano é **privado por usuário** (`user_id`), como o modelo de tarefa. | Mesma regra do mecanismo existente. |
 | D2 | Armazenamento em **1 tabela com `payload jsonb` versionado** (`v: 1`), não tabelas normalizadas. | Gestão na v1 é só renomear/excluir; snapshot opaco basta. Versão no payload permite evoluir o formato. |
 | D3 | Posições gravadas **relativas** ao canto superior esquerdo da caixa envolvente do conjunto capturado. | Reposicionar em qualquer área livre preservando o arranjo. |
-| D4 | **Aprovações ignoradas.** Cards de aprovação e nós de junção não entram no modelo. Conexão que sai de um card de aprovação é **remapeada pro card pai** da cadeia. | O modelo de tarefa não guarda pessoas; aprovador é pessoa. O remapeamento mantém o encadeamento das tarefas. |
-| D5 | Tarefas criadas pela aplicação nascem como um card novo nasce hoje: `status=draft`, `scheduleMode=sem_prazo`, `assigned_to`/`owner_id`/`created_by` = quem aplica. Prioridade vem do modelo. | Mesma regra do `POST /cards`. |
-| D6 | Captura e aplicação rodam **no servidor, em transação**. | Não existe endpoint em lote; o `GET` do mapa não traz checklist nem descrição da tarefa; atomicidade. |
-| D7 | Área livre = **à direita** da caixa envolvente de todos os elementos atuais, com folga de 120px, alinhada ao topo. Mapa vazio: origem `(0,0)`. | Garantidamente livre, coerente com o fluxo LR do layout. |
+| D4 | **Aprovações ignoradas.** Cards de aprovação e nós de junção não entram no modelo. Conexão persistida que toca um card de aprovação (origem ou destino) é **remapeada pro card pai** da cadeia. | O modelo de tarefa não guarda pessoas; aprovador é pessoa. As arestas internas da cadeia (pai → aprovação → junção) são derivadas no frontend e nunca persistidas, então toda `card_connections` que toca uma aprovação é externa à cadeia: no modo sequencial sai do último aprovador (terminal), no paralelo sai do próprio pai. Remapear pro pai cobre os dois casos e mantém o encadeamento. |
+| D5 | Tarefas criadas pela aplicação nascem como um card novo nasce hoje: `status=draft`, `scheduleMode=sem_prazo`, `assigned_to`/`owner_id` = quem aplica. Prioridade vem do modelo. Além disso grava `created_by` = quem aplica. | Mesma regra do `POST /cards` pra status, prazo, responsável e dono. O `POST /cards` **não** grava `created_by` (lacuna pré-existente; fora do escopo corrigir); o apply grava porque o `DELETE` de tarefa depende disso. |
+| D6 | Captura e aplicação rodam **no servidor, em transação**, com **advisory lock por mapa** (`pg_advisory_xact_lock(hashtext(mapId))`) no apply. | Não existe endpoint em lote; o `GET` do mapa não traz checklist nem descrição da tarefa; atomicidade; dois applies simultâneos no mesmo mapa não calculam a mesma origem. |
+| D7 | Área livre = **à direita** da caixa envolvente de todos os elementos atuais, com folga de 120px, alinhada ao topo. Mapa vazio: origem `(0,0)`. | Livre na prática: a caixa nominal do card (`NODE_WIDTH=200`) subestima o render (~220px), e a folga de 120px absorve essa diferença. Coerente com o fluxo LR do layout. |
 | D8 | Aplicar **não pede confirmação**; os novos elementos nascem **selecionados**. | Nada do plano atual é alterado; Delete desfaz em um gesto (diálogo de exclusão já existente). |
 | D9 | Menu do modal de tarefa continua no **popover artesanal** existente; menu do canvas usa **`DropdownMenu` do `@beeads/ui`**. | O popover do modal existe por causa do portal dentro do Dialog e do iframe `/embed/task` (commit `9ec0da0`). O canvas não tem essa restrição; vale a regra do DS. |
 | D10 | Nome automático: título da tarefa; nome do plano; `"<nome do plano> (seleção)"`. Sem diálogo de nome. | Pedido explícito: clique → criado → toast. Renomear fica na página de gestão. |
@@ -121,38 +121,39 @@ type PlanTemplatePayloadV1 = {
 };
 ```
 
-`title` do card = `tasks.title` (fallback `cards.title` quando o card não tem tarefa). `description` = `tasks.description ?? cards.description`.
+`title` do card = `tasks.title` (fallback `cards.title` quando o card não tem tarefa). `description` = `tasks.description ?? cards.description`. Card legado **sem tarefa** (`cards.taskId IS NULL`, `statusVisual = no_task`) entra com `task.priority = "medium"` e `checklist = []`; na aplicação todo card ganha tarefa (regra do `POST /cards`). `texts[].content` é copiado **literalmente** (string JSON do Tiptap), sem parse.
 
-### B2. Captura — `POST /api/plan-templates/from-map`
+### B2. Captura — `POST /api/workspaces/:workspaceId/maps/:mapId/plan-templates/capture`
 
-Body `{ workspaceId: uuid, mapId: uuid, cardIds?: uuid[], textElementIds?: uuid[], shapeIds?: uuid[] }`. `requireAuth` + membro do workspace (qualquer papel) + mapa pertence ao workspace (404 caso contrário).
+Body `{ cardIds?: uuid[], textElementIds?: uuid[], shapeIds?: uuid[] }`. Middlewares: `requireAuth` + `requireWorkspaceRole(["admin","editor","executor"])` + `requireMapInWorkspace` (ambos leem `req.params`, por isso a rota fica no escopo do mapa).
 
-Service `captureFromMap(userId, input)`:
-1. Carrega cards do mapa com `tasks` (left join) e `task_subtasks`; conexões; textos; formas.
-2. **Filtro de conjunto.** Sem ids → todos. Com ids → só os listados (ids desconhecidos no mapa são ignorados). Em ambos os casos exclui: cards cuja tarefa tem `isApprovalTask = true`; formas `type = "image"`. Conta `skipped.approvals` e `skipped.images` (sobre o conjunto considerado).
-3. **Conexões.** Pra cada `card_connections` do mapa: `source' = sourceCardId` se não é aprovação, senão o card do `parentTaskId` da aprovação (card cujo `taskId = parentTaskId`); `target'` idem. Mantém se `source' ≠ target'` e ambos estão no conjunto. Dedupe por `(source', target')`. Handles: `source-right` / `target-left` quando remapeada; os originais caso contrário.
-4. **Posições relativas.** `minX = min(x)` e `minY = min(y)` sobre cards, textos e formas incluídos (linhas usam `positionX/Y` como os demais). Grava `x - minX`, `y - minY`.
+Service `captureFromMap(userId, { mapId, mapName, cardIds?, textElementIds?, shapeIds? })`:
+1. Carrega cards do mapa com `tasks` (left join) e `task_subtasks`; conexões do mapa; textos; formas.
+2. **Filtro de conjunto.** Sem nenhum array → todos os elementos do mapa. Com arrays → só os ids listados (ids que não existem no mapa são ignorados). Em ambos os casos exclui: cards cuja tarefa tem `isApprovalTask = true`; formas `type = "image"`. Conta `skipped.approvals` e `skipped.images` sobre o conjunto considerado (no mapa inteiro, todas as aprovações do mapa; na seleção, as aprovações cujos ids vieram em `cardIds`). O pai de uma aprovação selecionada **não** entra implicitamente.
+3. **Conexões.** Só `card_connections` cujas duas pontas existem entre os cards carregados do mapa (integridade não é garantida pelo schema). Pra cada uma: `source' = sourceCardId` se não é aprovação, senão o card do pai (card cujo `taskId = tasks.parentTaskId` da aprovação, resolvido com os dados do mapa inteiro, não só da seleção); `target'` idem. Mantém se `source' ≠ target'` e ambos estão no conjunto. Dedupe por `(source', target')`. Handles: `source-right` / `target-left` quando remapeada; os originais caso contrário.
+4. **Posições relativas.** `minX = min(positionX)` e `minY = min(positionY)` sobre cards, textos e formas incluídos (linhas usam `positionX/Y` como os demais; `x1..y2` são locais ao nó e copiados sem alteração). Grava `x - minX`, `y - minY`.
 5. Conjunto vazio (nenhum card, texto ou forma) → 400 `{ error: "nada pra salvar no modelo" }`.
-6. Nome: `map.name` sem ids; `"<map.name> (seleção)"` com ids.
+6. Nome: `map.name` sem arrays; `"<map.name> (seleção)"` com arrays.
 7. Insere `plan_templates`. Retorna 201 `{ template: { id, name, counts: { cards, connections, texts, shapes }, createdAt }, skipped: { approvals, images } }`.
 
 Funções puras, testáveis sem banco, em `services/planTemplates/capture.ts`: `selectElements`, `remapConnections`, `normalizePositions`, `buildPayload`.
 
-### B3. Aplicação — `POST /api/plan-templates/:id/apply`
+### B3. Aplicação — `POST /api/workspaces/:workspaceId/maps/:mapId/plan-templates/:templateId/apply`
 
-Body `{ workspaceId: uuid, mapId: uuid }`. `requireAuth` + `requireWorkspaceRole(["admin","editor"])` + mapa pertence ao workspace. Modelo precisa ser do usuário (404 caso contrário). Payload inválido pelo Zod → 422.
+Sem body. Middlewares: `requireAuth` + `requireWorkspaceRole(["admin","editor"])` + `requireMapInWorkspace`. Modelo precisa ser do usuário (404 caso contrário). Payload fora do schema Zod `v:1` → 422.
 
-Service `applyToMap(userId, templateId, input)`:
-1. Carrega caixas dos elementos atuais do mapa: cards (`NODE_WIDTH × NODE_HEIGHT` de `lib/collision.ts`), textos e formas (`width × height`).
-2. **Origem** (`computeOrigin`, pura): `{ x: maxRight + 120, y: minTop }`; mapa sem elementos → `{ x: 0, y: 0 }`.
-3. Em **uma transação**, na ordem:
-   - Pra cada card: insere `tasks` (`title`, `description`, `priority`, `status: "draft"`, `scheduleMode: "sem_prazo"`, `mapId`, `workspaceId`, `assignedTo`/`ownerId`/`createdBy` = userId); insere `cards` (`title`, `description`, `positionX = origin.x + x`, `positionY = origin.y + y`, `statusVisual: "draft"`, `taskId`); insere `task_subtasks` do checklist (`text`, `completed: false`, `order`); `recordTaskActivity` `task_created` (com `actorName`, `source` do request). Guarda `key → cardId`.
-   - Conexões: insere `card_connections` resolvendo chaves. Chave inexistente no mapa de ids → ignora.
+Service `applyToMap({ userId, actorName, source, templateId, mapId, workspaceId })` (`source` = `req.user.source`, como o `POST /cards` passa pro activity):
+1. Abre **uma transação** e toma `SELECT pg_advisory_xact_lock(hashtext(<mapId>))` antes de ler qualquer coisa.
+2. Dentro da transação, carrega as caixas dos elementos atuais do mapa: cards (`NODE_WIDTH × NODE_HEIGHT` de `lib/collision.ts`), textos (`width × height`) e formas (`shapeAabb`: caixa alinhada aos eixos da forma rotacionada em torno do centro, `w' = |w·cosθ| + |h·sinθ|`, `h' = |w·sinθ| + |h·cosθ|`; linhas usam `position + width × height`).
+3. **Origem** (`computeOrigin`, pura): `{ x: maxRight + 120, y: minTop }`; mapa sem elementos → `{ x: 0, y: 0 }`.
+4. Ainda na transação, na ordem:
+   - Pra cada card: insere `tasks` (`title`, `description`, `priority`, `status: "draft"`, `scheduleMode: "sem_prazo"`, `mapId`, `workspaceId`, `assignedTo`/`ownerId`/`createdBy` = userId); insere `cards` (`title`, `description`, `positionX = origin.x + x`, `positionY = origin.y + y`, `statusVisual: "draft"`, `taskId`); insere `task_subtasks` do checklist (`text`, `completed: false`, `order`); insere `task_activities` **via `tx`** (`type: "task_created"`, `metadata: { actorName, source? }`, mesmo shape que `recordTaskActivity` produz; o helper usa o `db` global e por isso não serve aqui). Guarda `key → cardId`.
+   - Conexões: insere `card_connections` resolvendo chaves, **sem dedupe** (par duplicado no payload viola a unique `(source, target)` e derruba a transação; a captura já deduplica). Chave inexistente no mapa de ids → ignora.
    - Textos e formas: insere com posição deslocada pela origem; demais campos copiados.
-4. `bounds` absolutos dos elementos criados: `x = origin.x`, `y = origin.y`, `width = max(x_rel + w)`, `height = max(y_rel + h)` sobre os elementos do payload, usando a caixa nominal (`NODE_WIDTH × NODE_HEIGHT`) pros cards e `width × height` pra textos e formas.
-5. Retorna 200 `{ cardIds, connectionIds, textElementIds, shapeIds, bounds: { x, y, width, height } }`.
+5. `bounds` absolutos dos elementos criados: `x = origin.x`, `y = origin.y`, `width = max(x_rel + w)`, `height = max(y_rel + h)` sobre os elementos do payload, usando a caixa nominal (`NODE_WIDTH × NODE_HEIGHT`) pros cards, `width × height` pra textos e `shapeAabb` pra formas.
+6. Retorna 200 `{ cardIds, connectionIds, textElementIds, shapeIds, bounds: { x, y, width, height } }`.
 
-Sem `findFreeSlot`: a área é livre por construção e as posições são explícitas.
+Sem `findFreeSlot`: a área é livre por construção e as posições são explícitas. `computeOrigin`, `shapeAabb` e o cálculo de `bounds` ficam em `services/planTemplates/apply.ts` como funções puras.
 
 ### B4. Gestão — `GET` / `PATCH` / `DELETE`
 
@@ -161,19 +162,26 @@ Sem `findFreeSlot`: a área é livre por construção e as posições são expl�
 - `DELETE /api/plan-templates/:id`.
 - Todos 404 quando o modelo não é do usuário.
 
-Rotas em `routes/planTemplates.ts`, montadas em `routes/index.ts` em `/api/plan-templates`.
+Rotas de gestão em `routes/planTemplates.ts`, montadas em `routes/index.ts` em `/api/plan-templates`. As rotas `capture` e `apply` ficam em `routes/mapPlanTemplates.ts` (router com `mergeParams: true`), montado em `/api/workspaces/:workspaceId/maps/:mapId/plan-templates`, seguindo o padrão de `cards.ts`/`connections.ts`.
 
 ### B5. UI — canvas
 
 Em `pages/maps/canvas.tsx`, novo componente `components/maps/PlanTemplateMenu.tsx`:
 - Botão flutuante `absolute top-4 right-16 z-20` (a busca global fica em `right-4 z-30`; quando ela expande, cobre o botão, o que é aceitável). Mesmo estilo do botão de busca (`w-10 h-10 rounded-xl bg-card border border-border shadow-sm ...`), ícone `FileText` `w-4 h-4`, `title="modelos de plano de ação"`.
-- `DropdownMenu` do `@beeads/ui` com trigger via `render` (não `asChild`). Ao abrir, lê a seleção de `nodesRef.current`: nós `selected` dos tipos `mindmap`, `textnode`, `shapenode` (exclui `approvalnode`, `joinnode` e shape `image`).
+- `DropdownMenu` do `@beeads/ui` com trigger via `render` (não `asChild`). Ao abrir, lê a seleção de `nodesRef.current` (nós com `selected === true`):
+  - **aproveitáveis** (decidem se o item 3 aparece): `mindmap`, `textnode`, `shapenode` com `data.type !== "image"`;
+  - **enviados** no item 3: `cardIds` = ids dos nós `mindmap` **e** `approvalnode` (aprovação também é card; o servidor exclui e conta em `skipped.approvals`), `textElementIds` = ids dos `textnode`, `shapeIds` = ids dos `shapenode` (incluindo imagem; o servidor exclui e conta). `joinnode` é virtual e nunca é enviado.
+  - Os ids dos nós `mindmap`, `approvalnode`, `textnode` e `shapenode` são os UUIDs do banco sem prefixo (ver `buildTextNode`/`buildShapeNode`/`mapApprovalCardToNodeData` em `canvas.tsx`); o `node.type` separa os arrays.
 - Itens:
-  1. "aplicar modelo de plano de ação" → troca pra lista (`GET /api/plan-templates`, loading / "você ainda não tem modelos de plano de ação" / itens por nome). Clique → `POST .../apply`.
-  2. "criar modelo de plano de ação" → `POST /from-map` sem ids.
-  3. "criar modelo a partir da seleção" → só renderizado quando a seleção lida ao abrir tem ≥1 elemento aproveitável. Envia `cardIds` / `textElementIds` / `shapeIds`. Os ids dos nós `mindmap`, `textnode` e `shapenode` são os UUIDs do banco sem prefixo (ver `buildTextNode`/`buildShapeNode` em `canvas.tsx`); o `node.type` separa os três arrays.
+  1. "aplicar modelo de plano de ação" → troca pra lista (`GET /api/plan-templates`, loading / "você ainda não tem modelos de plano de ação" / itens por nome). Clique → `POST .../plan-templates/:templateId/apply`.
+  2. "criar modelo de plano de ação" → `POST .../plan-templates/capture` com body `{}`.
+  3. "criar modelo a partir da seleção" → só renderizado quando há ≥1 elemento aproveitável selecionado. `POST .../capture` com os três arrays.
 - Pós-criação: `toast({ title: "novo modelo de plano de ação criado", description })`, onde `description` só existe quando `skipped.approvals + skipped.images > 0` (ex.: "2 aprovações e 1 imagem ficaram de fora"). Invalida `["/api/plan-templates"]`.
-- Pós-aplicação: `await refetch` do mapa (o efeito de sync insere os nós novos) → `setNodes` marcando `selected: true` nos ids retornados e `false` nos demais → `fitBounds(bounds, { duration: 400, padding: 0.2 })` → `toast({ title: "modelo de plano de ação aplicado" })`. Erro → toast destrutivo com `body.error`.
+- Pós-aplicação, nesta ordem:
+  1. `pendingSelectIdsRef.current = new Set([...cardIds, ...textElementIds, ...shapeIds])`.
+  2. `fitBounds(bounds, { duration: 400, padding: 0.2 })` imediatamente (não depende dos nós existirem).
+  3. `invalidateQueries` do mapa. O **efeito de sync** (que hoje insere nós ausentes e preserva `selected` dos existentes) passa a: ao inserir um nó cujo id está em `pendingSelectIdsRef`, marcar `selected: true`; na mesma passada em que consome o conjunto, marcar `selected: false` nos nós existentes; esvaziar o ref ao fim. Assim a seleção acontece no mesmo `setNodes` que cria os nós, sem corrida com o `refetch`.
+  4. `toast({ title: "modelo de plano de ação aplicado" })`. Erro → toast destrutivo com `body.error`.
 - Enquanto uma mutação roda, o botão mostra `Loader2 animate-spin` e o menu fica fechado.
 
 ### B6. UI — página `/my-templates`
@@ -187,9 +195,9 @@ Em `pages/maps/canvas.tsx`, novo componente `components/maps/PlanTemplateMenu.ts
 
 | Operação | Quem |
 |---|---|
-| `from-task` | membro do workspace da tarefa, ou responsável em standalone |
-| `from-map` | qualquer membro do workspace do mapa |
-| `apply` | admin ou editor do workspace de destino |
+| `from-task` | membro do workspace da tarefa, ou responsável em standalone (checado no service, rota global) |
+| `capture` | qualquer membro do workspace do mapa (`requireWorkspaceRole` + `requireMapInWorkspace`) |
+| `apply` | admin ou editor do workspace de destino (`requireWorkspaceRole` + `requireMapInWorkspace`); modelo do próprio usuário |
 | `GET/PATCH/DELETE` de modelos | dono do modelo |
 
 ## Erros
@@ -204,9 +212,9 @@ Em `pages/maps/canvas.tsx`, novo componente `components/maps/PlanTemplateMenu.ts
 ## Testes
 
 **api-server (vitest):**
-- `planTemplatesCapture.test.ts` (puro): seleção com/sem ids; exclusão de aprovações e imagens com contagem; remapeamento aprovação → pai (sequencial e paralelo), dedupe, descarte de self-loop; normalização de posições (mínimo vira 0, linhas incluídas); conjunto vazio.
-- `planTemplatesApply.test.ts` (puro): `computeOrigin` com mapa vazio, só cards, mistura de tipos; `bounds` dos criados.
-- `planTemplates.smoke.test.ts` (banco dev): from-map do mapa inteiro e de subconjunto; apply cria contagens esperadas, tarefas em `draft` com dono/responsável = caller, conexões resolvidas, checklist copiado; apply em mapa com elementos posiciona à direita sem sobreposição; falha forçada não deixa resíduo; 403 pra executor no apply; 404 pra modelo de outro usuário.
+- `planTemplatesCapture.test.ts` (puro): seleção com/sem ids; exclusão de aprovações e imagens com contagem; remapeamento aprovação → pai (sequencial: conexão sai do último aprovador; paralelo: sai do pai), pai fora da seleção descarta a conexão, dedupe, descarte de self-loop, conexão com ponta fora do mapa descartada; card sem tarefa vira `priority: "medium"` + checklist vazio; normalização de posições (mínimo vira 0, linhas incluídas, `x1..y2` intactos); conjunto vazio.
+- `planTemplatesApply.test.ts` (puro): `computeOrigin` com mapa vazio, só cards, mistura de tipos, forma rotacionada (`shapeAabb` a 90° troca largura e altura); `bounds` dos criados.
+- `planTemplates.smoke.test.ts` (banco dev, helpers de `__tests__/helpers.ts`): capture do mapa inteiro e de subconjunto (contagens e `skipped`); apply cria contagens esperadas, tarefas em `draft` com dono/responsável/`created_by` = caller, activity `task_created` por tarefa, conexões resolvidas, checklist copiado, posições deslocadas pela origem; apply em mapa com elementos posiciona à direita (todo `positionX` novo ≥ `maxRight + 120`); **rollback**: modelo inserido direto no banco com o mesmo par de conexão duas vezes → apply falha e o mapa fica com as mesmas contagens de antes (cards, tasks, activities, connections); 403 pra executor no apply; 404 pra modelo de outro usuário; 404 pra mapa de outro workspace.
 - `taskTemplatesFromTask.smoke.test.ts`: copia campos e checklist; 403 pra não-membro; 400 pra tarefa de aprovação.
 
 **mindtask-app:** sem teste automatizado novo obrigatório (typecheck relativo: sem erro novo; ver memória `bloquim_fe_typecheck_debt`). Smoke manual no browser: menu do modal, criar/aplicar modelo de tarefa, botão do canvas com e sem seleção, aplicação enquadra e seleciona, aba de gestão.
