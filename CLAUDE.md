@@ -41,7 +41,9 @@ artifacts/
         myTasks.ts           # Minhas tarefas (CRUD, subtasks, comments, attachments, activities)
         workspaceTasks.ts    # Tarefas do workspace (counts, aprovações, approve/reject)
         tasksSearch.ts       # Busca global de tarefas
-        taskTemplates.ts     # CRUD templates + subtasks de template + apply
+        taskTemplates.ts     # CRUD templates + subtasks de template + apply + from-task
+        planTemplates.ts     # Modelos de plano de ação do usuário (listar/renomear/excluir)
+        mapPlanTemplates.ts  # Capturar/aplicar modelo de plano num mapa
         comments.ts          # Comentários em cards e tarefas
         textElements.ts      # Elementos de texto livre no mapa
         shapes.ts            # Formas desenhadas no mapa (rect, ellipse, line, image)
@@ -61,6 +63,11 @@ artifacts/
         taskStatusService.ts        # Transições de status
         taskSubtasksService.ts      # Lógica de subtarefas
         taskTemplatesService.ts     # Lógica de templates
+        planTemplates/
+          types.ts                  # Formato do snapshot do modelo de plano
+          capture.ts                # Seleção do mapa → snapshot
+          apply.ts                  # Snapshot → novos cards/textos/formas/conexões
+          service.ts                # CRUD + orquestração (privado por usuário)
         taskVisualSyncService.ts    # Sincronização task.status → card.statusVisual
         googleCalendarService.ts    # Integração Google Calendar
       middlewares/
@@ -97,6 +104,7 @@ artifacts/
           TextNode.tsx           # Node de texto livre (Tiptap)
           TextNodeEditor.tsx     # Editor inline do TextNode
           ShapeNode.tsx          # Node de forma (rect, ellipse, line, image)
+          PlanTemplateMenu.tsx   # Menu do canvas: salvar seleção / aplicar modelo de plano
           ApprovalNode.tsx       # Node de aprovação (violeta)
           ApprovalJoinNode.tsx   # Ponto de convergência de aprovações
           ApprovalEdge.tsx       # Edge tracejada (aprovação)
@@ -123,11 +131,15 @@ artifacts/
           association/           # Chips de associação tarefa-card
         templates/
           TemplateDetailModal.tsx # Modal de edição de template
+          PlanTemplatesTab.tsx   # Aba "planos de ação" da página de modelos
         profile/
           ProfileSheet.tsx       # Sheet de perfil do usuário
       hooks/
         useComments.ts, useGoogleCalendar.ts, useProfile.ts,
         usePositionHistory.ts, useHidden.ts, use-toast.ts
+      lib/
+        planTemplates.ts         # Tipos/contrato dos modelos de plano (rotas fora do OpenAPI)
+        apiErrorMessage.ts       # Mensagem exibível de erro da API (byStatus)
       stores/                   # Zustand stores
 
   mockup-sandbox/              # Design preview server (rota /__mockup)
@@ -156,6 +168,7 @@ lib/
       textElements.ts           # map_text_elements
       attachments.ts            # attachments (unificado)
       shapes.ts                 # map_shapes
+      planTemplates.ts          # plan_templates
       integrations.ts           # user_google_calendar_accounts, user_calendar_preferences
   object-storage-web/
     src/
@@ -213,6 +226,7 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | map_text_elements | Elementos de texto livre no mapa (Tiptap) |
 | task_templates | Templates reutilizáveis de tarefa |
 | task_template_subtasks | Subtarefas de um template |
+| plan_templates | Modelos de plano de ação (snapshot jsonb de cards/textos/formas/conexões), privados por usuário |
 | map_shapes | Formas desenhadas (rect, ellipse, line, image) |
 | user_google_calendar_accounts | Contas Google Calendar vinculadas |
 | user_calendar_preferences | Preferências de calendário |
@@ -336,6 +350,19 @@ pnpm --filter @workspace/api-server run build      # Build de produção do API 
 | PATCH/DELETE | /api/task-templates/:tId/subtasks/:sId | Atualizar/excluir subtask do template |
 | PUT | /api/task-templates/:tId/subtasks/reorder | Reordenar subtasks |
 | POST | /api/task-templates/:tId/apply | Aplicar template a uma tarefa |
+| POST | /api/task-templates/from-task | Criar template a partir de uma tarefa existente |
+
+### Modelos de plano de ação
+
+Modelos são privados por usuário (cada um só vê/edita os seus).
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | /api/plan-templates | Listar meus modelos de plano |
+| PATCH | /api/plan-templates/:id | Renomear modelo |
+| DELETE | /api/plan-templates/:id | Excluir modelo |
+| POST | /api/workspaces/:wId/maps/:mId/plan-templates/capture | Salvar a seleção do mapa como modelo (qualquer membro) |
+| POST | /api/workspaces/:wId/maps/:mId/plan-templates/:templateId/apply | Aplicar modelo no mapa, criando elementos novos (admin/editor) |
 
 ### Anexos de Tarefas (workspace scope)
 | Método | Rota | Descrição |

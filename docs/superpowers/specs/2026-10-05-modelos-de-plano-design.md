@@ -223,7 +223,7 @@ Em `pages/maps/canvas.tsx`, novo componente `components/maps/PlanTemplateMenu.ts
 
 ## Rollout
 
-- Migration aditiva; aplicar em prod com `drizzle-kit push` (padrão do repo) antes do deploy do api.
+- Migration aditiva: aplicar `lib/db/drizzle/0041_add_plan_templates.sql` à mão com `pg` no banco de produção (o mesmo SQL idempotente já aplicado em dev; nunca `drizzle-kit push`), antes do deploy do api.
 - Sem flag de feature. Sem mudança de contrato nas rotas existentes.
 - Deploy: push na branch → PR → merge em `master` só com pedido explícito (regra do projeto).
 
