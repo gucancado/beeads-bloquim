@@ -434,6 +434,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const highlightedEdgeIdRef = useRef<string | null>(null);
   const [pendingDeleteNodeIds, setPendingDeleteNodeIds] = useState<string[] | null>(null);
+  // Textos/formas selecionados junto com cards no Delete: excluídos pelo mesmo diálogo.
+  const [pendingDeleteExtraNodes, setPendingDeleteExtraNodes] = useState<Array<{ id: string; type: string }>>([]);
   const initializedRef = useRef(false);
   const nodesRef = useRef<Node[]>([]);
   const groupIndexRef = useRef<ApprovalGroupIndex>(new Map());
@@ -481,6 +483,11 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       if (selectedNodes.length === 0) return;
       e.preventDefault();
       e.stopPropagation();
+      setPendingDeleteExtraNodes(
+        nodesRef.current
+          .filter(n => n.selected && (n.type === 'textnode' || n.type === 'shapenode') && n.deletable !== false)
+          .map(n => ({ id: n.id, type: n.type as string })),
+      );
       setPendingDeleteNodeIds(selectedNodes.map(n => n.id));
     };
     document.addEventListener('keydown', handleKeyDown, true);
@@ -898,6 +905,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           selectIds = pendingSel;
           pendingSelectIdsRef.current = new Set();
         }
+      }
+      if (selectIds) {
+        // D8: arestas antigas selecionadas não podem ir junto no próximo Delete.
+        setEdges(prev => prev.some(e => e.selected) ? prev.map(e => e.selected ? { ...e, selected: false } : e) : prev);
       }
       setNodes(prev => {
         const serverCardIds = new Set(mapData.cards.map(c => c.id));
@@ -2889,6 +2900,20 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
     );
   }, [setNodes, setEdges, deleteCardMut, workspaceId, mapId, queryClient]);
 
+  // Exclusão de um nó do canvas pelo tipo (texto, forma ou card) — usada pelo
+  // onNodesDelete do ReactFlow e pelo diálogo do Delete.
+  const deleteCanvasNode = useCallback((n: { id: string; type?: string }) => {
+    if (n.type === 'textnode') {
+      handleDeleteTextNode(n.id);
+      deleteTextMut.mutate({ workspaceId, mapId, elementId: n.id });
+    } else if (n.type === 'shapenode') {
+      handleDeleteShapeNode(n.id);
+      deleteShapeMut.mutate({ workspaceId, mapId, shapeId: n.id });
+    } else {
+      handleDeleteCard(n.id);
+    }
+  }, [handleDeleteTextNode, handleDeleteShapeNode, deleteTextMut, deleteShapeMut, handleDeleteCard, workspaceId, mapId]);
+
   if (isLoading || !mapData) {
     return (
       <AppLayout>
@@ -3151,17 +3176,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
             minZoom={0.2}
             maxZoom={2.5}
             onNodesDelete={(deletedNodes) => {
-              deletedNodes.forEach(n => {
-                if (n.type === 'textnode') {
-                  handleDeleteTextNode(n.id);
-                  deleteTextMut.mutate({ workspaceId, mapId, elementId: n.id });
-                } else if (n.type === 'shapenode') {
-                  handleDeleteShapeNode(n.id);
-                  deleteShapeMut.mutate({ workspaceId, mapId, shapeId: n.id });
-                } else {
-                  handleDeleteCard(n.id);
-                }
-              });
+              deletedNodes.forEach(n => deleteCanvasNode(n));
             }}
             deleteKeyCode="Delete"
             className="w-full h-full"
@@ -3219,7 +3234,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 lowercase">
-              excluir {pendingDeleteNodeIds && pendingDeleteNodeIds.length > 1 ? `${pendingDeleteNodeIds.length} tarefas` : 'tarefa'}?
+              excluir {pendingDeleteExtraNodes.length > 0
+                ? `${(pendingDeleteNodeIds?.length ?? 0) + pendingDeleteExtraNodes.length} elementos`
+                : pendingDeleteNodeIds && pendingDeleteNodeIds.length > 1 ? `${pendingDeleteNodeIds.length} tarefas` : 'tarefa'}?
             </AlertDialogTitle>
             <AlertDialogDescription className="lowercase">
               essa ação não pode ser desfeita.
@@ -3232,7 +3249,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               onClick={() => {
                 if (pendingDeleteNodeIds) {
                   pendingDeleteNodeIds.forEach(id => handleDeleteCard(id));
+                  pendingDeleteExtraNodes.forEach(n => deleteCanvasNode(n));
                 }
+                setPendingDeleteExtraNodes([]);
                 setPendingDeleteNodeIds(null);
               }}
             >
