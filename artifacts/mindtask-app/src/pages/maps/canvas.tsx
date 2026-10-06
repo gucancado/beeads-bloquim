@@ -25,6 +25,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { PlanTemplateMenu } from "@/components/maps/PlanTemplateMenu";
+import { selectionFromNodes, type PlanApplyResult } from "@/lib/planTemplates";
 import { usePresenceChannel } from "@/realtime/usePresenceChannel";
 import { PresenceCursorsOverlay } from "@/realtime/PresenceCursorsOverlay";
 
@@ -376,7 +378,7 @@ function isNodeDragActive(startedAt: number): boolean {
 function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView, setCenter } = useReactFlow();
+  const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView, fitBounds, setCenter } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
   const [cardGhost, setCardGhost] = useState<{ x: number; y: number } | null>(null);
@@ -441,6 +443,9 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const pendingDeleteNodeIdsRef = useRef<string[] | null>(pendingDeleteNodeIds);
   const focusOnLoadCardIdRef = useRef<string | null>(null);
   const focusOnLoadAppliedRef = useRef(false);
+  // Ids (cards/textos/formas) criados por "aplicar modelo de plano": o efeito
+  // de sync os seleciona no MESMO setNodes que os insere (sem corrida com o refetch).
+  const pendingSelectIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
@@ -879,6 +884,21 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       setEdges(initialEdges);
       initializedRef.current = true;
     } else {
+      // Consome a seleção pendente só quando o payload já traz os elementos
+      // aplicados (um poll em voo, anterior ao apply, não pode esvaziar o ref).
+      // Decidido FORA do updater: o React pode chamar o updater duas vezes.
+      let selectIds: Set<string> | null = null;
+      const pendingSel = pendingSelectIdsRef.current;
+      if (pendingSel.size > 0) {
+        const arrived =
+          mapData.cards.some(c => pendingSel.has(c.id)) ||
+          (mapDataWithText.textElements ?? []).some(el => pendingSel.has(el.id)) ||
+          (mapDataWithText.shapes ?? []).some(sh => pendingSel.has(sh.id));
+        if (arrived) {
+          selectIds = pendingSel;
+          pendingSelectIdsRef.current = new Set();
+        }
+      }
       setNodes(prev => {
         const serverCardIds = new Set(mapData.cards.map(c => c.id));
         const serverTextIds = new Set((mapDataWithText.textElements ?? []).map(el => el.id));
@@ -941,7 +961,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           }
           return jn;
         });
-        return [
+        const next: Node[] = [
           ...filtered.map(n => {
             if (n.type === 'textnode') {
               const serverEl = (mapDataWithText.textElements ?? []).find(el => el.id === n.id);
@@ -990,6 +1010,10 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           ...newTextNodes,
           ...freshJoinNodes,
         ];
+        if (!selectIds) return next;
+        const toSelect = selectIds;
+        // Novos nós do modelo nascem selecionados; o resto é desmarcado (D8).
+        return next.map(n => ({ ...n, selected: toSelect.has(n.id) }));
       });
 
       setEdges(prev => {
@@ -1156,6 +1180,16 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
       },
     );
   }, [workspaceId, mapId, layoutMapMut, pushSnapshot, queryClient, setNodes, fitView]);
+
+  const getPlanSelection = useCallback(() => selectionFromNodes(nodesRef.current), []);
+
+  // Pós-aplicação de modelo de plano: marca a seleção pendente, enquadra a
+  // caixa devolvida pelo servidor (não depende dos nós existirem) e refaz o GET.
+  const handlePlanTemplateApplied = useCallback((r: PlanApplyResult) => {
+    pendingSelectIdsRef.current = new Set([...r.cardIds, ...r.textElementIds, ...r.shapeIds]);
+    fitBounds(r.bounds, { duration: 400, padding: 0.2 });
+    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
+  }, [fitBounds, queryClient, workspaceId, mapId]);
 
   const handleAddChildCard = useCallback((parentCardId: string) => {
     // For parallel mode, prefer the join node position (to the right of the join circle)
@@ -2882,6 +2916,15 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
               ]}
             />
           </div>
+        </div>
+
+        <div className="absolute top-4 right-16 z-20">
+          <PlanTemplateMenu
+            workspaceId={workspaceId}
+            mapId={mapId}
+            getSelection={getPlanSelection}
+            onApplied={handlePlanTemplateApplied}
+          />
         </div>
 
         {textGhost && (
