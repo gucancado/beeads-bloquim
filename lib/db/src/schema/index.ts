@@ -12,3 +12,4 @@ export * from "./integrations";
 export * from "./preferences";
 export * from "./workspaceAgents";
 export * from "./meetings";
+export * from "./planTemplates";

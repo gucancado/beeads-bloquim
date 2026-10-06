@@ -12,6 +12,7 @@ import {
   deleteTemplateSubtask,
   reorderTemplateSubtasks,
   applyTemplateToTask,
+  createTemplateFromTask,
 } from "../services/taskTemplatesService";
 
 const router: IRouter = Router();
@@ -43,6 +44,10 @@ const applySchema = z.object({
   taskId: z.string().uuid(),
 });
 
+const fromTaskSchema = z.object({
+  taskId: z.string().uuid(),
+});
+
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const r = await listTemplates(req.user!.userId);
   res.status(r.status).json(r.body);
@@ -50,6 +55,16 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   const r = await createTemplate(req.user!.userId);
+  res.status(r.status).json(r.body);
+});
+
+router.post("/from-task", requireAuth, async (req: AuthRequest, res) => {
+  const parsed = fromTaskSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation error", message: parsed.error.message });
+    return;
+  }
+  const r = await createTemplateFromTask(req.user!.userId, parsed.data.taskId);
   res.status(r.status).json(r.body);
 });
 
