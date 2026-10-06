@@ -135,7 +135,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       onSelect: () => setProfileOpen(true),
     },
     {
-      label: "modelos de tarefas",
+      label: "modelos",
       icon: <FileTextIcon className="h-4 w-4" />,
       onSelect: () => setLocation("/my-templates"),
     },
