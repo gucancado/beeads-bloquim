@@ -5,6 +5,7 @@ import {
   tasks,
   subtasks,
   workspaceMembers,
+  cards,
 } from "@workspace/db/schema";
 import { and, asc, eq, or, isNull } from "drizzle-orm";
 
@@ -278,6 +279,25 @@ export async function applyTemplateToTask(
   await db.transaction(async (tx) => {
     if (Object.keys(updateData).length > 1) {
       await tx.update(tasks).set(updateData).where(eq(tasks.id, taskId));
+    }
+    // O modal aberto pelo mapa lê título/descrição do CARD, não da tarefa — e
+    // salva de volta o que mostra ao fechar. Sem espelhar aqui, o modelo
+    // "aplicava" e o fechamento do modal desfazia título e prioridade.
+    if (tplTitle || tplDesc) {
+      const linked = await tx
+        .select({ id: cards.id, description: cards.description })
+        .from(cards)
+        .where(eq(cards.taskId, taskId));
+      for (const c of linked) {
+        const cardData: Record<string, unknown> = { updatedAt: new Date() };
+        if (tplTitle) cardData.title = tplTitle;
+        if (tplDesc) {
+          cardData.description = (c.description ?? "").trim()
+            ? `${c.description}\n\n${tpl.description}`
+            : tpl.description;
+        }
+        await tx.update(cards).set(cardData).where(eq(cards.id, c.id));
+      }
     }
     if (tplSubs.length > 0) {
       const existing = await tx

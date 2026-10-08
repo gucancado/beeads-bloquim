@@ -732,15 +732,22 @@ export function TaskDetailModal({
                   onTemplateApplied={() => {
                     resetTitleDescriptionInit();
                     invalidateTask();
-                    if (resolvedTaskId) {
+                    // Aberto pelo mapa, o formulário é hidratado do CARD: sem
+                    // recarregá-lo, o modal segue com título/prioridade antigos
+                    // e os grava de volta ao fechar, desfazendo o modelo.
+                    if (isCardMode) invalidateCard();
+                    // No modo card o id da tarefa vem do card (taskIdResolved);
+                    // resolvedTaskId só existe no modo lista.
+                    const appliedTaskId = taskIdResolved ?? resolvedTaskId;
+                    if (appliedTaskId) {
                       const subPath = isStandalone
-                        ? `/api/my-tasks/${resolvedTaskId}/subtasks`
-                        : `/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}/subtasks`;
+                        ? `/api/my-tasks/${appliedTaskId}/subtasks`
+                        : `/api/workspaces/${effectiveWorkspaceId}/tasks/${appliedTaskId}/subtasks`;
                       queryClient.invalidateQueries({ queryKey: [subPath] });
                       queryClient.invalidateQueries({
                         queryKey: isStandalone
-                          ? [`/api/my-tasks/${resolvedTaskId}`]
-                          : [`/api/workspaces/${effectiveWorkspaceId}/tasks/${resolvedTaskId}`],
+                          ? [`/api/my-tasks/${appliedTaskId}`]
+                          : [`/api/workspaces/${effectiveWorkspaceId}/tasks/${appliedTaskId}`],
                       });
                     }
                   }}
