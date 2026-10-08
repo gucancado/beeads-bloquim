@@ -225,6 +225,62 @@ test("modal de tarefa: menu modelo (criar e aplicar), rascunho e não-rascunho",
 
 // ───────────────────────────── 5: /embed/task ─────────────────────────────
 
+test("modal pelo mapa: aplicar modelo de OUTRA tarefa muda título e prioridade e sobrevive ao fechar", async ({ page, context }) => {
+  // Regressão do smoke de prod 2026-10-07: o modal aberto pelo mapa não recarregava
+  // o card após aplicar e, ao fechar, gravava de volta título/prioridade antigos.
+  const errors = watchErrors(page);
+  const stamp = Date.now();
+  const { api } = await login(OWNER);
+  const c: Cleanup = { taskTemplates: [], planTemplates: [] };
+  let wsId: string | undefined;
+  try {
+    const s = await newWorkspace(api, stamp);
+    wsId = s.wsId;
+    const alfa = await newCard(api, s.wsId, s.mapId, `alfa ${stamp}`, 100, 100);
+    const beta = await newCard(api, s.wsId, s.mapId, `beta ${stamp}`, 500, 100);
+    await ok(api.patch(`/api/workspaces/${s.wsId}/tasks/${alfa.taskId}`, { data: { priority: "high" } }), "patch alfa");
+    await ok(
+      api.post(`/api/workspaces/${s.wsId}/tasks/${alfa.taskId}/subtasks`, { data: { items: [{ text: "item 1" }, { text: "item 2" }] } }),
+      "subtasks alfa",
+    );
+    const tpl = await ok(api.post("/api/task-templates/from-task", { data: { taskId: alfa.taskId } }), "tpl alfa");
+    c.taskTemplates.push(tpl.id);
+
+    await authenticate(context, api);
+    await openCanvas(page, s.wsId, s.mapId, `?cardId=${beta.id}`);
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByTitle("modelo", { exact: true }).click();
+    await page.getByRole("button", { name: "aplicar modelo", exact: true }).click();
+    await page.getByRole("button", { name: `alfa ${stamp}`, exact: true }).click();
+    const applied = page.waitForResponse((r) => r.url().endsWith(`/api/task-templates/${tpl.id}/apply`));
+    await page.getByRole("alertdialog").getByRole("button", { name: "Aplicar" }).click();
+    expect((await applied).ok()).toBeTruthy();
+    await expect(toast(page, "modelo aplicado")).toBeVisible();
+
+    // O modal se atualiza sem reabrir: título e checklist do modelo aparecem.
+    const inputValues = () =>
+      dialog.locator("input").evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+    await expect.poll(inputValues, { timeout: 10_000 }).toContain(`alfa ${stamp}`);
+    await expect.poll(inputValues, { timeout: 10_000 }).toEqual(expect.arrayContaining(["item 1", "item 2"]));
+
+    // Fecha (o fechamento salva o formulário) e confere o que ficou gravado.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await page.waitForTimeout(1500); // deixa os PUT/PATCH do fechamento chegarem
+    const card = await ok(api.get(`/api/workspaces/${s.wsId}/maps/${s.mapId}/cards/${beta.id}`), "card beta");
+    expect(card.title).toBe(`alfa ${stamp}`);
+    expect(card.task.title).toBe(`alfa ${stamp}`);
+    expect(card.task.priority).toBe("high");
+    const subs = await ok(api.get(`/api/workspaces/${s.wsId}/tasks/${beta.taskId}/subtasks`), "subtasks beta");
+    expect((subs as unknown[]).length).toBe(2);
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  } finally {
+    await cleanup(api, wsId, c);
+  }
+});
+
 test("embed /embed/task: menu modelo abre dentro do modal e cria modelo", async ({ page, context }) => {
   const errors = watchErrors(page);
   const stamp = Date.now();
