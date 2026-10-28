@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, Fragment } from "react";
 import { usePositionHistory, NodePositionSnapshot } from "@/hooks/usePositionHistory";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -29,6 +29,8 @@ import { PlanTemplateMenu } from "@/components/maps/PlanTemplateMenu";
 import { selectionFromNodes, type PlanApplyResult } from "@/lib/planTemplates";
 import { usePresenceChannel } from "@/realtime/usePresenceChannel";
 import { PresenceCursorsOverlay } from "@/realtime/PresenceCursorsOverlay";
+import { changedMessage, workspaceRouteBase } from "@/lib/embedBridge";
+import { postToEmbedParent } from "@/lib/embedParent";
 
 interface CreateConnectionRequestWithHandles extends CreateConnectionRequest {
   sourceHandle?: string;
@@ -375,9 +377,17 @@ function isNodeDragActive(startedAt: number): boolean {
   return startedAt !== 0 && Date.now() - startedAt < NODE_DRAG_ACTIVE_TIMEOUT_MS;
 }
 
-function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: string }) {
+/**
+ * Canvas do plano. Renderizado pela página `/workspaces/:wsId/maps/:mapId`
+ * (dentro do `AppLayout`) e por `/embed/workspaces/:wsId/maps/:mapId`
+ * (`embedded`): no embed não há `AppLayout` nem botão de voltar, o
+ * breadcrumb não tem link (sair do canvas é gesto do painel) e toda
+ * navegação é `replace` — o iframe não empilha histórico no painel.
+ */
+export function CanvasInner({ workspaceId, mapId, embedded = false }: { workspaceId: string; mapId: string; embedded?: boolean }) {
   const queryClient = useQueryClient();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const Frame = embedded ? Fragment : AppLayout;
   const { getViewport, setViewport, screenToFlowPosition, zoomIn, zoomOut, fitView, fitBounds, setCenter } = useReactFlow();
   const [textGhost, setTextGhost] = useState<{ x: number; y: number } | null>(null);
   const textDragRef = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
@@ -423,7 +433,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
   const nodeDragActiveRef = useRef(0);
 
   const search = useSearch();
-  const canvasBasePath = `/workspaces/${workspaceId}/maps/${mapId}`;
+  const canvasBasePath = `${workspaceRouteBase(workspaceId, location)}/maps/${mapId}`;
   const cardIdFromUrl = new URLSearchParams(search).get("cardId");
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -614,8 +624,8 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   const handleOpenPanel = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
-    navigate(`${canvasBasePath}?cardId=${cardId}`);
-  }, [canvasBasePath, navigate]);
+    navigate(`${canvasBasePath}?cardId=${cardId}`, { replace: embedded });
+  }, [canvasBasePath, navigate, embedded]);
 
   const handleInlineUpdate = useCallback((cardId: string, patch: Partial<{
     title: string;
@@ -1252,7 +1262,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         if (!anySelected) return;
         e.preventDefault();
         setNodes(prev => prev.map(n => ({ ...n, selected: false })));
-        navigate(canvasBasePath);
+        navigate(canvasBasePath, { replace: embedded });
         return;
       }
 
@@ -2916,27 +2926,29 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
 
   if (isLoading || !mapData) {
     return (
-      <AppLayout>
+      <Frame>
         <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-background">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
         </div>
-      </AppLayout>
+      </Frame>
     );
   }
 
   return (
-    <AppLayout>
+    <Frame>
       <div className="flex-1 flex flex-col bg-slate-100 dark:bg-background relative overflow-hidden">
         <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
-          <Link href={`/workspaces/${workspaceId}`}>
-            <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 bg-background shadow-md border-border/60">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
+          {!embedded && (
+            <Link href={workspaceRouteBase(workspaceId, location)}>
+              <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 bg-background shadow-md border-border/60">
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            </Link>
+          )}
           <div className="bg-background px-4 py-2 rounded-xl border border-border/60 shadow-md">
             <PageBreadcrumb
               items={[
-                { label: (canvasWorkspace?.name ?? "espaço").toLowerCase(), href: `/workspaces/${workspaceId}` },
+                { label: (canvasWorkspace?.name ?? "espaço").toLowerCase(), href: embedded ? undefined : workspaceRouteBase(workspaceId, location) },
                 { label: mapData.name.toLowerCase() },
               ]}
             />
@@ -3217,13 +3229,14 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
         onClose={() => {
           setSelectedCardId(null);
           navigate(canvasBasePath, { replace: true });
+          if (embedded) postToEmbedParent(changedMessage("tasks"));
         }}
         onDeleteCard={handleDeleteCard}
         onDuplicated={(_, newCardId) => {
           if (newCardId) {
             queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
             setSelectedCardId(newCardId);
-            navigate(`${canvasBasePath}?cardId=${newCardId}`);
+            navigate(`${canvasBasePath}?cardId=${newCardId}`, { replace: embedded });
           } else {
             queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/maps/${mapId}`] });
           }
@@ -3260,7 +3273,7 @@ function CanvasInner({ workspaceId, mapId }: { workspaceId: string; mapId: strin
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </Frame>
   );
 }
 

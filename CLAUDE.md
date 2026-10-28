@@ -420,6 +420,23 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 - `/*` → `bloquim-web` (Vite SPA, porta `WEB_PORT`)
 - Reverse proxy gerenciado pelo Coolify; ambos sobem como containers separados no projeto `bloquim`.
 
+### Embed do modal de tarefa no painel (`/embed/task`)
+Desde 2026-09-15 o painel (`painel.beeads.com.br`, repo `beeads-central-de-dados`) embute o `TaskDetailModal` deste app num iframe em tela cheia (botão "nova tarefa" do header). É **contrato entre repos**:
+- `artifacts/mindtask-app/src/pages/embed/task.tsx` — rota sem AppLayout; posta `ready` ao montar, abre o modal com `open {workspaceId, taskId}`, posta `closed` ao fechar. A cópia duplicada só reabre depois do `open=false` commitado (`pendingReopen` + effect) — senão fechar a cópia **apaga a original** intocada (o reset do `useAutoCreateTask` só roda num `!open` commitado).
+- `artifacts/mindtask-app/src/lib/embedBridge.ts` (+ `.test.ts`) — protocolo e allowlist de origem; **espelho** de `web/src/lib/task-embed-bridge.ts` do painel, com as mesmas fixtures. Mudar um lado exige mudar o outro.
+- `App.tsx` força o tema em `/embed/*` a partir de `?theme=` (`forcedTheme`, não grava a preferência); `index.css` tem `html.embed-transparent` (fundo transparente).
+- `deploy/mindtask-app/nginx.conf` — `location ^~ /embed/` com `rewrite ^ /index.html break` e `Content-Security-Policy: frame-ancestors 'self' https://painel.beeads.com.br`. **Não trocar por `try_files`**: o fallback reentra em `location /` e herda o `X-Frame-Options: SAMEORIGIN`.
+- Ao mexer nos callbacks do `TaskDetailModal` (`onClose`/`onAutoCreated`/`onDuplicated`, e a ordem em que o duplicar os chama) ou em navegação interna do modal (ex.: `navigate` em `components/tasks/approval/ApprovalTaskView.tsx`), conferir o embed: dentro do iframe, navegar renderiza o app inteiro e nunca manda `closed`. O painel nunca desmonta o iframe ao fechar (o save do título no fechamento não é aguardado).
+
+### Embed da lista de tarefas e do canvas no painel (`/embed/workspaces/...`)
+Desde 2026-10-28 o painel embute também a aba de tarefas e o canvas do plano (barra direita). Mais três rotas sem AppLayout, servidas pelo mesmo `location ^~ /embed/` do nginx:
+- `/embed/workspaces/:wsId/tasks` e `/embed/workspaces/:wsId/tasks/:taskId` → `pages/embed/workspaceTasks.tsx` (`WorkspaceTasksPanel embedded`, extraído da página do workspace).
+- `/embed/workspaces/:wsId/maps/:mapId` → `pages/embed/canvas.tsx` (`CanvasInner embedded`, exportado de `pages/maps/canvas.tsx`): sem botão de voltar, breadcrumb sem link; `?cardId=` abre a tarefa.
+- `components/embed/EmbedShell.tsx` — casca comum: raiz transparente, posta `ready`, gate de sessão (sessão expirada → link "entrar de novo" com `target="_top"` e o `returnUrl` do `init`).
+- Protocolo (`lib/embedBridge.ts`, mesma allowlist de origem): pai→filho `init {returnUrl}` (o filho guarda a origem do pai em `lib/embedParent.ts`) e `navigate {path}` (só caminhos `/embed/`, sempre `replace`); filho→pai `navigate {target: "tasks" | "map", mapId}` (trocar de tela é decisão do painel) e `changed {what: "plans" | "tasks"}` (o painel refaz a leitura da barra; o canvas posta `changed tasks` ao fechar o modal de tarefa).
+- Regras: prefixo de rota **só** por `workspaceRouteBase(workspaceId, location)` (nunca literal `/workspaces/...` — tiraria o iframe do embed e renderizaria o app inteiro com sidebar); entre telas (lista ↔ canvas) **só** por mensagem ao pai; dentro do embed todo `navigate` é `{ replace: true }` (o iframe não empilha histórico no painel).
+- Guarda: `components/tasks/embedLinks.test.ts` varre os arquivos que rodam sob `/embed/*` e falha com prefixo literal. Arquivo novo que renderize dentro do embed entra na lista `FILES`.
+
 ### Sincronização Visual
 Ao atualizar `task.status`, o `taskVisualSyncService` atualiza automaticamente `card.statusVisual`. Cores: pending=azul, in_progress=âmbar, completed=esmeralda, overdue=vermelho, blocked=cinza, draft=slate.
 

@@ -8,11 +8,11 @@ import path from "node:path";
  * `workspaceRouteBase` — um literal `/workspaces/...` tiraria o iframe do
  * embed (e cairia no AppLayout com sidebar dentro do painel).
  */
-// `pages/maps/canvas.tsx` entra na lista na Task 4.
 const FILES = [
   "components/tasks/TaskListItem.tsx",
   "components/tasks/ApprovalTaskView.tsx",
   "components/workspaces/WorkspaceTasksPanel.tsx",
+  "pages/maps/canvas.tsx",
 ];
 const BANNED = ["href={`/workspaces/", "navigate(`/workspaces/", "navigate(`${APP_BASE}/workspaces/"];
 
