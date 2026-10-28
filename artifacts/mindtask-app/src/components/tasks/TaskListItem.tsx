@@ -566,7 +566,9 @@ export function TaskListItem({
 
   const renderWorkspaceMapCell = () => {
     const wsVisible = showWorkspaceName && localTask.workspaceName;
-    const mapVisible = showMapName && localTask.mapName;
+    // Sem `mapId` não há para onde ir (nem link nem pedido ao painel): o chip some.
+    const mapId = localTask.mapId;
+    const mapVisible = showMapName && localTask.mapName && mapId;
     if (!wsVisible && !mapVisible) return null;
     // Dentro do embed (`/embed/workspaces/...`, iframe do painel) os chips não
     // navegam o iframe: pedem ao painel para abrir a lista ou o plano.
@@ -609,12 +611,12 @@ export function TaskListItem({
             <span className="truncate">{localTask.workspaceName}</span>
           </>
         ))}
-        {mapVisible && chip(`${base}/maps/${localTask.mapId}`, { kind: "map", mapId: localTask.mapId ?? "" }, (
+        {mapVisible && mapId ? chip(`${base}/maps/${mapId}`, { kind: "map", mapId }, (
           <>
             <MapIcon className="w-3 h-3 shrink-0" />
             <span className="truncate">{localTask.mapName}</span>
           </>
-        ))}
+        )) : null}
       </div>
     );
   };
