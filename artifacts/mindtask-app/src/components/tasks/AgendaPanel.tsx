@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { ChevronDown, ChevronRight, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { useGoogleCalendarStatus, useTodayEvents } from "@/hooks/useGoogleCalendar";
@@ -10,6 +10,9 @@ import { TriageDialog } from "@/components/meetings/TriageDialog";
 import { EventRow } from "@/components/meetings/EventRow";
 
 export function AgendaPanel() {
+  // A agenda começa SEMPRE recolhida e só expande por clique do usuário.
+  // Nunca abrir programaticamente (ex.: reunião em coleta, evento próximo):
+  // o usuário pediu que a lista nunca "abra sozinha".
   const [expanded, setExpanded] = useState(false);
   const { data: status, isLoading: statusLoading, isFetched: statusFetched } = useGoogleCalendarStatus();
   const isConnected = !!status?.connected;
@@ -27,12 +30,6 @@ export function AgendaPanel() {
   const events = (data?.events ?? []).filter(e => !syncedEventIds.has(e.id));
   const allDay = events.filter(e => e.allDay);
   const timed = events.filter(e => !e.allDay);
-
-  // Abre a agenda automaticamente quando há uma reunião coletando (feedback pós "nova reunião").
-  const hasCollecting = meetings.some(m => m.status === "collecting");
-  useEffect(() => {
-    if (hasCollecting) setExpanded(true);
-  }, [hasCollecting]);
 
   if (statusLoading || !statusFetched) return null;
   // Sem Google Calendar conectado e sem reuniões → nada a exibir.
