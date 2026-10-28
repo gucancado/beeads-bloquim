@@ -1,7 +1,7 @@
 // Renders a single task as a <tr> inside a <TaskTable>. Cells (after the
 // always-leading "title" cell) are rendered in the order defined by the
 // user's saved column preferences — passed in via `columnOrder`.
-import { useState, useEffect, cloneElement } from "react";
+import { useState, useEffect, cloneElement, type ReactNode } from "react";
 import { Calendar as CalendarIcon, Map as MapIcon, Building2, User, Repeat, Paperclip, ListChecks, MessageSquare } from "lucide-react";
 import { formatDueDate, addOneDayYmd } from "@/lib/utils";
 import { SchedulePopover } from "@/components/tasks/SchedulePopover";
@@ -19,6 +19,8 @@ import { EditableTitle } from "@/components/ui/editable-title";
 import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { MemberSelectList } from "@/components/tasks/MemberSelectList";
 import { useInlineTaskEditor } from "@/hooks/useInlineTaskEditor";
+import { navigateMessage, workspaceRouteBase, type NavigateTarget } from "@/lib/embedBridge";
+import { isEmbedded, postToEmbedParent } from "@/lib/embedParent";
 
 function getInitials(name: string) {
   return name
@@ -564,16 +566,40 @@ export function TaskListItem({
 
   const renderWorkspaceMapCell = () => {
     const wsVisible = showWorkspaceName && localTask.workspaceName;
-    const mapVisible = showMapName && localTask.mapName;
+    // Sem `mapId` não há para onde ir (nem link nem pedido ao painel): o chip some.
+    const mapId = localTask.mapId;
+    const mapVisible = showMapName && localTask.mapName && mapId;
     if (!wsVisible && !mapVisible) return null;
+    // Dentro do embed (`/embed/workspaces/...`, iframe do painel) os chips não
+    // navegam o iframe: pedem ao painel para abrir a lista ou o plano.
+    const embedded = isEmbedded();
+    const base = workspaceRouteBase(localTask.workspaceId, window.location.pathname);
+    const chipClass = "flex items-center gap-1 hover:underline decoration-dotted min-w-0";
+    const chip = (href: string, target: NavigateTarget, content: ReactNode) =>
+      embedded ? (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            postToEmbedParent(navigateMessage(target));
+          }}
+          className={`${chipClass} text-left`}
+        >
+          {content}
+        </button>
+      ) : (
+        <Link
+          href={href}
+          onClick={e => e.stopPropagation()}
+          className={chipClass}
+        >
+          {content}
+        </Link>
+      );
     return (
       <div className="flex flex-col gap-0.5 min-w-0 text-xs text-muted-foreground">
-        {wsVisible && (
-          <Link
-            href={`/workspaces/${localTask.workspaceId}`}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 hover:underline decoration-dotted min-w-0"
-          >
+        {wsVisible && chip(base, { kind: "tasks" }, (
+          <>
             {workspaceColorHex ? (
               <span
                 style={{ backgroundColor: workspaceColorHex, width: 8, height: 8, minWidth: 8 }}
@@ -583,18 +609,14 @@ export function TaskListItem({
               <Building2 className="w-3 h-3 shrink-0" />
             )}
             <span className="truncate">{localTask.workspaceName}</span>
-          </Link>
-        )}
-        {mapVisible && (
-          <Link
-            href={`/workspaces/${localTask.workspaceId}/maps/${localTask.mapId}`}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 hover:underline decoration-dotted min-w-0"
-          >
+          </>
+        ))}
+        {mapVisible && mapId ? chip(`${base}/maps/${mapId}`, { kind: "map", mapId }, (
+          <>
             <MapIcon className="w-3 h-3 shrink-0" />
             <span className="truncate">{localTask.mapName}</span>
-          </Link>
-        )}
+          </>
+        )) : null}
       </div>
     );
   };

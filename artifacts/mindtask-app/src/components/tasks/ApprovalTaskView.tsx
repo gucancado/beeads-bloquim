@@ -11,6 +11,8 @@ import { ConsolidatedActivityHistory } from "@/components/maps/CommentsSection";
 import { ApprovalBadge, getApprovalDisplayTitle } from "@/lib/approvalTaskTitle";
 import { AttachmentsSection } from "@/components/tasks/AttachmentsSection";
 import { PriorityBadge } from "@/components/tasks/PriorityBadge";
+import { workspaceRouteBase } from "@/lib/embedBridge";
+import { isEmbedded } from "@/lib/embedParent";
 
 interface ParentTask {
   id: string;
@@ -342,7 +344,11 @@ export function ApprovalTaskView({ taskId, workspaceId, onClose, currentUserId =
     // parent task. Calling onClose() here would dispatch the host's
     // close handler, which navigates back to the task list and tears the
     // modal down before the parent gets a chance to render.
-    navigate(`${APP_BASE}/workspaces/${workspaceId}/tasks/${task.parentTaskId}`);
+    // No embed, o prefixo fica sob `/embed` e a troca não empilha histórico.
+    navigate(
+      `${APP_BASE}${workspaceRouteBase(workspaceId, window.location.pathname)}/tasks/${task.parentTaskId}`,
+      { replace: isEmbedded() },
+    );
   };
 
   if (isLoading || !task) {

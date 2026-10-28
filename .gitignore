@@ -52,3 +52,6 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Claude Code (worktrees locais)
+.claude/

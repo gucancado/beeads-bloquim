@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useRoute, Link, useSearch, useLocation } from "wouter";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRoute, Link, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageBreadcrumb, PageBreadcrumbItem } from "@/components/layout/PageBreadcrumb";
-import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, useListWorkspaceMembers, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
+import { useGetWorkspace, useCreateMap, useGetDashboard, useRemoveWorkspaceMember, usePatchWorkspaceMemberRole, useGetMe, customFetch } from "@workspace/api-client-react";
 import { useListMapsWithHidden, useToggleMapHidden, useDeleteMap } from "@/hooks/useHidden";
 import { Map, Plus, Users, Settings, LayoutDashboard, Loader2, ArrowRight, BarChart3, UserPlus, Trash2, ShieldAlert, Shield, User, EyeOff, Eye, CheckSquare } from "lucide-react";
 import { Button } from "@beeads/ui";
@@ -15,20 +15,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@beeads/ui";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { AssigneeFilterPills } from "@/components/tasks/AssigneeFilterPills";
-import { TaskListItemMember, TaskListItemData } from "@/components/tasks/TaskListItem";
-import { TaskTable } from "@/components/tasks/TaskTable";
 import { Avatar, AvatarImage, AvatarFallback } from "@beeads/ui";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@beeads/ui";
 
 import { COLOR_PALETTE, getColorByIndex } from "@workspace/db/colorPalette";
-import { groupTasksByDeadline, selectWindow, ateSextaLabel, type TimeWindow } from "@/lib/groupTasksByDeadline";
-import { TimeWindowFilterPills } from "@/components/tasks/TimeWindowFilterPills";
-import { TASK_STATUS_ORDER, TODOS_STATUS, statusFilterToApi } from "@/lib/taskStatusConstants";
-import { TodosStatusPill } from "@/components/tasks/TodosStatusPill";
-import { ViewModeToggle, type ViewMode } from "@/components/tasks/ViewModeToggle";
-import { WeekCalendar } from "@/components/calendar/WeekCalendar";
+import { type ViewMode } from "@/components/tasks/ViewModeToggle";
+import { WorkspaceTasksPanel } from "@/components/workspaces/WorkspaceTasksPanel";
 
 function getInitials(name: string) {
   return name
@@ -175,7 +167,6 @@ export default function WorkspaceDetailPage() {
   const tabParam = new URLSearchParams(search).get("tab");
   const tabFromUrl: TabValue = isValidTab(tabParam) ? tabParam : "tasks";
   const [activeTab, setActiveTab] = useState<TabValue>(deepLinkTaskId ? "tasks" : tabFromUrl);
-  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (deepLinkTaskId) {
@@ -196,65 +187,18 @@ export default function WorkspaceDetailPage() {
   const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, "admin" | "editor" | "executor">>({});
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showHiddenMaps, setShowHiddenMaps] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<string>("in_progress");
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
-  // Default "todas" no workspace — usuário pediu (decisão diferente da tela
-  // de /my-tasks, que defaulta pra "hoje").
-  const [timeWindow, setTimeWindow] = useState<TimeWindow>("todas");
+  // Só o padding lateral da página reage ao modo calendário da aba de
+  // tarefas; o estado da aba vive no WorkspaceTasksPanel.
   const [viewMode, setViewMode] = useState<ViewMode>("lista");
-
-  // Fallback caso o usuário esteja em "ate_sexta" quando o dia vira pra
-  // sexta-feira (botão fica oculto).
-  useEffect(() => {
-    if (timeWindow === "ate_sexta" && ateSextaLabel() === null) {
-      setTimeWindow("todas");
-    }
-  }, [timeWindow]);
-  const [openCard, setOpenCard] = useState<{ workspaceId: string; mapId: string; cardId: string } | null>(null);
-  const [taskSheetOpen, setTaskSheetOpen] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
 
   const { data: maps, isLoading: isMapsLoading } = useListMapsWithHidden(workspaceId, showHiddenMaps);
-  const { data: workspaceMembers } = useListWorkspaceMembers(workspaceId);
 
   const { data: me } = useGetMe();
   const currentUserId = me?.id ?? "";
-
-  const resolvedAssignees = selectedAssignees
-    .map(a => (a === "me" ? currentUserId : a))
-    .filter(Boolean);
-
-  const tasksQueryKey = [`/api/workspaces/${workspaceId}/tasks`, selectedStatus, resolvedAssignees];
-  const { data: workspaceTasks, isLoading: isTasksLoading } = useQuery<any[]>({
-    queryKey: tasksQueryKey,
-    queryFn: () => {
-      const p = new URLSearchParams();
-      p.set("status", statusFilterToApi(selectedStatus));
-      if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
-      const qs = p.toString() ? `?${p.toString()}` : "";
-      return customFetch(`/api/workspaces/${workspaceId}/tasks${qs}`);
-    },
-    enabled: !selectedAssignees.includes("me") || !!currentUserId,
-  });
-
-  const countsQueryKey = [`/api/workspaces/${workspaceId}/tasks/counts`, resolvedAssignees];
-  const { data: statusCounts } = useQuery<Record<string, number>>({
-    queryKey: countsQueryKey,
-    queryFn: () => {
-      const p = new URLSearchParams();
-      if (resolvedAssignees.length > 0) p.set("assignedTo", resolvedAssignees.join(","));
-      const qs = p.toString() ? `?${p.toString()}` : "";
-      return customFetch(`/api/workspaces/${workspaceId}/tasks/counts${qs}`);
-    },
-    enabled: !selectedAssignees.includes("me") || !!currentUserId,
-  });
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const calendarExtraKeys = useMemo(() => [countsQueryKey, ["/api/my-tasks"]], [JSON.stringify(countsQueryKey)]);
 
   const isAdmin = workspace?.role === "admin";
   const queryClient = useQueryClient();
@@ -365,12 +309,6 @@ export default function WorkspaceDetailPage() {
     }
   }, [isEditingTitle]);
 
-  const toggleAssignee = (id: string) => {
-    setSelectedAssignees(prev =>
-      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-    );
-  };
-
   const handleCreateMap = (e: React.FormEvent) => {
     e.preventDefault();
     if (!mapName.trim()) return;
@@ -468,70 +406,6 @@ export default function WorkspaceDetailPage() {
       case 'admin': return 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400 border border-red-200 dark:border-red-900/50';
       case 'editor': return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50';
       default: return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
-    }
-  };
-
-  const STATUS_OPTIONS = TASK_STATUS_ORDER;
-
-  const selectStatus = (value: string) => {
-    setSelectedStatus(value);
-  };
-
-  const changeView = (v: ViewMode) => {
-    setViewMode(v);
-    if (v === "calendario") setSelectedStatus(TODOS_STATUS);
-  };
-
-  useEffect(() => {
-    if (deepLinkTaskId) {
-      // Always sync the open sheet to the URL — including when the user
-      // navigates between tasks while a modal is already open (e.g. from
-      // an approval task to its parent via "abrir tarefa principal").
-      if (deepLinkTaskId !== editingTaskId) {
-        setEditingTaskId(deepLinkTaskId);
-        setTaskSheetOpen(true);
-        setOpenCard(null);
-      }
-    } else {
-      if (taskSheetOpen || openCard) {
-        setTaskSheetOpen(false);
-        setEditingTaskId(null);
-        setOpenCard(null);
-      }
-    }
-  }, [deepLinkTaskId]);
-
-  const handleClosePanel = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/my-tasks"] });
-    queryClient.invalidateQueries({ queryKey: tasksQueryKey });
-    queryClient.invalidateQueries({ queryKey: countsQueryKey });
-    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
-    setOpenCard(null);
-    if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
-  };
-
-  const handleDeleteCardFromPanel = () => {
-    setOpenCard(null);
-    if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
-  };
-
-  const handleCloseTaskSheet = () => {
-    queryClient.invalidateQueries({ queryKey: tasksQueryKey });
-    queryClient.invalidateQueries({ queryKey: countsQueryKey });
-    queryClient.invalidateQueries({ queryKey: [`/api/workspaces/${workspaceId}/tasks`] });
-    setTaskSheetOpen(false);
-    setEditingTaskId(null);
-    if (deepLinkTaskId) navigate(`/workspaces/${workspaceId}?tab=tasks`, { replace: true });
-  };
-
-  const openTaskItem = (task: any) => {
-    if (task.cardId && task.mapId) {
-      setOpenCard({ workspaceId: task.workspaceId, mapId: task.mapId, cardId: task.cardId });
-      navigate(`/workspaces/${workspaceId}/tasks/${task.id}`);
-    } else {
-      setEditingTaskId(task.id);
-      setTaskSheetOpen(true);
-      navigate(`/workspaces/${workspaceId}/tasks/${task.id}`);
     }
   };
 
@@ -724,139 +598,13 @@ export default function WorkspaceDetailPage() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="tasks" className="mt-0 outline-none">
-                  {/* Header row: filters + nova tarefa button */}
-                  <div className="flex flex-col gap-6 mb-12">
-                    <div className="flex justify-end">
-                      <Button
-                        variant="outline"
-                        className="rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer shrink-0 lowercase"
-                        onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}
-                      >
-                        <Plus className="w-4 h-4 mr-1.5" /> criar
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <TodosStatusPill
-                            active={selectedStatus === TODOS_STATUS}
-                            onSelect={() => selectStatus(TODOS_STATUS)}
-                          />
-                          {STATUS_OPTIONS.map(opt => {
-                            const isActive = selectedStatus === opt.value;
-                            const cnt = statusCounts?.[opt.value] ?? 0;
-                            const OptIcon = opt.icon;
-                            const ariaLabel = cnt === 1 ? opt.label : opt.labelPlural;
-                            // "Concluídas" e "canceladas" são estados terminais
-                            // — contador escondido pra reduzir ruído.
-                            const showCount = opt.value !== "completed" && opt.value !== "blocked";
-                            return (
-                              <button
-                                key={opt.value}
-                                onClick={() => selectStatus(opt.value)}
-                                title={showCount ? `${cnt} ${ariaLabel}` : opt.labelPlural}
-                                aria-label={showCount ? `${cnt} ${ariaLabel}` : opt.labelPlural}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-150 cursor-pointer ${
-                                  isActive
-                                    ? opt.activeClass
-                                    : "bg-card text-muted-foreground border-border hover:border-slate-400 dark:hover:border-slate-600"
-                                }`}
-                              >
-                                <OptIcon className="w-3.5 h-3.5" />
-                                {showCount && <span>{cnt}</span>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {viewMode === "lista" && selectedStatus !== "completed" && selectedStatus !== "blocked" && (
-                          <TimeWindowFilterPills
-                            value={timeWindow}
-                            onChange={setTimeWindow}
-                          />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ViewModeToggle value={viewMode} onChange={changeView} />
-                        {(workspaceMembers && workspaceMembers.length > 0) && (
-                          <AssigneeFilterPills
-                            members={(workspaceMembers ?? [])
-                              .filter(m => m.userId !== currentUserId)
-                              .map(m => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl }))}
-                            selected={selectedAssignees}
-                            onToggle={toggleAssignee}
-                            showMe
-                            meLabel="Eu"
-                            meAvatarUrl={(me as { avatarUrl?: string | null } | undefined)?.avatarUrl}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {viewMode === "calendario" ? (
-                    <WeekCalendar
-                      scope={{ kind: "workspace", workspaceId }}
-                      status={selectedStatus}
-                      assignees={selectedAssignees}
-                      membersFor={() => (workspaceMembers ?? []).map(m => ({ userId: m.userId, user: { name: m.user.name, avatarUrl: m.user.avatarUrl ?? null } }))}
-                      extraInvalidateKeys={calendarExtraKeys}
-                      onOpenTask={openTaskItem}
-                    />
-                  ) : isTasksLoading ? (
-                    <div className="flex items-center justify-center py-20">
-                      <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                    </div>
-                  ) : (() => {
-                    const detailMembers: TaskListItemMember[] = (workspaceMembers ?? []).map(m => ({
-                      userId: m.userId,
-                      name: m.user.name,
-                    }));
-
-                    // Em status terminais (completed/blocked) ordenamos pelo
-                    // timestamp de conclusão/cancelamento; em qualquer outro
-                    // estado o backend já devolve na ordem certa e o filtro
-                    // de janela escolhe um subset desse array.
-                    let flatTasks: TaskListItemData[];
-                    let dateColumnMode: "default" | "completed" | "cancelled" = "default";
-                    if (selectedStatus === "completed" || selectedStatus === "blocked") {
-                      const dateKey = selectedStatus === "completed" ? "completedAt" : "blockedSince";
-                      flatTasks = [...(workspaceTasks ?? [])].sort((a, b) => {
-                        const ta = a[dateKey] ? new Date(a[dateKey]).getTime() : 0;
-                        const tb = b[dateKey] ? new Date(b[dateKey]).getTime() : 0;
-                        return tb - ta;
-                      });
-                      dateColumnMode = selectedStatus === "completed" ? "completed" : "cancelled";
-                    } else if (timeWindow === "todas") {
-                      flatTasks = workspaceTasks ?? [];
-                    } else {
-                      const grouped = groupTasksByDeadline(workspaceTasks ?? []);
-                      flatTasks = selectWindow(grouped, timeWindow);
-                    }
-
-                    if (flatTasks.length === 0) {
-                      return (
-                        <div className="text-center py-24">
-                          <p className="text-muted-foreground lowercase">nada</p>
-                          <Button variant="outline" className="mt-6 rounded-xl h-10 px-5 shadow-md bg-background border-border/60 select-none cursor-pointer lowercase" onClick={() => { setEditingTaskId(null); setTaskSheetOpen(true); }}>
-                            <Plus className="w-4 h-4 mr-1.5" /> criar
-                          </Button>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <TaskTable
-                        sections={[{ label: "", tasks: flatTasks }]}
-                        members={detailMembers}
-                        invalidateQueryKeys={[tasksQueryKey, countsQueryKey, ["/api/my-tasks"]]}
-                        countsQueryKeys={[countsQueryKey]}
-                        onOpenDetail={openTaskItem}
-                        showMapName
-                        dateColumnMode={dateColumnMode}
-                      />
-                    );
-                  })()}
+                <TabsContent value="tasks" className="mt-0 outline-none" keepMounted>
+                  <WorkspaceTasksPanel
+                    workspaceId={workspaceId}
+                    deepLinkTaskId={deepLinkTaskId}
+                    embedded={false}
+                    onViewModeChange={setViewMode}
+                  />
                 </TabsContent>
 
                 <TabsContent value="dashboard" className="mt-0 outline-none">
@@ -1015,33 +763,6 @@ export default function WorkspaceDetailPage() {
           </div>
         </div>
       </div>
-
-      {openCard && (
-        <TaskDetailModal
-          workspaceId={openCard.workspaceId}
-          mapId={openCard.mapId}
-          cardId={openCard.cardId}
-          open={!!openCard}
-          onClose={handleClosePanel}
-          onDeleteCard={handleDeleteCardFromPanel}
-          onDuplicated={(newTaskId) => {
-            navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
-          }}
-        />
-      )}
-
-      <TaskDetailModal
-        workspaceId={workspaceId}
-        taskId={editingTaskId}
-        open={taskSheetOpen}
-        onClose={handleCloseTaskSheet}
-        onAutoCreated={(newTaskId) => {
-          navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
-        }}
-        onDuplicated={(newTaskId) => {
-          navigate(`/workspaces/${workspaceId}/tasks/${newTaskId}`);
-        }}
-      />
 
       {/* Add Member Dialog */}
       <Dialog open={isMemberDialogOpen} onOpenChange={(open) => {
