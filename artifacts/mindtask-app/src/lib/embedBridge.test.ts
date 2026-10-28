@@ -17,6 +17,8 @@ import {
 
 // Fixtures ESPELHADAS em beeads-central-de-dados/web/src/lib/task-embed-bridge.check.ts.
 const PAINEL = "https://painel.beeads.com.br";
+const BLOQUIM = "https://bloquim.beeads.com.br"; // fixture espelhada — usada só no teste do painel
+void BLOQUIM;
 const WS = "b2c49094-d3b8-4408-ad36-d439e4fdb517";
 const TASK = "0f7a3c2e-1b4d-4e5f-9a6b-7c8d9e0f1a2b";
 const MAP = "7d2f9b1c-3a4e-4f50-8b6c-9d0e1f2a3b4c";
@@ -123,6 +125,15 @@ describe("isAllowedEmbedPath", () => {
     expect(isAllowedEmbedPath(`/embed/workspaces/${WS}/maps/${MAP}/x`)).toBe(false);
     expect(isAllowedEmbedPath(`/embed/workspaces/../tasks`)).toBe(false);
     expect(isAllowedEmbedPath("https://evil.example/embed/workspaces/x/tasks")).toBe(false);
+  });
+  it("recusa codificação, barra invertida, // e barra final", () => {
+    expect(isAllowedEmbedPath(`/embed/workspaces/${WS}/maps/a%2Fb`)).toBe(false);
+    expect(isAllowedEmbedPath(`/embed/workspaces/${WS}/maps/a%5Cb`)).toBe(false);
+    expect(isAllowedEmbedPath(`/embed/workspaces/%2e%2e/tasks`)).toBe(false);
+    expect(isAllowedEmbedPath(`/embed/workspaces/${WS}/maps/a\\b`)).toBe(false);
+    expect(isAllowedEmbedPath(`/embed/workspaces//tasks`)).toBe(false);
+    expect(isAllowedEmbedPath(`/embed/workspaces/${WS}//tasks`)).toBe(false);
+    expect(isAllowedEmbedPath(`/embed/workspaces/${WS}/tasks/`)).toBe(false);
   });
 });
 

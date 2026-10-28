@@ -75,12 +75,17 @@ export function parseParentMessage(
   return { source: EMBED_PARENT_SOURCE, type: "open", workspaceId: d.workspaceId, taskId };
 }
 
-const EMBED_WORKSPACE_PATH = /^\/embed\/workspaces\/[^/?#]+\/(tasks(\/[^/?#]+)?|maps\/[^/?#]+)$/;
+/**
+ * Segmentos são ids opacos (UUID): só `[A-Za-z0-9_-]`. Isso recusa por
+ * construção `.`/`..`, `\`, `%` (nada codificado chega a um roteador que
+ * decodifique), query, hash, `//` e barra final.
+ */
+const EMBED_WORKSPACE_PATH =
+  /^\/embed\/workspaces\/[A-Za-z0-9_-]+\/(tasks(\/[A-Za-z0-9_-]+)?|maps\/[A-Za-z0-9_-]+)$/;
 
 /** Rotas de embed que o pai pode mandar o filho abrir: lista, deep link de tarefa e mapa. */
 export function isAllowedEmbedPath(path: string): boolean {
-  if (!EMBED_WORKSPACE_PATH.test(path)) return false;
-  return !path.split("/").some((seg) => seg === "." || seg === "..");
+  return EMBED_WORKSPACE_PATH.test(path);
 }
 
 /**
