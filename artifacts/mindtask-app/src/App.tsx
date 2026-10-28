@@ -18,6 +18,7 @@ import SettingsMcpPage from "@/pages/settings/mcp";
 import PrivacidadePage from "@/pages/privacidade";
 import TermosPage from "@/pages/termos";
 import EmbedTaskPage from "@/pages/embed/task";
+import EmbedWorkspaceTasksPage from "@/pages/embed/workspaceTasks";
 import { forcedEmbedTheme, isEmbedPath } from "@/lib/embedBridge";
 
 // Safety net: any mutation that goes through React Query and fails without a
@@ -118,6 +119,8 @@ function Router() {
       <Route path="/privacidade" component={PrivacidadePage} />
       <Route path="/termos" component={TermosPage} />
       <Route path="/embed/task" component={EmbedTaskPage} />
+      <Route path="/embed/workspaces/:wsId/tasks/:taskId" component={EmbedWorkspaceTasksPage} />
+      <Route path="/embed/workspaces/:wsId/tasks" component={EmbedWorkspaceTasksPage} />
       <Route component={NotFound} />
     </Switch>
   );
