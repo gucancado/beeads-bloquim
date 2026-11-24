@@ -1,8 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { users, workspaces, workspaceMembers } from "@workspace/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { users, workspaces, workspaceMembers, tasks } from "@workspace/db/schema";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getMemberRoleFresh } from "../middlewares/permissions";
 
 /**
@@ -125,4 +125,64 @@ internalRouter.get("/workspaces", async (req, res) => {
     .from(workspaces)
     .where(inArray(workspaces.id, ids));
   res.json({ workspaces: rows });
+});
+
+const TASKS_CAP = 100;
+
+/**
+ * GET /api/internal/workspaces/:workspaceId/tasks?completedSince=<ISO>
+ *
+ * Server-to-server: tarefas do workspace para o resumo semanal por IA do worker
+ * (Visão Geral do painel). Duas listas, cada uma com teto de 100:
+ *  - `open`: pending / in_progress / blocked / overdue, sem cancelamento,
+ *    por prazo (sem prazo por último). Rascunho fica FORA: é privado do autor.
+ *  - `completed`: concluídas a partir de `completedSince`, mais recentes primeiro.
+ * Subtarefas de aprovação (parent_task_id) ficam fora — a principal já conta.
+ *
+ * 200: { open: Task[], completed: Task[] }, Task = { title, status, priority,
+ *      overdue, dueDate, completedAt, createdAt, assigneeName }
+ * 400: workspaceId ou completedSince inválido
+ */
+internalRouter.get("/workspaces/:workspaceId/tasks", async (req, res) => {
+  const workspaceId = String(req.params.workspaceId ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) {
+    res.status(400).json({ error: "workspaceId inválido" });
+    return;
+  }
+  const since = new Date(String(req.query.completedSince ?? ""));
+  if (Number.isNaN(since.getTime())) {
+    res.status(400).json({ error: "completedSince inválido" });
+    return;
+  }
+
+  const cols = {
+    title: tasks.title,
+    status: tasks.status,
+    priority: tasks.priority,
+    overdue: tasks.overdue,
+    dueDate: tasks.dueDate,
+    completedAt: tasks.completedAt,
+    createdAt: tasks.createdAt,
+    assigneeName: users.name,
+  };
+  const base = and(eq(tasks.workspaceId, workspaceId), isNull(tasks.parentTaskId), isNull(tasks.cancelledAt));
+
+  const [open, completed] = await Promise.all([
+    db
+      .select(cols)
+      .from(tasks)
+      .leftJoin(users, eq(users.id, tasks.assignedTo))
+      .where(and(base, inArray(tasks.status, ["pending", "in_progress", "blocked", "overdue"])))
+      .orderBy(sql`${tasks.dueDate} asc nulls last`, asc(tasks.createdAt))
+      .limit(TASKS_CAP),
+    db
+      .select(cols)
+      .from(tasks)
+      .leftJoin(users, eq(users.id, tasks.assignedTo))
+      .where(and(base, eq(tasks.status, "completed"), gte(tasks.completedAt, since)))
+      .orderBy(desc(tasks.completedAt))
+      .limit(TASKS_CAP),
+  ]);
+
+  res.json({ open, completed });
 });
